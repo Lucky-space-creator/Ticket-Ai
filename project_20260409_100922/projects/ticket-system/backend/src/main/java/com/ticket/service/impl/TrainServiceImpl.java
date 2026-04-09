@@ -30,7 +30,7 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
 
     @Override
     public List<Train> searchTrains(String startStation, String endStation, String trainDate) {
-        // 先查缓存
+        // 先查Redis缓存
         String cacheKey = String.format(CacheKey.TRAIN_SEARCH, startStation == null ? "" : startStation, endStation == null ? "" : endStation, trainDate == null ? "" : trainDate);
         List<Train> cached = redisUtil.get(cacheKey);
         if (cached != null) {
@@ -55,7 +55,7 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
 
         List<Train> trains = list(wrapper);
 
-        // 存缓存（30分钟）
+        //TODO: 存缓存（30分钟） 缓存时间为列车最终站到达时间-当前时间，上下时间浮动2min
         redisUtil.set(cacheKey, trains, 30, TimeUnit.MINUTES);
 
         return trains;
@@ -72,7 +72,7 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
 
         Train train = getById(trainId);
 
-        // 存缓存（1小时）
+        //TODO: 存缓存（1小时），缓存时间为列车最终站到达时间-当前时间，上下时间浮动2min
         if (train != null) {
             redisUtil.set(cacheKey, train, 60, TimeUnit.MINUTES);
         }

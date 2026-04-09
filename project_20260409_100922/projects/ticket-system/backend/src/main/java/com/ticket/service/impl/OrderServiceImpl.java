@@ -171,6 +171,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         List<Order> orders = list(wrapper);
 
+        //TODO 缓存设计时间
         // 存缓存（10分钟）
         redisUtil.set(cacheKey, orders, 10, TimeUnit.MINUTES);
 
@@ -192,6 +193,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         Order order = getOne(wrapper);
 
+        //TODO 缓存设计时间
         // 存缓存（30分钟）
         if (order != null) {
             redisUtil.set(cacheKey, order, 30, TimeUnit.MINUTES);
