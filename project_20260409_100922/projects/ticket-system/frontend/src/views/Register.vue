@@ -5,6 +5,28 @@
       <h2 class="title">注册</h2>
 
       <el-form :model="form" :rules="rules" ref="formRef" class="register-form">
+        <el-form-item prop="realName">
+          <el-input
+              v-model="form.realName"
+              placeholder="请输入真实姓名"
+              prefix-icon="User"
+              size="large"
+              autocomplete="off"
+              clearable
+          />
+        </el-form-item>
+
+        <el-form-item prop="idCard">
+          <el-input
+              v-model="form.idCard"
+              placeholder="请输入身份证号"
+              prefix-icon="Postcard"
+              size="large"
+              autocomplete="off"
+              clearable
+          />
+        </el-form-item>
+
         <el-form-item prop="phone">
           <el-input
               v-model="form.phone"
@@ -78,6 +100,8 @@ const formRef = ref()
 const loading = ref(false)
 
 const form = ref({
+  realName: '',
+  idCard: '',
   phone: '',
   password: '',
   confirmPassword: ''
@@ -86,6 +110,8 @@ const form = ref({
 // 页面加载时清空表单
 onMounted(() => {
   form.value = {
+    realName: '',
+    idCard: '',
     phone: '',
     password: '',
     confirmPassword: ''
@@ -104,6 +130,14 @@ const validateConfirmPassword = (rule, value, callback) => {
 }
 
 const rules = {
+  realName: [
+    { required: true, message: '请输入真实姓名', trigger: 'blur' },
+    { min: 2, max: 20, message: '姓名长度在 2 到 20 个字符', trigger: 'blur' }
+  ],
+  idCard: [
+    { required: true, message: '请输入身份证号', trigger: 'blur' },
+    { pattern: /^[1-9]\d{5}(18|19|20)\d{2}((0[1-9])|(1[0-2]))(([0-2][1-9])|10|20|30|31)\d{3}[0-9Xx]$/, message: '身份证号格式不正确', trigger: 'blur' }
+  ],
   phone: [
     { required: true, message: '请输入手机号', trigger: 'blur' },
     { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }
@@ -125,6 +159,8 @@ const handleRegister = async () => {
     loading.value = true
     try {
       const res = await request.post('/auth/register', {
+        realName: form.value.realName,
+        idCard: form.value.idCard,
         phone: form.value.phone,
         password: form.value.password
       })
@@ -137,6 +173,8 @@ const handleRegister = async () => {
 
       // 注册成功后清空表单
       form.value = {
+        realName: '',
+        idCard: '',
         phone: '',
         password: '',
         confirmPassword: ''

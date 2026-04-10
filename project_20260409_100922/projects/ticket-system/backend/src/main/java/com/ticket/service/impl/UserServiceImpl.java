@@ -2,8 +2,8 @@ package com.ticket.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.ticket.entity.User;
 import com.ticket.enums.CacheKey;
+import com.ticket.entity.User;
 import com.ticket.mapper.UserMapper;
 import com.ticket.service.UserService;
 import com.ticket.util.RedisUtil;
@@ -21,7 +21,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private RedisUtil redisUtil;
 
     @Override
-    public User register(String phone, String password) {
+    public User register(String phone, String password, String realName, String idCard) {
         // 检查手机号是否已存在
         User existUser = getByPhone(phone);
         if (existUser != null) {
@@ -41,6 +41,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         User user = new User();
         user.setPhone(phone);
         user.setPassword(encryptedPassword);
+        user.setRealName(realName);
+        user.setIdCard(idCard != null ? CryptoUtil.encrypt(idCard) : null);
         user.setStatus(1); // 正常状态
 
         save(user);

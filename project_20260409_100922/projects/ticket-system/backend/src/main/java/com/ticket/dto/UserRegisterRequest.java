@@ -23,4 +23,14 @@ public class UserRegisterRequest {
      */
     @NotBlank(message = "密码不能为空")
     private String password;
+
+    /**
+     * 真实姓名
+     */
+    private String realName;
+
+    /**
+     * 身份证号
+     */
+    private String idCard;
 }

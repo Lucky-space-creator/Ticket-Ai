@@ -1,10 +1,10 @@
 package com.ticket.controller;
 
+import com.ticket.enums.CacheKey;
+import com.ticket.enums.ResponseCode;
 import com.ticket.dto.UserLoginRequest;
 import com.ticket.dto.UserRegisterRequest;
 import com.ticket.entity.User;
-import com.ticket.enums.CacheKey;
-import com.ticket.enums.ResponseCode;
 import com.ticket.service.UserService;
 import com.ticket.util.RedisUtil;
 import com.ticket.util.JwtUtil;
@@ -40,7 +40,12 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseUtil.Result<?> register(@Valid @RequestBody UserRegisterRequest request) {
         try {
-            User user = userService.register(request.getPhone(), request.getPassword());
+            User user = userService.register(
+                    request.getPhone(),
+                    request.getPassword(),
+                    request.getRealName(),
+                    request.getIdCard()
+            );
 
             // 生成 Token
             String token = jwtUtil.generateToken(user.getId(), user.getPhone());

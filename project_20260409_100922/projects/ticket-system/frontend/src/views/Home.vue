@@ -6,12 +6,12 @@
         <div class="header-content">
           <div class="logo">12306</div>
           <el-menu
-            :default-active="activeMenu"
-            mode="horizontal"
-            router
-            background-color="#1890FF"
-            text-color="#ffffff"
-            active-text-color="#ffffff"
+              :default-active="activeMenu"
+              mode="horizontal"
+              router
+              background-color="#1890FF"
+              text-color="#ffffff"
+              active-text-color="#ffffff"
           >
             <el-menu-item index="/home">首页</el-menu-item>
             <el-menu-item index="/search">车票查询</el-menu-item>
@@ -36,10 +36,10 @@
           <h1 class="title">12306购票系统</h1>
           <p class="subtitle">便捷、快速、安全的铁路票务服务平台</p>
           <div class="actions">
-            <el-button type="primary" size="large" @click="$router.push('/search')">
+            <el-button type="primary" size="large" class="action-btn" @click="$router.push('/search')">
               立即购票
             </el-button>
-            <el-button type="info" size="large" @click="$router.push('/orders')">
+            <el-button type="default" size="large" class="action-btn" @click="$router.push('/orders')">
               查看订单
             </el-button>
           </div>
@@ -174,6 +174,28 @@ const handleLogout = () => {
     .el-button {
       font-size: 16px;
       padding: 12px 32px;
+      border-radius: 4px;
+    }
+
+    .action-btn {
+      background-color: rgba(255, 255, 255, 0.2);
+      border: 2px solid #ffffff;
+      color: #ffffff;
+
+      &:hover {
+        background-color: rgba(255, 255, 255, 0.3);
+      }
+    }
+
+    .el-button--primary.action-btn {
+      background-color: #ffffff;
+      color: #1890FF;
+      border-color: #ffffff;
+
+      &:hover {
+        background-color: #f0f0f0;
+        border-color: #f0f0f0;
+      }
     }
   }
 }
@@ -185,10 +207,20 @@ const handleLogout = () => {
     border-radius: 8px;
     text-align: center;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s;
+    transition: transform 0.3s, box-shadow 0.3s;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 
     &:hover {
       transform: translateY(-5px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    .el-icon {
+      flex-shrink: 0;
     }
 
     h3 {
@@ -200,6 +232,7 @@ const handleLogout = () => {
     p {
       color: #666666;
       line-height: 1.6;
+      margin: 0;
     }
   }
 }
