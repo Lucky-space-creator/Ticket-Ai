@@ -2,9 +2,9 @@ package com.ticket.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.ticket.enums.CacheKey;
 import com.ticket.entity.TicketStock;
 import com.ticket.entity.Train;
-import com.ticket.enums.CacheKey;
 import com.ticket.mapper.TicketStockMapper;
 import com.ticket.mapper.TrainMapper;
 import com.ticket.service.TrainService;
@@ -88,6 +88,19 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
                 .gt(TicketStock::getAvailableSeats, 0); // 只返回有票的
 
         return ticketStockMapper.selectList(wrapper);
+    }
+
+    @Override
+    public java.math.BigDecimal getSeatPrice(Long trainId, String trainDate, String startStation, String endStation, Integer seatType) {
+        LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(TicketStock::getTrainId, trainId)
+                .eq(TicketStock::getTrainDate, trainDate)
+                .eq(TicketStock::getStartStation, startStation)
+                .eq(TicketStock::getEndStation, endStation)
+                .eq(TicketStock::getSeatType, seatType);
+
+        TicketStock stock = ticketStockMapper.selectOne(wrapper);
+        return stock != null ? stock.getPrice() : java.math.BigDecimal.ZERO;
     }
 
     @Override

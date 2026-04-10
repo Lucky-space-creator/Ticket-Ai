@@ -27,6 +27,11 @@ public interface TrainService extends IService<Train> {
     List<TicketStock> getTicketStocks(Long trainId, String trainDate);
 
     /**
+     * 获取指定席别的票价
+     */
+    java.math.BigDecimal getSeatPrice(Long trainId, String trainDate, String startStation, String endStation, Integer seatType);
+
+    /**
      * 检查并扣减库存
      */
     boolean deductStock(Long trainId, String trainDate, String startStation, String endStation, Integer seatType, Integer count);

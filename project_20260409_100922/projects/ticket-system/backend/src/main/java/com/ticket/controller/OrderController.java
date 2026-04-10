@@ -1,10 +1,12 @@
 package com.ticket.controller;
 
+import com.ticket.enums.CacheKey;
 import com.ticket.enums.ResponseCode;
 import com.ticket.dto.CreateOrderRequest;
 import com.ticket.entity.Order;
 import com.ticket.entity.OrderItem;
 import com.ticket.service.OrderService;
+import com.ticket.service.TrainService;
 import com.ticket.util.CryptoUtil;
 import com.ticket.util.JwtUtil;
 import com.ticket.util.ResponseUtil;
@@ -12,6 +14,7 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,6 +28,9 @@ public class OrderController {
 
     @Resource
     private OrderService orderService;
+
+    @Resource
+    private TrainService trainService;
 
     @Resource
     private JwtUtil jwtUtil;
@@ -52,6 +58,15 @@ public class OrderController {
                 return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
             }
 
+            // 查询真实票价
+            BigDecimal seatPrice = trainService.getSeatPrice(
+                    request.getTrainId(),
+                    request.getTrainDate(),
+                    request.getStartStation(),
+                    request.getEndStation(),
+                    request.getSeatType()
+            );
+
             // 转换订单明细
             List<OrderItem> items = new ArrayList<>();
             if (request.getItems() != null) {
@@ -59,8 +74,7 @@ public class OrderController {
                     OrderItem item = new OrderItem();
                     item.setPassengerName(itemRequest.getPassengerName());
                     item.setIdCard(CryptoUtil.encrypt(itemRequest.getIdCard()));
-                    // 查询票价
-                    item.setPrice(java.math.BigDecimal.valueOf(100)); // 这里应该从余票表查询
+                    item.setPrice(seatPrice); // 使用真实票价
                     items.add(item);
                 }
             }
