@@ -14,6 +14,7 @@ import com.ticket.mapper.OrderMapper;
 import com.ticket.service.OrderService;
 import com.ticket.service.TrainService;
 import com.ticket.util.RedisUtil;
+import com.ticket.util.SnowflakeIdUtil;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -45,7 +47,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     public Order createOrder(Long userId, Long trainId, String trainDate, String startStation, String endStation, Integer seatType, List<OrderItem> items) {
         // 1. 检查车次信息
         Train train = trainService.getById(trainId);
-        if (train == null || train.getStatus() == BusinessStatus.TRAIN_STATUS_STOPPED) {
+        if (train == null || Objects.equals(train.getStatus(), BusinessStatus.TRAIN_STATUS_STOPPED)) {
             throw new RuntimeException(ResponseCode.TRAIN_NOT_FOUND.getMessage());
         }
 
@@ -59,7 +61,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         // 4. 创建订单
         Order order = new Order();
-        order.setOrderNo(IdUtil.getSnowflakeNextIdStr());
+        order.setOrderNo(SnowflakeIdUtil.getInstance().nextIdStr());
         order.setUserId(userId);
         order.setTrainId(trainId);
         order.setTrainNo(train.getTrainNo());

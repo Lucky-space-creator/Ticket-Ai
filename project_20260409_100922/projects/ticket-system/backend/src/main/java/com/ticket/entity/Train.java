@@ -16,7 +16,7 @@ public class Train {
     /**
      * 车次ID
      */
-    @TableId(type = IdType.AUTO)
+    @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
     /**
