@@ -1,5 +1,6 @@
 package com.ticket.service.impl;
 
+import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ticket.entity.Passenger;
@@ -70,7 +71,7 @@ public class PassengerServiceImpl extends ServiceImpl<PassengerMapper, Passenger
         if (cached != null) {
             // 缓存命中，去除重复的身份证返回
             return cached.stream()
-                    .filter(p -> p.getIdCard().equals(user.getIdCard()))
+                    .filter(p -> !p.getIdCard().equals(user.getIdCard()))
                     .collect(Collectors.toList());
         }
 
@@ -84,7 +85,7 @@ public class PassengerServiceImpl extends ServiceImpl<PassengerMapper, Passenger
 
         // 去除重复的身份证
         return list.stream()
-                .filter(p -> p.getIdCard().equals(user.getIdCard()))
+                .filter(p -> !p.getIdCard().equals(user.getIdCard()))
                 .collect(Collectors.toList());
     }
 }

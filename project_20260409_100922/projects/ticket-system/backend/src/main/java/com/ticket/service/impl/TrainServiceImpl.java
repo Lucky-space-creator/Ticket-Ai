@@ -42,12 +42,12 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
 
         // 如果出发站不为空，添加条件
         if (startStation != null && !startStation.trim().isEmpty()) {
-            wrapper.eq(Train::getStartStation, startStation);
+            wrapper.like(Train::getStartStation, startStation);
         }
 
         // 如果到达站不为空，添加条件
         if (endStation != null && !endStation.trim().isEmpty()) {
-            wrapper.eq(Train::getEndStation, endStation);
+            wrapper.like(Train::getEndStation, endStation);
         }
 
         // 只查询正常状态的车次
