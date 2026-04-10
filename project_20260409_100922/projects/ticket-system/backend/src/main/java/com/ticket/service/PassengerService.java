@@ -2,6 +2,9 @@ package com.ticket.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.ticket.entity.Passenger;
+import com.ticket.entity.User;
+
+import java.util.List;
 
 /**
  * 常用联系人服务接口
@@ -21,5 +24,5 @@ public interface PassengerService extends IService<Passenger> {
     /**
      * 获取用户的所有联系人
      */
-    java.util.List<Passenger> getByUserId(Long userId);
+    List<Passenger> getByUserId(User user);
 }

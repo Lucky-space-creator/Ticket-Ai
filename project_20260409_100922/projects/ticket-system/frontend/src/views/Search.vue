@@ -150,59 +150,55 @@
       <el-divider />
 
       <div class="passenger-section">
-        <div class="section-header">
-          <span>选择乘客</span>
-          <el-button type="primary" text size="small" @click="showAddPassenger = true">
-            + 添加乘客
-          </el-button>
-        </div>
+        <div class="section-title">选择乘客（最多可选{{ maxPassengers }}人）</div>
 
-        <el-checkbox-group v-model="selectedPassengerIds" :disabled="paying">
-          <div v-if="passengers.length === 0" class="no-passenger">
-            <el-empty description="暂无常用联系人，请添加" :image-size="60" />
+        <el-checkbox-group v-model="selectedPassengerIds" :disabled="paying" :max="maxPassengers">
+          <!-- 本人选项 -->
+          <div class="passenger-item self-item" v-if="currentUser?.realName">
+            <el-checkbox :label="'self'" :disabled="!currentUser?.idCard">
+              <div class="passenger-content">
+                <div class="passenger-name">
+                  <el-tag size="small" type="warning">本人</el-tag>
+                  <span>{{ currentUser.realName }}</span>
+                </div>
+                <div class="passenger-idcard" v-if="currentUser?.idCard">
+                  {{ formatIdCard(currentUser.idCard) }}
+                </div>
+                <div class="passenger-tip" v-else>
+                  <span style="color: #ff4d4f;">请先在个人中心完善身份信息</span>
+                </div>
+              </div>
+            </el-checkbox>
           </div>
-          <el-checkbox
-              v-for="passenger in passengers"
-              :key="passenger.id"
-              :label="passenger.id"
-              class="passenger-checkbox"
-          >
-            <div class="passenger-info">
-              <span class="name">{{ passenger.name }}</span>
-              <span class="idcard">{{ formatIdCard(passenger.idCard) }}</span>
-            </div>
-          </el-checkbox>
+
+          <!-- 联系人列表 -->
+          <div class="passenger-item" v-for="passenger in passengers" :key="passenger.id">
+            <el-checkbox :label="passenger.id">
+              <div class="passenger-content">
+                <div class="passenger-name">{{ passenger.name }}</div>
+                <div class="passenger-idcard">{{ formatIdCard(passenger.idCard) }}</div>
+              </div>
+            </el-checkbox>
+          </div>
         </el-checkbox-group>
+
+        <!-- 空状态 -->
+        <div class="empty-passengers" v-if="!currentUser?.realName && passengers.length === 0">
+          <el-empty description="暂无乘客信息，请先完善个人身份信息或添加联系人" :image-size="60" />
+        </div>
       </div>
 
-      <div class="total-section" v-if="selectedPassengerIds.length > 0">
-        <span>合计：</span>
-        <span class="total-price">¥{{ totalPrice }}</span>
+      <!-- 费用汇总 -->
+      <div class="total-section">
+        <div class="total-info">
+          <span>已选 {{ selectedPassengerIds.length }} 张票</span>
+          <span class="unit-price">单价 ¥{{ selectedStock?.price || 0 }}</span>
+        </div>
+        <div class="total-price-wrapper">
+          <span>合计：</span>
+          <span class="total-price">¥{{ totalPrice }}</span>
+        </div>
       </div>
-
-      <!-- 添加乘客表单 -->
-      <el-dialog
-          v-model="showAddPassenger"
-          title="添加乘客"
-          width="400px"
-          append-to-body
-      >
-        <el-form :model="passengerForm" :rules="passengerRules" ref="passengerFormRef" label-width="80px">
-          <el-form-item label="姓名" prop="name">
-            <el-input v-model="passengerForm.name" placeholder="请输入乘客姓名" />
-          </el-form-item>
-          <el-form-item label="身份证" prop="idCard">
-            <el-input v-model="passengerForm.idCard" placeholder="请输入身份证号" />
-          </el-form-item>
-          <el-form-item label="手机号" prop="phone">
-            <el-input v-model="passengerForm.phone" placeholder="请输入手机号" />
-          </el-form-item>
-        </el-form>
-        <template #footer>
-          <el-button @click="showAddPassenger = false">取消</el-button>
-          <el-button type="primary" @click="handleAddPassenger" :loading="addingPassenger">添加</el-button>
-        </template>
-      </el-dialog>
 
       <template #footer>
         <div class="dialog-footer">
@@ -249,33 +245,15 @@ const passengers = ref([])
 const selectedPassengerIds = ref([])
 const paying = ref(false)
 
-// 添加乘客相关
-const showAddPassenger = ref(false)
-const addingPassenger = ref(false)
-const passengerFormRef = ref()
-const passengerForm = reactive({
-  name: '',
-  idCard: '',
-  phone: ''
-})
+// 当前用户信息（从API获取的最新数据）
+const currentUser = ref(null)
 
-const passengerRules = {
-  name: [
-    { required: true, message: '请输入姓名', trigger: 'blur' }
-  ],
-  idCard: [
-    { required: true, message: '请输入身份证号', trigger: 'blur' },
-    { pattern: /^[1-9]\d{5}(18|19|20)\d{2}((0[1-9])|(1[0-2]))(([0-2][1-9])|10|20|30|31)\d{3}[0-9Xx]$/, message: '身份证号格式不正确', trigger: 'blur' }
-  ],
-  phone: [
-    { required: true, message: '请输入手机号', trigger: 'blur' },
-    { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }
-  ]
-}
+// 最多购票数量
+const maxPassengers = 5
 
 // 计算总价
 const totalPrice = computed(() => {
-  if (!selectedStock.value) return 0
+  if (!selectedStock.value) return '0.00'
   return (selectedStock.value.price * selectedPassengerIds.value.length).toFixed(2)
 })
 
@@ -336,11 +314,38 @@ const handleReset = () => {
   trains.value = []
 }
 
-// 获取乘客列表
+// 获取乘客列表（排除本人，避免重复显示）
 const loadPassengers = async () => {
   try {
+    // 先获取最新的用户信息
+    let userIdCard = ''
+    try {
+      const profileRes = await request.get('/user/profile')
+      if (profileRes.data) {
+        // 同时更新 store 和本地变量
+        userStore.setUser(profileRes.data)
+        currentUser.value = profileRes.data
+        userIdCard = profileRes.data.idCard || ''
+        console.log('获取到用户信息:', profileRes.data)
+      }
+    } catch (e) {
+      console.error('获取用户信息失败:', e)
+    }
+
+    // 获取联系人列表
     const res = await request.get('/passengers')
-    passengers.value = res.data || []
+    console.log('获取到联系人:', res.data)
+
+    // 过滤掉与本人相同的数据（使用解密后的身份证比较）
+    passengers.value = (res.data || []).filter(p => {
+      // 如果联系人身份证和本人身份证相同，则排除
+      if (userIdCard && p.idCard === userIdCard) {
+        console.log('过滤掉重复联系人:', p.name)
+        return false
+      }
+      return true
+    })
+    console.log('过滤后联系人:', passengers.value)
   } catch (error) {
     console.error('获取乘客列表失败:', error)
     passengers.value = []
@@ -350,7 +355,26 @@ const loadPassengers = async () => {
 // 格式化身份证号（隐藏中间部分）
 const formatIdCard = (idCard) => {
   if (!idCard) return ''
-  return idCard.replace(/(\d{4})\d+(\d{4})/, '$1**********$2')
+  // 去掉空格
+  idCard = idCard.trim()
+  // 检查是否是有效的身份证格式
+  if (/^\d{17}[\dXx]$/.test(idCard)) {
+    // 有效身份证：前3位 + 11个* + 后4位
+    return idCard.replace(/(\d{3})\d{11}(\d{4})/, '$1***********$2')
+  }
+  // 如果是 Base64 编码，尝试解码
+  if (/^[A-Za-z0-9+/=]+$/.test(idCard) && idCard.length > 20) {
+    try {
+      const decoded = atob(idCard)
+      if (/^\d{17}[\dXx]$/.test(decoded)) {
+        return decoded.replace(/(\d{3})\d{11}(\d{4})/, '$1***********$2')
+      }
+    } catch (e) {
+      // 解码失败
+    }
+  }
+  // 其他情况返回原始值
+  return idCard
 }
 
 // 点击购票
@@ -359,37 +383,10 @@ const handleBuy = async (train, stock) => {
   selectedStock.value = stock
   selectedPassengerIds.value = []
 
-  // 加载乘客列表
+  // 加载乘客列表（会自动获取最新用户信息并过滤）
   await loadPassengers()
 
   orderDialogVisible.value = true
-}
-
-// 添加乘客
-const handleAddPassenger = async () => {
-  await passengerFormRef.value.validate(async (valid) => {
-    if (!valid) return
-
-    addingPassenger.value = true
-    try {
-      await request.post('/passengers', {
-        name: passengerForm.name,
-        idCard: passengerForm.idCard,
-        phone: passengerForm.phone
-      })
-      ElMessage.success('添加成功')
-      showAddPassenger.value = false
-      passengerFormRef.value.resetFields()
-
-      // 刷新乘客列表
-      await loadPassengers()
-    } catch (error) {
-      console.error('添加乘客失败:', error)
-      ElMessage.error('添加失败，请稍后重试')
-    } finally {
-      addingPassenger.value = false
-    }
-  })
 }
 
 // 提交订单
@@ -399,17 +396,36 @@ const handleSubmitOrder = async () => {
     return
   }
 
+  // 检查本人是否已选但未完善身份信息
+  if (selectedPassengerIds.value.includes('self') && !currentUser.value?.idCard) {
+    ElMessage.warning('请先完善个人身份信息')
+    return
+  }
+
   paying.value = true
 
   try {
     // 构建订单明细
-    const items = selectedPassengerIds.value.map(id => {
-      const passenger = passengers.value.find(p => p.id === id)
-      return {
-        passengerName: passenger.name,
-        idCard: passenger.idCard
+    const items = []
+
+    for (const id of selectedPassengerIds.value) {
+      if (id === 'self') {
+        // 本人 - 使用 currentUser 中的数据
+        items.push({
+          passengerName: currentUser.value.realName,
+          idCard: currentUser.value.idCard
+        })
+      } else {
+        // 联系人
+        const passenger = passengers.value.find(p => p.id === id)
+        if (passenger) {
+          items.push({
+            passengerName: passenger.name,
+            idCard: passenger.idCard
+          })
+        }
       }
-    })
+    }
 
     // 创建订单
     const res = await request.post('/orders', {
@@ -613,35 +629,60 @@ onMounted(() => {
 }
 
 .passenger-section {
-  .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
+  .section-title {
     font-weight: 500;
+    color: #333;
+    margin-bottom: 15px;
   }
 
-  .no-passenger {
-    padding: 20px 0;
-  }
-
-  .passenger-checkbox {
-    display: block;
+  .passenger-item {
+    padding: 12px 15px;
+    border: 1px solid #e8e8e8;
+    border-radius: 6px;
     margin-bottom: 10px;
+    transition: all 0.3s;
 
-    .passenger-info {
-      display: inline-flex;
+    &:hover {
+      border-color: #1890FF;
+      background-color: #f0f7ff;
+    }
+
+    &.self-item {
+      border-color: #ffc069;
+      background-color: #fffbe6;
+
+      &:hover {
+        border-color: #ffc069;
+        background-color: #fffbe6;
+      }
+    }
+
+    .passenger-content {
+      display: flex;
       flex-direction: column;
+      gap: 4px;
 
-      .name {
+      .passenger-name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         font-weight: 500;
+        color: #333;
       }
 
-      .idcard {
+      .passenger-idcard {
         font-size: 12px;
         color: #999;
       }
+
+      .passenger-tip {
+        font-size: 12px;
+      }
     }
+  }
+
+  .empty-passengers {
+    padding: 20px 0;
   }
 }
 
@@ -649,16 +690,31 @@ onMounted(() => {
   margin-top: 20px;
   padding-top: 15px;
   border-top: 1px solid #eee;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  font-size: 16px;
 
-  .total-price {
-    margin-left: 10px;
-    font-size: 24px;
-    font-weight: bold;
-    color: #ff4d4f;
+  .total-info {
+    display: flex;
+    justify-content: space-between;
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 10px;
+
+    .unit-price {
+      color: #999;
+    }
+  }
+
+  .total-price-wrapper {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    font-size: 16px;
+
+    .total-price {
+      margin-left: 10px;
+      font-size: 28px;
+      font-weight: bold;
+      color: #ff4d4f;
+    }
   }
 }
 

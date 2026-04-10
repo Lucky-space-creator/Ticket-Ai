@@ -6,6 +6,7 @@ import com.ticket.dto.UserLoginRequest;
 import com.ticket.dto.UserRegisterRequest;
 import com.ticket.entity.User;
 import com.ticket.service.UserService;
+import com.ticket.util.CryptoUtil;
 import com.ticket.util.RedisUtil;
 import com.ticket.util.JwtUtil;
 import com.ticket.util.ResponseUtil;
@@ -90,13 +91,15 @@ public class AuthController {
     }
 
     /**
-     * 获取用户基本信息（不含敏感信息）
+     * 获取用户基本信息
      */
     private Map<String, Object> getUserInfo(User user) {
         Map<String, Object> info = new HashMap<>();
         info.put("id", user.getId());
         info.put("phone", user.getPhone());
         info.put("realName", user.getRealName());
+        // 返回解密后的身份证（用于购票）
+        info.put("idCard", user.getIdCard() != null ? CryptoUtil.decrypt(user.getIdCard()) : null);
         info.put("status", user.getStatus());
         return info;
     }

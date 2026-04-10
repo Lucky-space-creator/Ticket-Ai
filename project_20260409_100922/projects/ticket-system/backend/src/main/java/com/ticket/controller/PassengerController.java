@@ -1,7 +1,11 @@
 package com.ticket.controller;
 
 import com.ticket.entity.Passenger;
+import com.ticket.entity.User;
+import com.ticket.enums.ResponseCode;
 import com.ticket.service.PassengerService;
+import com.ticket.service.UserService;
+import com.ticket.util.CryptoUtil;
 import com.ticket.util.JwtUtil;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
@@ -9,6 +13,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 常用联系人控制器
@@ -17,6 +22,9 @@ import java.util.List;
 @RequestMapping("/api/passengers")
 @CrossOrigin(origins = "*")
 public class PassengerController {
+
+    @Resource
+    private UserService userService;
 
     @Resource
     private PassengerService passengerService;
@@ -44,10 +52,12 @@ public class PassengerController {
         try {
             Long userId = getCurrentUserId(request);
             if (userId == null) {
-                return ResponseUtil.error(com.ticket.enums.ResponseCode.UNAUTHORIZED);
+                return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
             }
 
-            List<Passenger> passengers = passengerService.getByUserId(userId);
+            User user = userService.getById(userId);
+
+            List<Passenger> passengers = passengerService.getByUserId(user);
 
             return ResponseUtil.success(passengers);
         } catch (Exception e) {

@@ -2,6 +2,7 @@ package com.ticket.controller;
 
 import com.ticket.entity.User;
 import com.ticket.service.UserService;
+import com.ticket.util.CryptoUtil;
 import com.ticket.util.JwtUtil;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
@@ -51,12 +52,13 @@ public class UserController {
                 return ResponseUtil.error(com.ticket.enums.ResponseCode.USER_NOT_FOUND);
             }
 
-            // 返回用户信息（不含敏感字段）
+            // 返回用户信息
             java.util.Map<String, Object> userInfo = new java.util.HashMap<>();
             userInfo.put("id", user.getId());
             userInfo.put("phone", user.getPhone());
             userInfo.put("realName", user.getRealName());
-            userInfo.put("idCard", user.getIdCard() != null ? "已认证" : null);
+            // 返回解密后的身份证（用于购票）
+            userInfo.put("idCard", user.getIdCard() != null ? CryptoUtil.decrypt(user.getIdCard()) : null);
             userInfo.put("status", user.getStatus());
 
             return ResponseUtil.success(userInfo);
