@@ -58,8 +58,6 @@ public class PassengerServiceImpl extends ServiceImpl<PassengerMapper, Passenger
     @Override
     public List<Passenger> getByUserId(User user) {
         Long userId = user.getId();
-        //解码user的idCard
-        String decryptedIdCard = CryptoUtil.decrypt(user.getIdCard());
         // 先查缓存
         String cacheKey = String.format(CacheKey.USER_PASSENGERS, userId);
         List<Passenger> cached = redisUtil.get(cacheKey);
@@ -67,12 +65,8 @@ public class PassengerServiceImpl extends ServiceImpl<PassengerMapper, Passenger
 
         if (cached != null) {
             //如果cached中的idCard和user的idCard一致，则返回缓存中的数据
-
-            //1.解码cached中的idCard
-            cached = cached.stream().peek(passenger -> passenger.setIdCard(CryptoUtil.decrypt(passenger.getIdCard()))).collect(Collectors.toList());
-
             //2.过滤cached中的idCard和user的idCard一致的
-            cached = cached.stream().filter(passenger -> passenger.getIdCard().equals(decryptedIdCard))
+            cached = cached.stream().filter(passenger -> passenger.getIdCard().equals(user.getIdCard()))
                     .collect(Collectors.toList());
 
             return cached;

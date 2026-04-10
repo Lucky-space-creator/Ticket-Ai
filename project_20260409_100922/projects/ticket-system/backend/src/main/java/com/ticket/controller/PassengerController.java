@@ -2,14 +2,12 @@ package com.ticket.controller;
 
 import com.ticket.entity.Passenger;
 import com.ticket.entity.User;
-import com.ticket.enums.ResponseCode;
 import com.ticket.service.PassengerService;
 import com.ticket.service.UserService;
 import com.ticket.util.CryptoUtil;
-import com.ticket.util.JwtUtil;
 import com.ticket.util.ResponseUtil;
+import com.ticket.util.UserContext;
 import jakarta.annotation.Resource;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,42 +22,39 @@ import java.util.stream.Collectors;
 public class PassengerController {
 
     @Resource
-    private UserService userService;
-
-    @Resource
     private PassengerService passengerService;
-
     @Resource
-    private JwtUtil jwtUtil;
-
-    /**
-     * 获取当前用户ID
-     */
-    private Long getCurrentUserId(HttpServletRequest request) {
-        String token = request.getHeader("Authorization");
-        if (token != null && token.startsWith("Bearer ")) {
-            token = token.substring(7);
-            return jwtUtil.getUserIdFromToken(token);
-        }
-        return null;
-    }
+    private UserService  userService;
 
     /**
      * 获取常用联系人列表
      */
     @GetMapping
-    public ResponseUtil.Result<?> getPassengers(HttpServletRequest request) {
+    public ResponseUtil.Result<?> getPassengers() {
         try {
-            Long userId = getCurrentUserId(request);
+            Long userId = UserContext.getCurrentUserId();
             if (userId == null) {
-                return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
+                return ResponseUtil.error(com.ticket.enums.ResponseCode.UNAUTHORIZED);
             }
-
             User user = userService.getById(userId);
 
             List<Passenger> passengers = passengerService.getByUserId(user);
 
-            return ResponseUtil.success(passengers);
+            // 解密身份证后返回
+            List<Passenger> decryptedPassengers = passengers.stream()
+                    .map(p -> {
+                        Passenger copy = new Passenger();
+                        copy.setId(p.getId());
+                        copy.setUserId(p.getUserId());
+                        copy.setName(p.getName());
+                        copy.setIdCard(p.getIdCard() != null ? CryptoUtil.decrypt(p.getIdCard()) : null);
+                        copy.setPhone(p.getPhone());
+                        copy.setCreatedAt(p.getCreatedAt());
+                        return copy;
+                    })
+                    .collect(Collectors.toList());
+
+            return ResponseUtil.success(decryptedPassengers);
         } catch (Exception e) {
             return ResponseUtil.error(e.getMessage());
         }
@@ -69,12 +64,9 @@ public class PassengerController {
      * 添加常用联系人
      */
     @PostMapping
-    public ResponseUtil.Result<?> addPassenger(
-            @RequestBody AddPassengerRequest addRequest,
-            HttpServletRequest httpRequest
-    ) {
+    public ResponseUtil.Result<?> addPassenger(@RequestBody AddPassengerRequest addRequest) {
         try {
-            Long userId = getCurrentUserId(httpRequest);
+            Long userId = UserContext.getCurrentUserId();
             if (userId == null) {
                 return ResponseUtil.error(com.ticket.enums.ResponseCode.UNAUTHORIZED);
             }
@@ -96,12 +88,9 @@ public class PassengerController {
      * 删除常用联系人
      */
     @DeleteMapping("/{id}")
-    public ResponseUtil.Result<?> deletePassenger(
-            @PathVariable Long id,
-            HttpServletRequest request
-    ) {
+    public ResponseUtil.Result<?> deletePassenger(@PathVariable Long id) {
         try {
-            Long userId = getCurrentUserId(request);
+            Long userId = UserContext.getCurrentUserId();
             if (userId == null) {
                 return ResponseUtil.error(com.ticket.enums.ResponseCode.UNAUTHORIZED);
             }

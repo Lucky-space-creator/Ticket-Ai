@@ -3,11 +3,13 @@ package com.ticket.controller;
 import com.ticket.entity.User;
 import com.ticket.service.UserService;
 import com.ticket.util.CryptoUtil;
-import com.ticket.util.JwtUtil;
 import com.ticket.util.ResponseUtil;
+import com.ticket.util.UserContext;
 import jakarta.annotation.Resource;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 用户控制器
@@ -20,28 +22,13 @@ public class UserController {
     @Resource
     private UserService userService;
 
-    @Resource
-    private JwtUtil jwtUtil;
-
-    /**
-     * 获取当前用户ID
-     */
-    private Long getCurrentUserId(HttpServletRequest request) {
-        String token = request.getHeader("Authorization");
-        if (token != null && token.startsWith("Bearer ")) {
-            token = token.substring(7);
-            return jwtUtil.getUserIdFromToken(token);
-        }
-        return null;
-    }
-
     /**
      * 获取个人信息
      */
     @GetMapping("/profile")
-    public ResponseUtil.Result<?> getProfile(HttpServletRequest request) {
+    public ResponseUtil.Result<?> getProfile() {
         try {
-            Long userId = getCurrentUserId(request);
+            Long userId = UserContext.getCurrentUserId();
             if (userId == null) {
                 return ResponseUtil.error(com.ticket.enums.ResponseCode.UNAUTHORIZED);
             }
@@ -53,7 +40,7 @@ public class UserController {
             }
 
             // 返回用户信息
-            java.util.Map<String, Object> userInfo = new java.util.HashMap<>();
+            Map<String, Object> userInfo = new HashMap<>();
             userInfo.put("id", user.getId());
             userInfo.put("phone", user.getPhone());
             userInfo.put("realName", user.getRealName());
@@ -71,12 +58,9 @@ public class UserController {
      * 更新个人信息
      */
     @PutMapping("/profile")
-    public ResponseUtil.Result<?> updateProfile(
-            @RequestBody UpdateProfileRequest updateRequest,
-            HttpServletRequest request
-    ) {
+    public ResponseUtil.Result<?> updateProfile(@RequestBody UpdateProfileRequest updateRequest) {
         try {
-            Long userId = getCurrentUserId(request);
+            Long userId = UserContext.getCurrentUserId();
             if (userId == null) {
                 return ResponseUtil.error(com.ticket.enums.ResponseCode.UNAUTHORIZED);
             }
