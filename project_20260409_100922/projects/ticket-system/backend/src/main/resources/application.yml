@@ -22,6 +22,8 @@ spring:
     time-zone: GMT+8
     date-format: yyyy-MM-dd HH:mm:ss
     default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
 
   # Redis 配置
   data:

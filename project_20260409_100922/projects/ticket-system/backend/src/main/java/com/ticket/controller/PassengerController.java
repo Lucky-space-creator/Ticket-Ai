@@ -36,9 +36,8 @@ public class PassengerController {
             if (userId == null) {
                 return ResponseUtil.error(com.ticket.enums.ResponseCode.UNAUTHORIZED);
             }
-            User user = userService.getById(userId);
 
-            List<Passenger> passengers = passengerService.getByUserId(user);
+            List<Passenger> passengers = passengerService.getByUserId(userId);
 
             // 解密身份证后返回
             List<Passenger> decryptedPassengers = passengers.stream()

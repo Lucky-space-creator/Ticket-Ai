@@ -7,6 +7,7 @@ import com.ticket.entity.User;
 import com.ticket.enums.CacheKey;
 import com.ticket.mapper.PassengerMapper;
 import com.ticket.service.PassengerService;
+import com.ticket.service.UserService;
 import com.ticket.util.RedisUtil;
 import com.ticket.util.CryptoUtil;
 import jakarta.annotation.Resource;
@@ -24,6 +25,8 @@ public class PassengerServiceImpl extends ServiceImpl<PassengerMapper, Passenger
 
     @Resource
     private RedisUtil redisUtil;
+    @Resource
+    private UserService userService;
 
     @Override
     public Passenger addPassenger(Long userId, String name, String idCard, String phone) {
@@ -56,20 +59,19 @@ public class PassengerServiceImpl extends ServiceImpl<PassengerMapper, Passenger
     }
 
     @Override
-    public List<Passenger> getByUserId(User user) {
-        Long userId = user.getId();
+    public List<Passenger> getByUserId(Long userId) {
+
+        User user = userService.getById(userId);
+
         // 先查缓存
         String cacheKey = String.format(CacheKey.USER_PASSENGERS, userId);
         List<Passenger> cached = redisUtil.get(cacheKey);
 
-
         if (cached != null) {
-            //如果cached中的idCard和user的idCard一致，则返回缓存中的数据
-            //2.过滤cached中的idCard和user的idCard一致的
-            cached = cached.stream().filter(passenger -> passenger.getIdCard().equals(user.getIdCard()))
+            // 缓存命中，去除重复的身份证返回
+            return cached.stream()
+                    .filter(p -> p.getIdCard().equals(user.getIdCard()))
                     .collect(Collectors.toList());
-
-            return cached;
         }
 
         // 查数据库
@@ -80,6 +82,9 @@ public class PassengerServiceImpl extends ServiceImpl<PassengerMapper, Passenger
         // 存缓存（1小时）
         redisUtil.set(cacheKey, list, 60, TimeUnit.MINUTES);
 
-        return list;
+        // 去除重复的身份证
+        return list.stream()
+                .filter(p -> p.getIdCard().equals(user.getIdCard()))
+                .collect(Collectors.toList());
     }
 }

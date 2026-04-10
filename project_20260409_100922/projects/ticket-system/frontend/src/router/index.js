@@ -41,6 +41,12 @@ const routes = [
     name: 'OrderDetail',
     component: () => import('@/views/OrderDetail.vue'),
     meta: { title: '订单详情', requiresAuth: true }
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: () => import('@/views/Profile.vue'),
+    meta: { title: '个人信息', requiresAuth: true }
   }
 ]
 

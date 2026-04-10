@@ -19,7 +19,9 @@
           </el-menu>
           <div class="user-actions">
             <template v-if="userStore.token">
-              <span class="username">{{ userStore.user?.realName || '用户' }}</span>
+              <span class="username" @click="$router.push('/profile')">
+                {{ userStore.user?.realName || '用户' }}
+              </span>
               <el-button type="primary" plain @click="handleLogout">退出</el-button>
             </template>
             <template v-else>
@@ -135,6 +137,11 @@ const handleLogout = () => {
       .username {
         color: #ffffff;
         margin-right: 10px;
+        cursor: pointer;
+
+        &:hover {
+          text-decoration: underline;
+        }
       }
     }
   }

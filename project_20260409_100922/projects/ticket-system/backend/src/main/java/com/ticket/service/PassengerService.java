@@ -24,5 +24,5 @@ public interface PassengerService extends IService<Passenger> {
     /**
      * 获取用户的所有联系人
      */
-    List<Passenger> getByUserId(User user);
+    List<Passenger> getByUserId(Long userId);
 }
