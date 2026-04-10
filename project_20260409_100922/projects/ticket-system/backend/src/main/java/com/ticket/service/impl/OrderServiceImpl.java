@@ -101,7 +101,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
 
         // 检查状态
-        if (order.getStatus() != BusinessStatus.ORDER_STATUS_PENDING) {
+        if (!Objects.equals(order.getStatus(), BusinessStatus.ORDER_STATUS_PENDING)) {
             throw new RuntimeException(ResponseCode.ORDER_PAID.getMessage());
         }
 
