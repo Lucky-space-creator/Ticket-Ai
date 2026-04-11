@@ -1,0 +1,141 @@
+package com.ticket.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.ticket.entity.KnowledgeBase;
+import com.ticket.mapper.KnowledgeBaseMapper;
+import com.ticket.service.KnowledgeBaseService;
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.output.Response;
+import dev.langchain4j.store.embedding.EmbeddingStore;
+import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * 知识库服务实现
+ */
+@Slf4j
+@Service
+public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, KnowledgeBase>
+        implements KnowledgeBaseService {
+
+    @Resource
+    private EmbeddingStore<TextSegment> embeddingStore;
+
+    @Resource
+    private EmbeddingModel embeddingModel;
+
+    /**
+     * 系统提示词
+     */
+    private static final String SYSTEM_PROMPT = """
+        你是一个12306铁路票务系统的智能客服助手，专门帮助用户解答关于购票、改签、退票、查询等铁路出行相关问题。
+        
+        请遵循以下规则：
+        1. 只回答与铁路票务相关的问题
+        2. 如果问题不在知识库范围内，礼貌地告知用户你无法回答该问题，并建议他们咨询人工客服
+        3. 回答要简洁、准确、易懂
+        4. 如果需要用户提供个人信息（如身份证号），提醒他们注意隐私保护
+        5. 对于涉及资金安全的问题，要特别提醒用户防范诈骗
+        
+        常用服务时间：周一至周日 6:00-23:00
+        客服热线：12306
+        """;
+
+    @Override
+    public List<KnowledgeBase> getEnabledKnowledge() {
+        LambdaQueryWrapper<KnowledgeBase> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(KnowledgeBase::getStatus, 1);
+        return list(wrapper);
+    }
+
+    @Override
+    public void syncToVectorStore() {
+        log.info("开始同步知识库到向量数据库...");
+
+        List<KnowledgeBase> knowledgeList = getEnabledKnowledge();
+
+        if (knowledgeList.isEmpty()) {
+            log.warn("知识库为空，跳过同步");
+            return;
+        }
+
+        // 1. 将知识库转换为文本片段
+        List<TextSegment> segments = knowledgeList.stream()
+                .map(kb -> {
+                    String content = String.format("问题：%s\n答案：%s\n关键词：%s",
+                            kb.getQuestion(),
+                            kb.getAnswer(),
+                            kb.getKeywords() != null ? kb.getKeywords() : "");
+                    // 可以添加元数据，方便后续溯源
+                    return TextSegment.from(content);
+                })
+                .collect(Collectors.toList());
+
+        // 2. 将文本片段转换为向量（需要传入参数）
+        Response<List<Embedding>> embeddings = embeddingModel.embedAll(segments);
+        List<Embedding> content = embeddings.content();
+
+        // 3. 调用addAll方法（传入embeddings和segments）
+        List<String> ids = embeddingStore.addAll(content, segments);
+
+        log.info("知识库同步完成，共 {} 条知识，生成 {} 个向量ID", knowledgeList.size(), ids.size());
+    }
+
+    @Override
+    public KnowledgeBase addOrUpdateKnowledge(String category, String question, String answer, String keywords) {
+        // 检查是否已存在相同问题
+        LambdaQueryWrapper<KnowledgeBase> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(KnowledgeBase::getQuestion, question);
+        KnowledgeBase existing = getOne(wrapper);
+
+        KnowledgeBase kb;
+        if (existing != null) {
+            // 更新
+            existing.setCategory(category);
+            existing.setAnswer(answer);
+            existing.setKeywords(keywords);
+            existing.setStatus(1);
+            updateById(existing);
+            kb = existing;
+        } else {
+            // 新增
+            kb = new KnowledgeBase();
+            kb.setCategory(category);
+            kb.setQuestion(question);
+            kb.setAnswer(answer);
+            kb.setKeywords(keywords);
+            kb.setStatus(1);
+            kb.setHitCount(0);
+            save(kb);
+        }
+
+        // 同步到向量库
+        syncToVectorStore();
+
+        return kb;
+    }
+
+    @Override
+    public boolean deleteKnowledge(Long id) {
+        boolean result = removeById(id);
+        if (result) {
+            // 重新同步（简化处理，实际生产可用增量更新）
+            syncToVectorStore();
+        }
+        return result;
+    }
+
+    /**
+     * 获取系统提示词
+     */
+    public static String getSystemPrompt() {
+        return SYSTEM_PROMPT;
+    }
+}

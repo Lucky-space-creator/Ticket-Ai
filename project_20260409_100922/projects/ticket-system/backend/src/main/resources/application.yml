@@ -71,17 +71,68 @@ logging:
 
 # ChromaDB 向量数据库配置
 chromadb:
-  host: 192.168.48.129
+  host: 192.168.48.131
   port: 8000
   collection: ticket_knowledge
 
-# Ollama 本地模型配置
-#ollama:
-#  base-url: http://192.168.48.129:11434
-#  chat-model: qwen2:7b           # 对话模型
-#  embedding-model: nomic-embed-text  # 向量化模型
-#  temperature: 0.7
-#  timeout: 60
+# AI模型配置 - 支持Ollama和OpenAI两种模式
+ai:
+  # 模型类型: ollama, openai, http-api
+  model-type: ollama
+  
+  # 启用/禁用AI服务
+  enabled: true
+  
+  # Ollama配置（当model-type=ollama时使用）
+  ollama:
+    base-url: http://localhost:11434
+    chat-model: qwen2:7b           # 对话模型
+    embedding-model: nomic-embed-text  # 向量化模型
+    temperature: 0.7
+    timeout: 60
+    
+  # OpenAI配置（当model-type=openai时使用）
+  openai:
+    api-key: ${OPENAI_API_KEY:sk-demo-key}
+    model: gpt-3.5-turbo
+    temperature: 0.7
+    timeout: 60
+    
+  # HTTP API配置（当model-type=http-api时使用）
+  http-api:
+    base-url: ${AI_API_URL:https://api.openai.com/v1}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:gpt-3.5-turbo}
+    temperature: 0.7
+    timeout: 60
+    
+  # 备用模式配置
+  fallback:
+    # 当首选模型失败时是否启用备用模式
+    enabled: true
+    # 备用模型类型（openai或http-api）
+    fallback-type: http-api
+
+# AI配置使用说明：
+# 1. Ollama模式（默认）：
+#    - 启动Ollama服务: ollama serve
+#    - 拉取模型: ollama pull qwen2:7b
+#    - 模型会自动切换到备用模式当Ollama不可用时
+#
+# 2. OpenAI模式：
+#    - 设置环境变量: export OPENAI_API_KEY=your_key_here
+#    - 或在配置中直接设置api-key
+#
+# 3. HTTP API模式（兼容OpenAI API的第三方服务）：
+#    - 设置环境变量: 
+#      export AI_API_KEY=your_api_key_here
+#      export AI_API_URL=https://api.your-service.com/v1
+#      export AI_MODEL=your_model_name
+#    - 或直接在配置中设置base-url、api-key和model
+#
+# 4. 禁用AI服务：
+#    - 设置: ai.enabled: false
+#    - AI服务将返回固定响应
 
 # 知识库配置
 knowledge:

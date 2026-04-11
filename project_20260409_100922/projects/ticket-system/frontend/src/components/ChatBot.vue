@@ -1,7 +1,7 @@
 <template>
-  <div class="chat-container" :class="{ 'chat-minimized': isMinimized }">
+  <div class="chat-container">
     <!-- 聊天按钮 -->
-    <div class="chat-toggle" @click="toggleChat" v-if="!isMinimized">
+    <div class="chat-toggle" @click="toggleChat" v-if="isMinimized">
       <el-badge :value="unreadCount" :hidden="unreadCount === 0" :max="99">
         <el-icon size="28"><ChatDotRound /></el-icon>
       </el-badge>
@@ -68,16 +68,6 @@
           <div class="message-content">
             <div class="message-text" v-html="formatMessage(msg.content)"></div>
             <div class="message-time">{{ formatTime(msg.time) }}</div>
-            <div class="reference" v-if="msg.references && msg.references.length > 0">
-              <div class="reference-title">参考知识：</div>
-              <div
-                  v-for="(ref, i) in msg.references"
-                  :key="i"
-                  class="reference-item"
-              >
-                <span class="ref-q">{{ ref.question }}</span>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -131,7 +121,6 @@ const inputText = ref('')
 const loading = ref(false)
 const unreadCount = ref(0)
 const messagesRef = ref(null)
-const sessionId = ref(generateSessionId())
 
 const quickQuestions = [
   '如何购买火车票',
@@ -139,11 +128,6 @@ const quickQuestions = [
   '如何退票',
   '学生票怎么买'
 ]
-
-// 生成会话ID
-function generateSessionId() {
-  return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
-}
 
 // 切换聊天窗口
 function toggleChat() {
@@ -174,16 +158,14 @@ async function sendMessage() {
   loading.value = true
 
   try {
-    const res = await request.post('/chat/send', {
-      sessionId: sessionId.value,
-      message: text
+    const res = await request.post('/chat/ask', {
+      question: text
     })
 
     // 添加机器人消息
     messages.value.push({
       role: 'assistant',
       content: res.data.answer,
-      references: res.data.references || [],
       time: new Date()
     })
 
@@ -208,8 +190,6 @@ function sendQuickQuestion(question) {
 // 清空历史
 function clearHistory() {
   messages.value = []
-  sessionId.value = generateSessionId()
-  request.delete(`/chat/session/${sessionId.value}`)
 }
 
 // 滚动到底部

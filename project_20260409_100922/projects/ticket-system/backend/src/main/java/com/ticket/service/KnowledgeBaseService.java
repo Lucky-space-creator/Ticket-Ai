@@ -2,6 +2,7 @@ package com.ticket.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.ticket.entity.KnowledgeBase;
+import org.springframework.stereotype.Service;
 
 import java.util.List;
 
