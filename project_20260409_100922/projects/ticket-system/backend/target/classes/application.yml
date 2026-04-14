@@ -9,7 +9,15 @@ server:
 spring:
   application:
     name: ticket-system
-
+# Spring 异步配置
+  task:
+    execution:
+      pool:
+        core-size: 2
+        max-size: 5
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
   # 数据源配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -85,26 +93,26 @@ ai:
   
   # Ollama配置（当model-type=ollama时使用）
   ollama:
-    base-url: http://localhost:11434
-    chat-model: qwen2:7b           # 对话模型
+    base-url: http://192.168.48.131:11434
+    chat-model: qwen2:1.5b     # 对话模型
     embedding-model: nomic-embed-text  # 向量化模型
     temperature: 0.7
-    timeout: 60
+    timeout: 300    #超时时间设置，初始加载模型会比较慢，需要时间久一点
     
   # OpenAI配置（当model-type=openai时使用）
   openai:
-    api-key: ${OPENAI_API_KEY:sk-demo-key}
+    api-key: sk-demo-key
     model: gpt-3.5-turbo
     temperature: 0.7
-    timeout: 60
+    timeout: 300
     
   # HTTP API配置（当model-type=http-api时使用）
   http-api:
-    base-url: ${AI_API_URL:https://api.openai.com/v1}
-    api-key: ${AI_API_KEY:}
-    model: ${AI_MODEL:gpt-3.5-turbo}
+    base-url: https://api.openai.com/v1
+    api-key: sk-demo-key
+    model: gpt-3.5-turbo
     temperature: 0.7
-    timeout: 60
+    timeout: 300    #超时时间设置，初始加载模型
     
   # 备用模式配置
   fallback:

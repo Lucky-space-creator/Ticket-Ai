@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/chat")
-public class ChatController {
+public class AIChatController {
 
     @Resource
     private KnowledgeAssistant knowledgeAssistant;  // 直接注入接口

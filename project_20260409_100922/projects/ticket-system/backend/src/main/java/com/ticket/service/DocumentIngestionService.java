@@ -10,13 +10,19 @@ import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 文档加载服务
@@ -25,26 +31,70 @@ import java.util.List;
 @Service
 public class DocumentIngestionService {
 
+    private static final Logger log = LoggerFactory.getLogger(DocumentIngestionService.class);
+
     @Resource
     private EmbeddingStore<TextSegment> embeddingStore;
 
     @Resource
     private EmbeddingModel embeddingModel;
 
-    @Value("${knowledge.base-path:./knowledge-base}")
+    @Value("${knowledge.base-path}")
     private String knowledgeBasePath;
+
+    @Value("${knowledge.init-on-startup:true}")
+    private boolean initOnStartup;
 
     @PostConstruct
     public void ingestDocuments() {
-        System.out.println("=== 开始加载知识库 ===");
+        if (!initOnStartup) {
+            log.info("知识库初始化已禁用（knowledge.init-on-startup=false）");
+            return;
+        }
+
+        // 异步加载知识库，避免阻塞应用启动
+        CompletableFuture.runAsync(() -> {
+            try {
+                // 等待5秒，让应用完全启动
+                TimeUnit.SECONDS.sleep(5);
+                loadDocuments();
+            } catch (Exception e) {
+                log.error("知识库加载失败: {}", e.getMessage(), e);
+            }
+        });
+    }
+
+    private void loadDocuments() {
+        log.info("=== 开始加载知识库 ===");
+
+        // 先测试 embedding 模型连接
+        if (!testEmbeddingModel()) {
+            log.warn("Embedding 模型连接失败，将在30秒后重试");
+            try {
+                TimeUnit.SECONDS.sleep(30);
+                if (!testEmbeddingModel()) {
+                    log.error("Embedding 模型仍然不可用，跳过知识库加载");
+                    return;
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
 
         try {
             Path path = Paths.get(knowledgeBasePath);
             File dir = path.toFile();
 
             if (!dir.exists()) {
-                System.out.println("知识库目录不存在，创建目录: " + knowledgeBasePath);
-                dir.mkdirs();
+                log.info("知识库目录不存在，创建目录: {}", knowledgeBasePath);
+                boolean mkdirs = dir.mkdirs();
+
+                if (!mkdirs) {
+                    log.error("创建目录失败，请检查权限");
+                    return;
+                }
+
                 createSampleDocument();
                 return;
             }
@@ -55,12 +105,12 @@ public class DocumentIngestionService {
             );
 
             if (documents.isEmpty()) {
-                System.out.println("知识库目录中没有找到文档");
+                log.info("知识库目录中没有找到文档");
                 createSampleDocument();
                 return;
             }
 
-            System.out.println("找到 " + documents.size() + " 个文档");
+            log.info("找到 {} 个文档", documents.size());
 
             EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
                     .documentSplitter(DocumentSplitters.recursive(500, 100))
@@ -69,16 +119,29 @@ public class DocumentIngestionService {
                     .build();
 
             ingestor.ingest(documents);
-            System.out.println("知识库加载完成！");
+            log.info("知识库加载完成！");
 
         } catch (Exception e) {
-            System.err.println("知识库加载失败: " + e.getMessage());
+            log.error("知识库加载失败: {}", e.getMessage(), e);
             e.printStackTrace();
         }
     }
 
+    private boolean testEmbeddingModel() {
+        try {
+            log.info("测试 Embedding 模型连接...");
+            // 使用一个小文本测试 embedding
+            embeddingModel.embed("test");
+            log.info("Embedding 模型连接成功");
+            return true;
+        } catch (Exception e) {
+            log.warn("Embedding 模型连接失败: {}", e.getMessage());
+            return false;
+        }
+    }
+
     private void createSampleDocument() {
-        System.out.println("创建示例知识库文档...");
+        log.info("创建示例知识库文档...");
         String sampleContent = """
             === 12306 购票系统常见问题 ===
             
@@ -118,6 +181,6 @@ public class DocumentIngestionService {
                 .build();
 
         ingestor.ingest(document);
-        System.out.println("文档已添加: " + source);
+        log.info("文档已添加: {}", source);
     }
 }

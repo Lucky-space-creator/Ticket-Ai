@@ -22,61 +22,61 @@ import java.util.List;
 @Configuration
 public class AIModelConfig {
 
-    @Value("${ai.model-type:ollama}")
+    @Value("${ai.model-type}")
     private String modelType;
     
-    @Value("${ai.enabled:true}")
+    @Value("${ai.enabled}")
     private boolean aiEnabled;
     
-    @Value("${ai.fallback.enabled:true}")
+    @Value("${ai.fallback.enabled}")
     private boolean fallbackEnabled;
     
-    @Value("${ai.fallback.fallback-type:http-api}")
+    @Value("${ai.fallback.fallback-type}")
     private String fallbackType;
     
     // Ollama配置
-    @Value("${ai.ollama.base-url:http://localhost:11434}")
+    @Value("${ai.ollama.base-url}")
     private String ollamaBaseUrl;
 
-    @Value("${ai.ollama.chat-model:qwen2:7b}")
+    @Value("${ai.ollama.chat-model}")
     private String ollamaChatModelName;
 
-    @Value("${ai.ollama.embedding-model:nomic-embed-text}")
+    @Value("${ai.ollama.embedding-model}")
     private String ollamaEmbeddingModelName;
 
-    @Value("${ai.ollama.temperature:0.7}")
+    @Value("${ai.ollama.temperature}")
     private Double ollamaTemperature;
 
-    @Value("${ai.ollama.timeout:60}")
+    @Value("${ai.ollama.timeout}")
     private int ollamaTimeoutSeconds;
     
     // OpenAI配置
-    @Value("${ai.openai.api-key:}")
+    @Value("${ai.openai.api-key}")
     private String openaiApiKey;
 
-    @Value("${ai.openai.model:gpt-3.5-turbo}")
+    @Value("${ai.openai.model}")
     private String openaiModel;
 
-    @Value("${ai.openai.temperature:0.7}")
+    @Value("${ai.openai.temperature}")
     private Double openaiTemperature;
 
-    @Value("${ai.openai.timeout:60}")
+    @Value("${ai.openai.timeout}")
     private int openaiTimeoutSeconds;
     
     // HTTP API配置
-    @Value("${ai.http-api.base-url:}")
+    @Value("${ai.http-api.base-url}")
     private String httpApiBaseUrl;
 
-    @Value("${ai.http-api.api-key:}")
+    @Value("${ai.http-api.api-key}")
     private String httpApiKey;
 
-    @Value("${ai.http-api.model:gpt-3.5-turbo}")
+    @Value("${ai.http-api.model}")
     private String httpApiModel;
 
-    @Value("${ai.http-api.temperature:0.7}")
+    @Value("${ai.http-api.temperature}")
     private Double httpApiTemperature;
 
-    @Value("${ai.http-api.timeout:60}")
+    @Value("${ai.http-api.timeout}")
     private int httpApiTimeoutSeconds;
 
     @Bean
