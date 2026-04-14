@@ -1,9 +1,5 @@
 package com.ticket.config;
 
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
@@ -12,6 +8,8 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.model.output.Response;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +19,7 @@ import java.util.List;
 
 @Configuration
 public class AIModelConfig {
+    private static final Logger log = LoggerFactory.getLogger(AIModelConfig.class);
 
     @Value("${ai.model-type}")
     private String modelType;
@@ -82,40 +81,40 @@ public class AIModelConfig {
     @Bean
     public ChatLanguageModel chatLanguageModel() {
         if (!aiEnabled) {
-            System.out.println("=== AI服务已禁用 ===");
+            log.info("=== AI服务已禁用 ===");
             return null;
         }
         
-        System.out.println("=== 初始化AI对话模型 ===");
-        System.out.println("模型类型: " + modelType);
+        log.info("=== 初始化AI对话模型 ===");
+        log.info("模型类型: {}", modelType);
         
         try {
             switch (modelType.toLowerCase()) {
                 case "ollama":
-                    System.out.println("尝试连接Ollama服务: " + ollamaBaseUrl);
-                    System.out.println("模型名称: " + ollamaChatModelName);
+                    log.info("尝试连接Ollama服务: {}", ollamaBaseUrl);
+                    log.info("模型名称: {}", ollamaChatModelName);
                     return createOllamaChatModel();
                     
                 case "openai":
-                    System.out.println("使用OpenAI API");
-                    System.out.println("模型: " + openaiModel);
+                    log.info("使用OpenAI API");
+                    log.info("模型: {}", openaiModel);
                     return createOpenAiChatModel();
                     
                 case "http-api":
-                    System.out.println("使用HTTP API");
-                    System.out.println("API地址: " + httpApiBaseUrl);
+                    log.info("使用HTTP API");
+                    log.info("API地址: {}", httpApiBaseUrl);
                     return createHttpApiChatModel();
                     
                 default:
-                    System.err.println("未知的模型类型: " + modelType + ", 使用默认的Ollama配置");
+                    log.warn("未知的模型类型: {}, 使用默认的Ollama配置", modelType);
                     return createOllamaChatModel();
             }
         } catch (Exception e) {
-            System.err.println("初始化主模型失败: " + e.getMessage());
+            log.error("初始化主模型失败: {}", e.getMessage(), e);
             
             // 如果启用了回退机制，尝试使用备用模式
             if (fallbackEnabled) {
-                System.out.println("尝试使用备用模式: " + fallbackType);
+                log.info("尝试使用备用模式: {}", fallbackType);
                 try {
                     switch (fallbackType.toLowerCase()) {
                         case "openai":
@@ -123,14 +122,14 @@ public class AIModelConfig {
                         case "http-api":
                             return createHttpApiChatModel();
                         default:
-                            System.err.println("未知的备用模型类型: " + fallbackType);
+                            log.warn("未知的备用模型类型: {}", fallbackType);
                     }
                 } catch (Exception ex) {
-                    System.err.println("备用模式也失败: " + ex.getMessage());
+                    log.error("备用模式也失败: {}", ex.getMessage(), ex);
                 }
             }
             
-            System.err.println("所有AI模型初始化失败，使用虚拟模型");
+            log.warn("所有AI模型初始化失败，使用虚拟模型");
             return null;
         }
     }
@@ -138,18 +137,18 @@ public class AIModelConfig {
     @Bean
     public EmbeddingModel embeddingModel() {
         if (!aiEnabled) {
-            System.out.println("=== AI向量化模型已禁用 ===");
+            log.info("=== AI向量化模型已禁用 ===");
             return null;
         }
         
-        System.out.println("=== 初始化AI向量化模型 ===");
-        System.out.println("模型类型: " + modelType);
+        log.info("=== 初始化AI向量化模型 ===");
+        log.info("模型类型: {}", modelType);
         
         try {
             switch (modelType.toLowerCase()) {
                 case "ollama":
-                    System.out.println("Ollama服务地址: " + ollamaBaseUrl);
-                    System.out.println("嵌入模型名称: " + ollamaEmbeddingModelName);
+                    log.info("Ollama服务地址: {}", ollamaBaseUrl);
+                    log.info("嵌入模型名称: {}", ollamaEmbeddingModelName);
                     return OllamaEmbeddingModel.builder()
                             .baseUrl(ollamaBaseUrl)
                             .modelName(ollamaEmbeddingModelName)
@@ -158,36 +157,36 @@ public class AIModelConfig {
                 case "openai":
                 case "http-api":
                     // OpenAI和HTTP API使用相同的嵌入模型
-                    System.out.println("使用OpenAI兼容的嵌入模型");
+                    log.info("使用OpenAI兼容的嵌入模型");
                     return OpenAiEmbeddingModel.builder()
                             .apiKey(getEffectiveApiKey())
                             .modelName("text-embedding-ada-002")
                             .build();
                             
                 default:
-                    System.err.println("未知的模型类型: " + modelType + ", 使用默认的Ollama嵌入模型");
+                    log.warn("未知的模型类型: {}, 使用默认的Ollama嵌入模型", modelType);
                     return OllamaEmbeddingModel.builder()
                             .baseUrl(ollamaBaseUrl)
                             .modelName(ollamaEmbeddingModelName)
                             .build();
             }
         } catch (Exception e) {
-            System.err.println("初始化向量化模型失败: " + e.getMessage());
+            log.error("初始化向量化模型失败: {}", e.getMessage(), e);
             
             // 如果启用了回退机制
             if (fallbackEnabled) {
                 try {
-                    System.out.println("尝试使用备用向量化模型");
+                    log.info("尝试使用备用向量化模型");
                     return OpenAiEmbeddingModel.builder()
                             .apiKey(getEffectiveApiKey())
                             .modelName("text-embedding-ada-002")
                             .build();
                 } catch (Exception ex) {
-                    System.err.println("备用向量化模型也失败: " + ex.getMessage());
+                    log.error("备用向量化模型也失败: {}", ex.getMessage(), ex);
                 }
             }
             
-            System.err.println("所有向量化模型初始化失败，使用虚拟模型");
+            log.warn("所有向量化模型初始化失败，使用虚拟模型");
             return null;
         }
     }

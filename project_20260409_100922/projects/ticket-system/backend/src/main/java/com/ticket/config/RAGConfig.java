@@ -8,6 +8,9 @@ import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import com.ticket.service.KnowledgeAssistant;
+import com.ticket.tool.TicketBusinessTool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,6 +22,7 @@ import java.util.List;
  */
 @Configuration
 public class RAGConfig {
+    private static final Logger log = LoggerFactory.getLogger(RAGConfig.class);
 
     @Value("${rag.max-results:3}")
     private int maxResults;
@@ -30,20 +34,32 @@ public class RAGConfig {
     public KnowledgeAssistant knowledgeAssistant(
             ChatLanguageModel chatLanguageModel,
             EmbeddingStore embeddingStore,
-            EmbeddingModel embeddingModel) {
+            EmbeddingModel embeddingModel,
+            TicketBusinessTool ticketBusinessTool) {
 
-        System.out.println("=== 初始化 RAG 服务 ===");
-        System.out.println("最大检索数: " + maxResults);
-        System.out.println("最低相似度: " + minScore);
+        log.info("=== 初始化 RAG 服务（集成业务工具） ===");
+        
+        // 验证配置参数
+        if (maxResults <= 0 || maxResults > 20) {
+            log.warn("maxResults 配置值 {} 超出合理范围 (1-20)，使用默认值 3", maxResults);
+            maxResults = 3;
+        }
+        if (minScore < 0.0 || minScore > 1.0) {
+            log.warn("minScore 配置值 {} 超出合理范围 (0.0-1.0)，使用默认值 0.7", minScore);
+            minScore = 0.7;
+        }
+        
+        log.info("最大检索数: {}", maxResults);
+        log.info("最低相似度: {}", minScore);
         
         // 检查聊天模型是否有效
         if (chatLanguageModel == null) {
-            System.err.println("警告: ChatLanguageModel 为 null，RAG 服务可能无法正常工作");
+            log.warn("ChatLanguageModel 为 null，RAG 服务可能无法正常工作");
         }
         
         // 检查嵌入模型是否有效
         if (embeddingModel == null) {
-            System.err.println("警告: EmbeddingModel 为 null，知识检索功能可能无法正常工作");
+            log.warn("EmbeddingModel 为 null，知识检索功能可能无法正常工作");
         }
 
         try {
@@ -55,16 +71,26 @@ public class RAGConfig {
                     .minScore(minScore)
                     .build();
 
-            // 组装 AI 服务
+            // 组装 AI 服务，集成业务工具
             return AiServices.builder(KnowledgeAssistant.class)
                     .chatLanguageModel(chatLanguageModel)
                     .contentRetriever(retriever)
+                    .tools(ticketBusinessTool)
                     .build();
         } catch (Exception e) {
-            System.err.println("初始化 RAG 服务失败: " + e.getMessage());
+            log.error("初始化 RAG 服务失败: {}", e.getMessage(), e);
             
-            // 返回一个降级的服务，当RAG失败时仍然可以回答问题
-            return question -> "抱歉，智能客服系统当前正在维护中。您的问题：" + question + " 已被记录，请稍后再试或联系人工客服。";
+            // 返回一个降级的服务，当RAG失败时提供有用的信息
+            return question -> {
+                log.info("使用降级服务处理问题: {}", question);
+                return "抱歉，智能客服系统当前正在维护中，预计10分钟内恢复。\n\n" +
+                       "您的问题已被记录，请稍后再试。\n\n" +
+                       "在此期间，您可以：\n" +
+                       "1. 查看【常见问题】页面\n" +
+                       "2. 拨打客服热线：12306\n" +
+                       "3. 使用网站上的其他自助服务\n\n" +
+                       "原始问题：" + question;
+            };
         }
     }
 }

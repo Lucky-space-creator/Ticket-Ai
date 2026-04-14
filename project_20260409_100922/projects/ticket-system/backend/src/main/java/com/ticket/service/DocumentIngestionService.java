@@ -42,7 +42,7 @@ public class DocumentIngestionService {
     @Value("${knowledge.base-path}")
     private String knowledgeBasePath;
 
-    @Value("${knowledge.init-on-startup:true}")
+    @Value("${knowledge.init-on-startup}")
     private boolean initOnStartup;
 
     @PostConstruct
@@ -171,6 +171,10 @@ public class DocumentIngestionService {
     }
 
     public void addDocument(String content, String source) {
+        // 1. 保存到文件系统
+        saveToFileSystem(content, source);
+        
+        // 2. 添加到向量数据库
         Document document = Document.from(content,
                 new dev.langchain4j.data.document.Metadata().put("source", source));
 
@@ -181,6 +185,25 @@ public class DocumentIngestionService {
                 .build();
 
         ingestor.ingest(document);
-        log.info("文档已添加: {}", source);
+        log.info("文档已添加到向量数据库: {}", source);
+    }
+    
+    private void saveToFileSystem(String content, String filename) {
+        try {
+            Path knowledgeDir = Paths.get(knowledgeBasePath);
+            if (!knowledgeDir.toFile().exists()) {
+                knowledgeDir.toFile().mkdirs();
+            }
+            
+            // 确保文件名安全，移除路径分隔符
+            String safeFilename = Paths.get(filename).getFileName().toString();
+            Path filePath = knowledgeDir.resolve(safeFilename);
+            
+            java.nio.file.Files.writeString(filePath, content, java.nio.charset.StandardCharsets.UTF_8);
+            log.info("文档已保存到文件: {}", filePath);
+        } catch (Exception e) {
+            log.warn("无法保存文档到文件系统: {}", e.getMessage());
+            // 不抛出异常，继续添加到向量数据库
+        }
     }
 }

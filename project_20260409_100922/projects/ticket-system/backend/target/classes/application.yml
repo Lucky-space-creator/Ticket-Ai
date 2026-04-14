@@ -94,17 +94,17 @@ ai:
   # Ollama配置（当model-type=ollama时使用）
   ollama:
     base-url: http://192.168.48.131:11434
-    chat-model: qwen2:1.5b     # 对话模型
+    chat-model: qwen2.5:3b # qwen2:1.5b不支持LangChain4j中的Tools注解     # 对话模型
     embedding-model: nomic-embed-text  # 向量化模型
     temperature: 0.7
-    timeout: 300    #超时时间设置，初始加载模型会比较慢，需要时间久一点
+    timeout: 600    # 超时时间设置为10分钟（600秒），初始加载模型可能需要较长时间
     
   # OpenAI配置（当model-type=openai时使用）
   openai:
     api-key: sk-demo-key
     model: gpt-3.5-turbo
     temperature: 0.7
-    timeout: 300
+    timeout: 600
     
   # HTTP API配置（当model-type=http-api时使用）
   http-api:
@@ -112,7 +112,7 @@ ai:
     api-key: sk-demo-key
     model: gpt-3.5-turbo
     temperature: 0.7
-    timeout: 300    #超时时间设置，初始加载模型
+    timeout: 600    #超时时间设置，初始加载模型
     
   # 备用模式配置
   fallback:
@@ -144,7 +144,8 @@ ai:
 
 # 知识库配置
 knowledge:
-  base-path: ./knowledge-base     # 知识库文件目录
+  base-path: ../knowledge-base     # 知识库文件目录（相对于backend目录）
+  init-on-startup: true
 
 # RAG 检索配置
 rag:
