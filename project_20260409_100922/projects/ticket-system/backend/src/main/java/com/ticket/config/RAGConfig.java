@@ -1,14 +1,16 @@
 package com.ticket.config;
 
-import dev.langchain4j.data.message.ChatMessage;
+import com.ticket.tool.AIBusinessTool;
 import dev.langchain4j.memory.ChatMemory;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import com.ticket.service.KnowledgeAssistant;
-import com.ticket.tool.TicketBusinessTool;
+import com.ticket.service.StreamingKnowledgeAssistant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +18,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.util.List;
+import reactor.core.publisher.Flux;
 
 /**
  * RAG 配置
@@ -30,12 +33,33 @@ public class RAGConfig {
     @Value("${rag.min-score:0.7}")
     private Double minScore;
 
+    /**
+     * 创建知识检索服务
+     * @return
+     */
+    @Bean
+    public ChatMemory chatMemory() {
+        // 使用窗口式记忆，保留最近 10 条消息
+        return MessageWindowChatMemory.withMaxMessages(10);
+    }
+
+
+    /**
+     * 创建知识检索服务
+     * @param chatLanguageModel 聊天模型
+     * @param embeddingStore 向量数据库
+     * @param chatMemory 会话记忆
+     * @param embeddingModel 嵌入模型
+     * @param aiBusinessTool 业务工具
+     * @return
+     */
     @Bean
     public KnowledgeAssistant knowledgeAssistant(
             ChatLanguageModel chatLanguageModel,
             EmbeddingStore embeddingStore,
+            ChatMemory chatMemory,
             EmbeddingModel embeddingModel,
-            TicketBusinessTool ticketBusinessTool) {
+            AIBusinessTool aiBusinessTool) {
 
         log.info("=== 初始化 RAG 服务（集成业务工具） ===");
         
@@ -75,7 +99,8 @@ public class RAGConfig {
             return AiServices.builder(KnowledgeAssistant.class)
                     .chatLanguageModel(chatLanguageModel)
                     .contentRetriever(retriever)
-                    .tools(ticketBusinessTool)
+                    .chatMemory(chatMemory)
+                    .tools(aiBusinessTool)
                     .build();
         } catch (Exception e) {
             log.error("初始化 RAG 服务失败: {}", e.getMessage(), e);
@@ -83,14 +108,88 @@ public class RAGConfig {
             // 返回一个降级的服务，当RAG失败时提供有用的信息
             return question -> {
                 log.info("使用降级服务处理问题: {}", question);
-                return "抱歉，智能客服系统当前正在维护中，预计10分钟内恢复。\n\n" +
-                       "您的问题已被记录，请稍后再试。\n\n" +
-                       "在此期间，您可以：\n" +
-                       "1. 查看【常见问题】页面\n" +
-                       "2. 拨打客服热线：12306\n" +
-                       "3. 使用网站上的其他自助服务\n\n" +
-                       "原始问题：" + question;
+                return """
+                        抱歉，智能客服系统当前正在维护中，预计10分钟内恢复。
+                        您的问题已被记录，请稍后再试。
+
+                        在此期间，您可以：
+                        1. 查看【常见问题】页面
+                        2. 拨打客服热线：12306
+                        3. 使用网站上的其他自助服务""";
             };
+        }
+    }
+
+    /**
+     * 创建流式知识检索服务
+     * @param streamingChatLanguageModel 流式聊天模型
+     * @param embeddingStore 向量数据库
+     * @param chatMemory 会话记忆
+     * @param embeddingModel 嵌入模型
+     * @param aiBusinessTool 业务工具
+     * @return
+     */
+    @Bean
+    public StreamingKnowledgeAssistant streamingKnowledgeAssistant(
+            StreamingChatLanguageModel streamingChatLanguageModel,
+            EmbeddingStore embeddingStore,
+            ChatMemory chatMemory,
+            EmbeddingModel embeddingModel,
+            AIBusinessTool aiBusinessTool) {
+
+        log.info("=== 初始化流式 RAG 服务（集成业务工具） ===");
+        
+        // 验证配置参数
+        if (maxResults <= 0 || maxResults > 20) {
+            log.warn("maxResults 配置值 {} 超出合理范围 (1-20)，使用默认值 3", maxResults);
+            maxResults = 3;
+        }
+        if (minScore < 0.0 || minScore > 1.0) {
+            log.warn("minScore 配置值 {} 超出合理范围 (0.0-1.0)，使用默认值 0.7", minScore);
+            minScore = 0.7;
+        }
+        
+        log.info("最大检索数: {}", maxResults);
+        log.info("最低相似度: {}", minScore);
+        
+        // 检查聊天模型是否有效
+        if (streamingChatLanguageModel == null) {
+            log.warn("StreamingChatLanguageModel 为 null，流式 RAG 服务可能无法正常工作");
+        }
+        
+        // 检查嵌入模型是否有效
+        if (embeddingModel == null) {
+            log.warn("EmbeddingModel 为 null，知识检索功能可能无法正常工作");
+        }
+
+        try {
+            // 创建内容检索器（从向量数据库中检索相关知识）
+            EmbeddingStoreContentRetriever retriever = EmbeddingStoreContentRetriever.builder()
+                    .embeddingStore(embeddingStore)
+                    .embeddingModel(embeddingModel)
+                    .maxResults(maxResults)
+                    .minScore(minScore)
+                    .build();
+
+            // 组装流式 AI 服务，集成业务工具
+            return AiServices.builder(StreamingKnowledgeAssistant.class)
+                    .streamingChatLanguageModel(streamingChatLanguageModel)
+                    .contentRetriever(retriever)
+                    .chatMemory(chatMemory)
+                    .tools(aiBusinessTool)
+                    .build();
+        } catch (Exception e) {
+            log.error("初始化流式 RAG 服务失败: {}", e.getMessage(), e);
+            
+            // 返回一个降级的服务，当RAG失败时提供有用的信息
+            return question -> Flux.just("""
+                    抱歉，智能客服系统当前正在维护中，预计10分钟内恢复。
+                    您的问题已被记录，请稍后再试。
+
+                    在此期间，您可以：
+                    1. 查看【常见问题】页面
+                    2. 拨打客服热线：12306
+                    3. 使用网站上的其他自助服务""");
         }
     }
 }

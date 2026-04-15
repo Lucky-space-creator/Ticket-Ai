@@ -18,6 +18,13 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 @Configuration
 public class RedisConfig {
 
+    /**
+     * 配置 RedisTemplate Bean，用于 Redis 缓存操作
+     * 配置了 Jackson2JsonRedisSerializer 进行 JSON 序列化，支持 Java 8 时间类型
+     *
+     * @param factory Redis 连接工厂
+     * @return 配置完成的 RedisTemplate 实例
+     */
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();

@@ -10,6 +10,7 @@ import com.ticket.service.TrainService;
 import com.ticket.service.UserService;
 import com.ticket.util.CryptoUtil;
 import com.ticket.util.UserContext;
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
@@ -19,12 +20,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 购票业务工具类
+ * AI调用业务工具类
  * 将所有可暴露的API整合起来，形成一个业务工具类，可调用具体的业务
  * 每个方法使用 @Tool 注解，可以被AI自动调用
  */
 @Component
-public class TicketBusinessTool {
+public class AIBusinessTool {
 
     @Resource
     private TrainService trainService;
@@ -47,9 +48,14 @@ public class TicketBusinessTool {
      */
     @Tool("查询车次信息，根据出发地、目的地和日期返回可用车次列表")
     public List<Train> searchTrains(
-            String from,
-            String to,
-            String date) {
+            @P(value = "出发地", required = false) String from,
+            @P(value = "目的地", required = false) String to,
+            @P(value = "出发日期", required = false) String date) {
+
+        from = from == null ? "" : from;
+        to = to == null ? "" : to;
+        date = date == null ? "" : date;
+
         return trainService.searchTrains(from, to, date);
     }
 
@@ -59,7 +65,7 @@ public class TicketBusinessTool {
      * @return 车次详情
      */
     @Tool("获取车次详情，根据车次ID返回详细信息")
-    public Train getTrainDetail(Long trainId) {
+    public Train getTrainDetail(@P(value = "车次ID", required = true) Long trainId) {
         return trainService.getTrainDetail(trainId);
     }
 
@@ -76,13 +82,13 @@ public class TicketBusinessTool {
      */
     @Tool("购买车票，根据车次信息、乘客信息和座位类型下单")
     public Order createOrder(
-            Long trainId,
-            String trainDate,
-            String startStation,
-            String endStation,
-            Integer seatType,
-            String passengerNames,
-            String idCards) {
+            @P(value = "车次ID", required = true) Long trainId,
+            @P(value = "出发日期", required = true) String trainDate,
+            @P(value = "出发站", required = true) String startStation,
+            @P(value = "到达站", required = true) String endStation,
+            @P(value = "座位类型", required = true) Integer seatType,
+            @P(value = "乘客姓名", required = true) String passengerNames,
+            @P(value = "身份证号", required = false) String idCards) {
         Long userId = UserContext.getCurrentUserId();
         if (userId == null) {
             throw new RuntimeException("用户未登录");
@@ -91,7 +97,7 @@ public class TicketBusinessTool {
         String[] names = passengerNames.split(",");
         String[] cards = idCards.split(",");
         if (names.length != cards.length) {
-            throw new RuntimeException("乘客姓名和身份证号数量不匹配");
+            throw new RuntimeException("乘客姓名和身份证号不匹配");
         }
         // 查询真实票价
         BigDecimal seatPrice = trainService.getSeatPrice(trainId, trainDate, startStation, endStation, seatType);
@@ -114,7 +120,7 @@ public class TicketBusinessTool {
      * @return 支付结果
      */
     @Tool("支付订单，根据订单号完成支付")
-    public boolean payOrder(String orderNo) {
+    public boolean payOrder(@P(value = "订单号", required = true) String orderNo) {
         Long userId = UserContext.getCurrentUserId();
         if (userId == null) {
             throw new RuntimeException("用户未登录");
@@ -128,7 +134,7 @@ public class TicketBusinessTool {
      * @return 退票结果
      */
     @Tool("取消订单，根据订单号取消未支付的订单或退票")
-    public boolean refundOrder(String orderNo) {
+    public boolean refundOrder(@P(value = "订单号", required = true) String orderNo) {
         Long userId = UserContext.getCurrentUserId();
         if (userId == null) {
             throw new RuntimeException("用户未登录");
@@ -167,8 +173,8 @@ public class TicketBusinessTool {
      */
     @Tool("更新个人信息，包括真实姓名和身份证号")
     public boolean updateProfile(
-            String realName,
-            String idCard) {
+            @P(value = "真实姓名", required = true) String realName,
+            @P(value = "身份证号", required = true) String idCard) {
         Long userId = UserContext.getCurrentUserId();
         if (userId == null) {
             throw new RuntimeException("用户未登录");
@@ -198,9 +204,9 @@ public class TicketBusinessTool {
      */
     @Tool("添加常用联系人")
     public Passenger addPassenger(
-            String name,
-            String idCard,
-            String phone) {
+            @P(value = "姓名", required = true) String name,
+            @P(value = "身份证号", required = true) String idCard,
+            @P(value = "手机号", required = true) String phone) {
         Long userId = UserContext.getCurrentUserId();
         if (userId == null) {
             throw new RuntimeException("用户未登录");
@@ -214,7 +220,7 @@ public class TicketBusinessTool {
      * @return 删除结果
      */
     @Tool("删除常用联系人")
-    public boolean deletePassenger(Long passengerId) {
+    public boolean deletePassenger(@P(value = "联系人ID", required = true) Long passengerId) {
         Long userId = UserContext.getCurrentUserId();
         if (userId == null) {
             throw new RuntimeException("用户未登录");

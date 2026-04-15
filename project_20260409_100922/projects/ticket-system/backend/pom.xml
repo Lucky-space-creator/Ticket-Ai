@@ -121,7 +121,25 @@
             <version>${langchain4j.version}</version>
         </dependency>
 
-        <!-- Ollama 本地部署 -->
+        <!--
+         目前langchain4j的版本0.36.2，版本对模型的tool工具有要求，对于流式回答暂且不支持，
+         如果需要流式回答，需要后续升级langchain4j的版本和依赖
+         -->
+
+        <!-- Reactor Core for reactive streams -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
+        </dependency>
+
+        <!-- LangChain4j Reactor 支持 -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-reactor</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+
+    <!-- Ollama 本地部署 -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-ollama</artifactId>
@@ -147,6 +165,12 @@
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-document-parser-apache-poi</artifactId>
             <version>${langchain4j.version}</version>
+        </dependency>
+
+        <!-- Reactor Core for reactive streams -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
         </dependency>
     </dependencies>
 

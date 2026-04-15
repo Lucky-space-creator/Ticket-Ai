@@ -1,13 +1,15 @@
 package com.ticket.config;
 
 import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
+import dev.langchain4j.model.ollama.OllamaStreamingChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
-import dev.langchain4j.data.document.Document;
-import dev.langchain4j.model.output.Response;
+import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +19,7 @@ import org.springframework.context.annotation.Configuration;
 import java.time.Duration;
 import java.util.List;
 
+@Getter
 @Configuration
 public class AIModelConfig {
     private static final Logger log = LoggerFactory.getLogger(AIModelConfig.class);
@@ -49,18 +52,18 @@ public class AIModelConfig {
     @Value("${ai.ollama.timeout}")
     private int ollamaTimeoutSeconds;
     
-    // OpenAI配置
-    @Value("${ai.openai.api-key}")
-    private String openaiApiKey;
-
-    @Value("${ai.openai.model}")
-    private String openaiModel;
-
-    @Value("${ai.openai.temperature}")
-    private Double openaiTemperature;
-
-    @Value("${ai.openai.timeout}")
-    private int openaiTimeoutSeconds;
+//    // OpenAI配置
+//    @Value("${ai.openai.api-key}")
+//    private String openaiApiKey;
+//
+//    @Value("${ai.openai.model}")
+//    private String openaiModel;
+//
+//    @Value("${ai.openai.temperature}")
+//    private Double openaiTemperature;
+//
+//    @Value("${ai.openai.timeout}")
+//    private int openaiTimeoutSeconds;
     
     // HTTP API配置
     @Value("${ai.http-api.base-url}")
@@ -95,11 +98,6 @@ public class AIModelConfig {
                     log.info("模型名称: {}", ollamaChatModelName);
                     return createOllamaChatModel();
                     
-                case "openai":
-                    log.info("使用OpenAI API");
-                    log.info("模型: {}", openaiModel);
-                    return createOpenAiChatModel();
-                    
                 case "http-api":
                     log.info("使用HTTP API");
                     log.info("API地址: {}", httpApiBaseUrl);
@@ -116,13 +114,10 @@ public class AIModelConfig {
             if (fallbackEnabled) {
                 log.info("尝试使用备用模式: {}", fallbackType);
                 try {
-                    switch (fallbackType.toLowerCase()) {
-                        case "openai":
-                            return createOpenAiChatModel();
-                        case "http-api":
-                            return createHttpApiChatModel();
-                        default:
-                            log.warn("未知的备用模型类型: {}", fallbackType);
+                    if (fallbackType.equalsIgnoreCase("http-api")) {
+                        return createHttpApiChatModel();
+                    } else {
+                        log.warn("未知的备用模型类型: {}", fallbackType);
                     }
                 } catch (Exception ex) {
                     log.error("备用模式也失败: {}", ex.getMessage(), ex);
@@ -191,6 +186,76 @@ public class AIModelConfig {
         }
     }
     
+    @Bean
+    public StreamingChatLanguageModel streamingChatLanguageModel() {
+        if (!aiEnabled) {
+            log.info("=== AI流式模型已禁用 ===");
+            return null;
+        }
+        
+        log.info("=== 初始化AI流式对话模型 ===");
+        log.info("模型类型: {}", modelType);
+        
+        try {
+            switch (modelType.toLowerCase()) {
+                case "ollama":
+                    log.info("尝试连接Ollama流式服务: {}", ollamaBaseUrl);
+                    log.info("模型名称: {}", ollamaChatModelName);
+                    return OllamaStreamingChatModel.builder()
+                            .baseUrl(ollamaBaseUrl)
+                            .modelName(ollamaChatModelName)
+                            .temperature(ollamaTemperature)
+                            .timeout(Duration.ofSeconds(ollamaTimeoutSeconds))
+                            .build();
+                            
+                case "http-api":
+                    log.info("使用HTTP API流式模型");
+                    log.info("API地址: {}", httpApiBaseUrl);
+                    return OpenAiStreamingChatModel.builder()
+                            .apiKey(httpApiKey)
+                            .baseUrl(httpApiBaseUrl)
+                            .modelName(httpApiModel)
+                            .temperature(httpApiTemperature)
+                            .timeout(Duration.ofSeconds(httpApiTimeoutSeconds))
+                            .build();
+                            
+                default:
+                    log.warn("未知的模型类型: {}, 使用默认的Ollama流式配置", modelType);
+                    return OllamaStreamingChatModel.builder()
+                            .baseUrl(ollamaBaseUrl)
+                            .modelName(ollamaChatModelName)
+                            .temperature(ollamaTemperature)
+                            .timeout(Duration.ofSeconds(ollamaTimeoutSeconds))
+                            .build();
+            }
+        } catch (Exception e) {
+            log.error("初始化流式模型失败: {}", e.getMessage(), e);
+            
+            // 如果启用了回退机制
+            if (fallbackEnabled) {
+                log.info("尝试使用备用流式模式: {}", fallbackType);
+                try {
+                    if (fallbackType.equalsIgnoreCase("http-api")) {
+                        return OpenAiStreamingChatModel.builder()
+                                .apiKey(httpApiKey)
+                                .baseUrl(httpApiBaseUrl)
+                                .modelName(httpApiModel)
+                                .temperature(httpApiTemperature)
+                                .timeout(Duration.ofSeconds(httpApiTimeoutSeconds))
+                                .build();
+                    } else {
+                        log.warn("未知的备用流式模型类型: {}", fallbackType);
+                    }
+                } catch (Exception ex) {
+                    log.error("备用流式模式也失败: {}", ex.getMessage(), ex);
+                }
+            }
+            
+            log.warn("所有流式AI模型初始化失败，使用虚拟模型");
+            return null;
+        }
+    }
+    
     private ChatLanguageModel createOllamaChatModel() {
         return OllamaChatModel.builder()
                 .baseUrl(ollamaBaseUrl)
@@ -199,20 +264,7 @@ public class AIModelConfig {
                 .timeout(Duration.ofSeconds(ollamaTimeoutSeconds))
                 .build();
     }
-    
-    private ChatLanguageModel createOpenAiChatModel() {
-        String apiKey = openaiApiKey;
-        if (apiKey == null || apiKey.trim().isEmpty() || "sk-demo-key".equals(apiKey)) {
-            throw new RuntimeException("OpenAI API密钥未配置或为默认值");
-        }
-        
-        return OpenAiChatModel.builder()
-                .apiKey(apiKey)
-                .modelName(openaiModel)
-                .temperature(openaiTemperature)
-                .timeout(Duration.ofSeconds(openaiTimeoutSeconds))
-                .build();
-    }
+
     
     private ChatLanguageModel createHttpApiChatModel() {
         String apiKey = httpApiKey;
@@ -238,11 +290,6 @@ public class AIModelConfig {
     
     private String getEffectiveApiKey() {
         // 返回有效的API密钥，修复空指针异常
-        if ("openai".equalsIgnoreCase(modelType)) {
-            if (openaiApiKey != null && !openaiApiKey.trim().isEmpty() && !"sk-demo-key".equals(openaiApiKey)) {
-                return openaiApiKey.trim();
-            }
-        }
         
         if ("http-api".equalsIgnoreCase(modelType)) {
             if (httpApiKey != null && !httpApiKey.trim().isEmpty()) {
@@ -252,21 +299,11 @@ public class AIModelConfig {
         
         // 回退逻辑
         if (fallbackEnabled) {
-            if ("openai".equalsIgnoreCase(fallbackType)) {
-                if (openaiApiKey != null && !openaiApiKey.trim().isEmpty() && !"sk-demo-key".equals(openaiApiKey)) {
-                    return openaiApiKey.trim();
-                }
-            } else if ("http-api".equalsIgnoreCase(fallbackType)) {
+            if ("http-api".equalsIgnoreCase(fallbackType)) {
                 if (httpApiKey != null && !httpApiKey.trim().isEmpty()) {
                     return httpApiKey.trim();
                 }
             }
-            
-            // 如果指定的回退类型失败，尝试其他可用的
-            if (openaiApiKey != null && !openaiApiKey.trim().isEmpty() && !"sk-demo-key".equals(openaiApiKey)) {
-                return openaiApiKey.trim();
-            }
-            
             if (httpApiKey != null && !httpApiKey.trim().isEmpty()) {
                 return httpApiKey.trim();
             }

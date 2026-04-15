@@ -114,6 +114,7 @@
 import { ref, reactive, nextTick, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
+import { useUserStore } from '@/stores/user'
 
 const isMinimized = ref(true)
 const messages = ref([])
@@ -157,24 +158,34 @@ async function sendMessage() {
 
   loading.value = true
 
+  // 创建占位符助手消息
+  const assistantMessage = {
+    role: 'assistant',
+    content: '',
+    time: new Date()
+  }
+  messages.value.push(assistantMessage)
+  const messageIndex = messages.value.length - 1
+
   try {
-    const res = await request.post('/chat/ask', {
-      question: text
-    })
-
-    // 添加机器人消息
-    messages.value.push({
-      role: 'assistant',
-      content: res.data.answer,
-      time: new Date()
-    })
-
+    // 使用同步端点
+    const result = await request.post('/chat/ask', { question: text })
+    // result.data 是 ChatResponse 对象
+    assistantMessage.content = result.data.answer
+    // 触发响应式更新
+    messages.value = [...messages.value]
+    scrollToBottom()
+    
+    // 接收完成
+    assistantMessage.time = new Date()
     // 如果窗口最小化，显示未读数
     if (isMinimized.value) {
       unreadCount.value++
     }
   } catch (error) {
     ElMessage.error('发送失败，请重试')
+    // 移除占位符消息
+    messages.value.splice(messageIndex, 1)
   } finally {
     loading.value = false
     scrollToBottom()

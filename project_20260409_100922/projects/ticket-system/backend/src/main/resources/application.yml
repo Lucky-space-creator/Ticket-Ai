@@ -79,7 +79,7 @@ logging:
 
 # ChromaDB 向量数据库配置
 chromadb:
-  host: 192.168.48.131
+  host: 192.168.48.132
   port: 8000
   collection: ticket_knowledge
 
@@ -93,8 +93,8 @@ ai:
   
   # Ollama配置（当model-type=ollama时使用）
   ollama:
-    base-url: http://192.168.48.131:11434
-    chat-model: qwen2.5:3b # qwen2:1.5b不支持LangChain4j中的Tools注解     # 对话模型
+    base-url: http://192.168.48.132:11434
+    chat-model: llama3.2:3b # qwen2:1.5b不支持LangChain4j中的Tools注解     # 对话模型
     embedding-model: nomic-embed-text  # 向量化模型
     temperature: 0.7
     timeout: 600    # 超时时间设置为10分钟（600秒），初始加载模型可能需要较长时间
@@ -146,6 +146,7 @@ ai:
 knowledge:
   base-path: ../knowledge-base     # 知识库文件目录（相对于backend目录）
   init-on-startup: true
+  prompt-file: ticket_rules.txt
 
 # RAG 检索配置
 rag:

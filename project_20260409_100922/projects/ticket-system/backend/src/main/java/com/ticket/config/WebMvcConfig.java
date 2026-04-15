@@ -31,8 +31,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/api/auth/**",
                         "/api/trains/**",
-                        "/api/stations/**",
-                        "/api/chat/**"
+                        "/api/stations/**"
                 );
     }
 }

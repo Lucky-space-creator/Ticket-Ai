@@ -23,7 +23,6 @@ com\ticket\service\impl\AIChatServiceImpl.class
 com\ticket\dto\CreateOrderRequest$OrderItemRequest.class
 com\ticket\service\impl\UserServiceImpl.class
 com\ticket\service\impl\PassengerServiceImpl.class
-com\ticket\tool\TicketBusinessTool.class
 com\ticket\config\RAGConfig.class
 com\ticket\enums\ResponseCode.class
 com\ticket\controller\KnowledgeController.class

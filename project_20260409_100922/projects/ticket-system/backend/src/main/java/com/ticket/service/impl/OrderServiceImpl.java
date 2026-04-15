@@ -44,7 +44,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Order createOrder(Long userId, Long trainId, String trainDate, String startStation, String endStation, Integer seatType, List<OrderItem> items) {
+    public Order createOrder(Long userId, Long trainId, String trainDate,
+                             String startStation, String endStation,
+                             Integer seatType, List<OrderItem> items) {
         // 1. 检查车次信息
         Train train = trainService.getById(trainId);
         if (train == null || Objects.equals(train.getStatus(), BusinessStatus.TRAIN_STATUS_STOPPED)) {
@@ -173,8 +175,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         List<Order> orders = list(wrapper);
 
-        //TODO 缓存设计时间
-        // 存缓存（10分钟）
         redisUtil.set(cacheKey, orders, 10, TimeUnit.MINUTES);
 
         return orders;
@@ -195,8 +195,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         Order order = getOne(wrapper);
 
-        //TODO 缓存设计时间
-        // 存缓存（30分钟）
         if (order != null) {
             redisUtil.set(cacheKey, order, 30, TimeUnit.MINUTES);
         }

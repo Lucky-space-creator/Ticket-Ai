@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ticket.entity.KnowledgeBase;
 import com.ticket.mapper.KnowledgeBaseMapper;
+import com.ticket.service.AIChatService;
 import com.ticket.service.KnowledgeBaseService;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
@@ -11,9 +12,12 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import jakarta.annotation.Resource;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.io.FileNotFoundException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -31,22 +35,17 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
     @Resource
     private EmbeddingModel embeddingModel;
 
+    @Resource
+    private AIChatService aiChatService;
+
     /**
      * 系统提示词
      */
     private static final String SYSTEM_PROMPT = """
-        你是一个12306铁路票务系统的智能客服助手，专门帮助用户解答关于购票、改签、退票、查询等铁路出行相关问题。
-        
-        请遵循以下规则：
-        1. 只回答与铁路票务相关的问题
-        2. 如果问题不在知识库范围内，礼貌地告知用户你无法回答该问题，并建议他们咨询人工客服
-        3. 回答要简洁、准确、易懂
-        4. 如果需要用户提供个人信息（如身份证号），提醒他们注意隐私保护
-        5. 对于涉及资金安全的问题，要特别提醒用户防范诈骗
-        
-        常用服务时间：周一至周日 6:00-23:00
-        客服热线：12306
-        """;
+      Question: {question}
+      userId: {userId}
+      date: {time}
+      """;
 
     @Override
     public List<KnowledgeBase> getEnabledKnowledge() {
@@ -134,8 +133,15 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
 
     /**
      * 获取系统提示词
+     * @param userId 用户ID
+     * @param question  问题
+     * @return
      */
-    public static String getSystemPrompt() {
-        return SYSTEM_PROMPT;
+    public static String getSystemPrompt(Long userId, String question) {
+        //提示词转化中{it}等转化为具体信息
+        String prompt = SYSTEM_PROMPT.replace("{userId}", String.valueOf(userId));
+        prompt = prompt.replace("{question}", question);
+        prompt = prompt.replace("{time}", LocalDateTime.now().toString());
+        return prompt;
     }
 }

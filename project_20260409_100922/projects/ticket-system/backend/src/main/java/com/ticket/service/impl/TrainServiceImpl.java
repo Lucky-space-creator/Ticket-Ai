@@ -13,6 +13,9 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -55,8 +58,16 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
 
         List<Train> trains = list(wrapper);
 
-        //TODO: 存缓存（30分钟） 缓存时间为列车最终站到达时间-当前时间，上下时间浮动2min
-        redisUtil.set(cacheKey, trains, 30, TimeUnit.MINUTES);
+        trains.forEach(train -> {
+            if (train != null) {
+                //车次最终战到达时间和当前时间差，设置过期时间，防止车已经停运还出现买票的情况
+                long expireTime = getExpireTrainTime(train);
+
+                if (expireTime > 0) {
+                    redisUtil.set(cacheKey, train, expireTime, TimeUnit.MINUTES);
+                }
+            }
+        });
 
         return trains;
     }
@@ -72,12 +83,27 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
 
         Train train = getById(trainId);
 
-        //TODO: 存缓存（1小时），缓存时间为列车最终站到达时间-当前时间，上下时间浮动2min
         if (train != null) {
-            redisUtil.set(cacheKey, train, 60, TimeUnit.MINUTES);
+            //车次最终战到达时间和当前时间差，设置过期时间，防止车已经停运还出现买票的情况
+            long expireTime = getExpireTrainTime(train);
+
+            if (expireTime > 0) {
+                redisUtil.set(cacheKey, train, expireTime, TimeUnit.MINUTES);
+            }
         }
 
         return train;
+    }
+
+    /**
+     * 车站到达时间 - 当前时间的函数
+     */
+    private long getExpireTrainTime(Train train) {
+        //测试环境先直接返回大于0的天数
+//        LocalDateTime endDateTime = LocalDateTime.from(train.getEndTime());
+//        return ChronoUnit.SECONDS.between(LocalDateTime.now(), endDateTime);
+
+        return Long.MAX_VALUE;
     }
 
     @Override
