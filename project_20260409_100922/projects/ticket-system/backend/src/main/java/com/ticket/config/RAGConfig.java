@@ -1,6 +1,8 @@
 package com.ticket.config;
 
 import com.ticket.tool.AIBusinessTool;
+import com.ticket.util.UserContext;
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatLanguageModel;
@@ -16,7 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import reactor.core.publisher.Flux;
 
@@ -33,14 +35,52 @@ public class RAGConfig {
     @Value("${rag.min-score:0.7}")
     private Double minScore;
 
+    // 存储每个用户的聊天记忆
+    private final ConcurrentHashMap<String, ChatMemory> chatMemoryMap = new ConcurrentHashMap<>();
+
     /**
-     * 创建知识检索服务
-     * @return
+     * 创建基于用户ID的聊天记忆
      */
     @Bean
     public ChatMemory chatMemory() {
-        // 使用窗口式记忆，保留最近 10 条消息
-        return MessageWindowChatMemory.withMaxMessages(10);
+        // 返回一个根据当前用户ID动态选择记忆的ChatMemory
+        return new UserScopedChatMemory();
+    }
+
+    /**
+     * 用户作用域的聊天记忆实现
+     * 根据当前用户ID从map中获取对应的MessageWindowChatMemory
+     */
+    private class UserScopedChatMemory implements ChatMemory {
+        @Override
+        public Object id() {
+            return getCurrentUserId();
+        }
+
+        @Override
+        public void add(ChatMessage message) {
+            getDelegate().add(message);
+        }
+
+        @Override
+        public List<ChatMessage> messages() {
+            return getDelegate().messages();
+        }
+
+        @Override
+        public void clear() {
+            getDelegate().clear();
+        }
+
+        private String getCurrentUserId() {
+            Long userId = UserContext.getCurrentUserId();
+            return userId != null ? userId.toString() : "anonymous";
+        }
+
+        private ChatMemory getDelegate() {
+            String userId = getCurrentUserId();
+            return chatMemoryMap.computeIfAbsent(userId, k -> MessageWindowChatMemory.withMaxMessages(10));
+        }
     }
 
 
@@ -51,7 +91,6 @@ public class RAGConfig {
      * @param chatMemory 会话记忆
      * @param embeddingModel 嵌入模型
      * @param aiBusinessTool 业务工具
-     * @return
      */
     @Bean
     public KnowledgeAssistant knowledgeAssistant(
@@ -95,7 +134,7 @@ public class RAGConfig {
                     .minScore(minScore)
                     .build();
 
-            // 组装 AI 服务，集成业务工具
+            // 组装 AI 服务，集成业务工具，使用基于用户ID的聊天记忆
             return AiServices.builder(KnowledgeAssistant.class)
                     .chatLanguageModel(chatLanguageModel)
                     .contentRetriever(retriever)
@@ -127,7 +166,6 @@ public class RAGConfig {
      * @param chatMemory 会话记忆
      * @param embeddingModel 嵌入模型
      * @param aiBusinessTool 业务工具
-     * @return
      */
     @Bean
     public StreamingKnowledgeAssistant streamingKnowledgeAssistant(
@@ -171,7 +209,7 @@ public class RAGConfig {
                     .minScore(minScore)
                     .build();
 
-            // 组装流式 AI 服务，集成业务工具
+            // 组装流式 AI 服务，集成业务工具，使用基于用户ID的聊天记忆
             return AiServices.builder(StreamingKnowledgeAssistant.class)
                     .streamingChatLanguageModel(streamingChatLanguageModel)
                     .contentRetriever(retriever)

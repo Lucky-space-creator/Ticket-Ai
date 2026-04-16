@@ -30,6 +30,7 @@ com\ticket\enums\BusinessStatus.class
 com\ticket\entity\OrderItem.class
 com\ticket\entity\User.class
 com\ticket\config\WebMvcConfig.class
+com\ticket\config\RAGConfig$UserScopedChatMemory.class
 com\ticket\dto\ChatRequest.class
 com\ticket\mapper\OrderMapper.class
 com\ticket\util\SnowflakeIdUtil.class
@@ -50,6 +51,7 @@ com\ticket\entity\TrainStation.class
 com\ticket\service\AIChatService.class
 com\ticket\mapper\TrainMapper.class
 com\ticket\config\ChromaDBConfig.class
+com\ticket\tool\AIBusinessTool.class
 com\ticket\dto\CreateOrderRequest.class
 com\ticket\entity\Order.class
 com\ticket\mapper\PassengerMapper.class
@@ -66,6 +68,7 @@ com\ticket\util\JwtUtil.class
 com\ticket\mapper\TicketStockMapper.class
 com\ticket\util\CacheUtil$CacheItem.class
 com\ticket\dto\ChatResponse.class
+com\ticket\service\StreamingKnowledgeAssistant.class
 com\ticket\config\MyMetaObjectHandler.class
 com\ticket\util\DateUtils.class
 com\ticket\service\impl\KnowledgeBaseServiceImpl.class

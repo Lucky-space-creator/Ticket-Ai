@@ -111,7 +111,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, nextTick, onMounted } from 'vue'
+import { ref, reactive, nextTick, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 import { useUserStore } from '@/stores/user'
@@ -122,6 +122,22 @@ const inputText = ref('')
 const loading = ref(false)
 const unreadCount = ref(0)
 const messagesRef = ref(null)
+const userStore = useUserStore()
+
+// 监听用户状态变化
+watch(() => userStore.token, (newToken, oldToken) => {
+  if (!newToken) {
+    // 用户注销，清空消息和未读计数
+    messages.value = []
+    unreadCount.value = 0
+    inputText.value = ''
+  } else if (oldToken && newToken !== oldToken) {
+    // token发生变化（可能是重新登录或切换账户），清空消息
+    messages.value = []
+    unreadCount.value = 0
+    inputText.value = ''
+  }
+})
 
 const quickQuestions = [
   '如何购买火车票',
@@ -199,8 +215,16 @@ function sendQuickQuestion(question) {
 }
 
 // 清空历史
-function clearHistory() {
+async function clearHistory() {
+  try {
+    await request.post('/api/chat/clear')
+    ElMessage.success('会话已清空')
+  } catch (error) {
+    ElMessage.error('清空会话失败')
+  }
   messages.value = []
+  unreadCount.value = 0
+  inputText.value = ''
 }
 
 // 滚动到底部

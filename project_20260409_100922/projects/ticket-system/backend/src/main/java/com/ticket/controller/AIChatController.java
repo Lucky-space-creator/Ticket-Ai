@@ -34,22 +34,21 @@ public class AIChatController {
     private AIChatService aiChatService;  // 注入AI聊天服务
 
     @PostMapping("/ask")
-    public ResponseUtil.Result<ChatResponse> ask(@Valid @RequestBody ChatRequest request) throws FileNotFoundException {
-        String systemPrompt = KnowledgeBaseServiceImpl.getSystemPrompt(UserContext.getCurrentUserId(), request.getQuestion());
-
-        String answer = aiChatService.chat(systemPrompt);
+    public ResponseUtil.Result<ChatResponse> ask(@Valid @RequestBody ChatRequest request) {
+        String question = request.getQuestion();
+        log.info("用户提问：{}", question);
+        String answer = aiChatService.chat(question);
         ChatResponse chatResponse = new ChatResponse(answer, true, System.currentTimeMillis());
         return ResponseUtil.success(chatResponse);
     }
 
     @PostMapping(value = "/ask/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter askStream(@Valid @RequestBody ChatRequest request) throws FileNotFoundException {
-        log.info("收到流式聊天请求，问题：{}", request.getQuestion());
-        String systemPrompt = KnowledgeBaseServiceImpl.getSystemPrompt(UserContext.getCurrentUserId(), request.getQuestion());
-        log.debug("系统提示：{}", systemPrompt);
+    public SseEmitter askStream(@Valid @RequestBody ChatRequest request) {
+        String question = request.getQuestion();
+        log.info("收到流式聊天请求，问题：{}", question);
         
         SseEmitter emitter = new SseEmitter(60000L); // 60秒超时
-        Flux<String> flux = aiChatService.streamingChat(systemPrompt);
+        Flux<String> flux = aiChatService.streamingChat(question);
         
         log.info("开始流式传输");
         flux.subscribe(
@@ -78,5 +77,12 @@ public class AIChatController {
         emitter.onError(error -> log.error("SSE连接错误", error));
         
         return emitter;
+    }
+
+    @PostMapping("/clear")
+    public ResponseUtil.Result<Void> clearMemory() {
+        log.info("清除当前用户聊天记忆");
+        aiChatService.clearMemory();
+        return ResponseUtil.success("清除成功");
     }
 }

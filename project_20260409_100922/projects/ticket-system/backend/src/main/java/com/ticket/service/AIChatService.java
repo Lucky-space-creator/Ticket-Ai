@@ -28,4 +28,9 @@ public interface AIChatService {
      * 获取系统提示词文档
      */
 //    String getSystemPrompt() throws FileNotFoundException;
+
+    /**
+     * 清除当前用户的聊天记忆
+     */
+    void clearMemory();
 }
