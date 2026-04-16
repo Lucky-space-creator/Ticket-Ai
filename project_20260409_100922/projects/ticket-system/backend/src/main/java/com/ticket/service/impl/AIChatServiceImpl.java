@@ -4,6 +4,7 @@ import com.ticket.entity.ChatRecord;
 import com.ticket.mapper.ChatRecordMapper;
 import com.ticket.service.AIChatService;
 import com.ticket.service.KnowledgeAssistant;
+import com.ticket.service.KnowledgeBaseService;
 import com.ticket.service.StreamingKnowledgeAssistant;
 import dev.langchain4j.memory.ChatMemory;
 import com.ticket.util.SnowflakeIdUtil;
@@ -45,6 +46,10 @@ public class AIChatServiceImpl implements AIChatService {
         String sessionId = getSessionId();
         // 保存用户消息
         saveChatRecord(question, 1, null, sessionId);
+
+        //将问题中的{}替换为具体信息
+//        question = KnowledgeBaseServiceImpl.getSystemPrompt(UserContext.getCurrentUserId(), String.valueOf(LocalDateTime.now()));
+
         // 调用AI
         String answer = knowledgeAssistant.chat(question);
         // 保存AI回复

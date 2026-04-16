@@ -88,9 +88,9 @@ public class DocumentIngestionService {
 
             if (!dir.exists()) {
                 log.info("知识库目录不存在，创建目录: {}", knowledgeBasePath);
-                boolean mkdirs = dir.mkdirs();
+                boolean mkdir = dir.mkdirs();
 
-                if (!mkdirs) {
+                if (!mkdir) {
                     log.error("创建目录失败，请检查权限");
                     return;
                 }

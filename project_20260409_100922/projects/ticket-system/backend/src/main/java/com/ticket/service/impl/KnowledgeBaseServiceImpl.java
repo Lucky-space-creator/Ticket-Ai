@@ -38,14 +38,6 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
     @Resource
     private AIChatService aiChatService;
 
-    /**
-     * 系统提示词
-     */
-    private static final String SYSTEM_PROMPT = """
-      Question: {question}
-      userId: {userId}
-      date: {time}
-      """;
 
     @Override
     public List<KnowledgeBase> getEnabledKnowledge() {
@@ -59,6 +51,15 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         log.info("开始同步知识库到向量数据库...");
 
         List<KnowledgeBase> knowledgeList = getEnabledKnowledge();
+
+        // 清空现有向量库，避免重复累积
+        try {
+            embeddingStore.removeAll();
+            log.info("已清空向量数据库中的旧数据");
+        } catch (Exception e) {
+            log.warn("清空向量数据库失败: {}", e.getMessage());
+            // 继续执行，因为可能向量库本来就为空或清空操作不被支持
+        }
 
         if (knowledgeList.isEmpty()) {
             log.warn("知识库为空，跳过同步");
@@ -129,19 +130,5 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
             syncToVectorStore();
         }
         return result;
-    }
-
-    /**
-     * 获取系统提示词
-     * @param userId 用户ID
-     * @param question  问题
-     * @return
-     */
-    public static String getSystemPrompt(Long userId, String question) {
-        //提示词转化中{it}等转化为具体信息
-        String prompt = SYSTEM_PROMPT.replace("{userId}", String.valueOf(userId));
-        prompt = prompt.replace("{question}", question);
-        prompt = prompt.replace("{time}", LocalDateTime.now().toString());
-        return prompt;
     }
 }
