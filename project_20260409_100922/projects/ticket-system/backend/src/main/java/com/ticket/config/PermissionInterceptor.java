@@ -1,7 +1,9 @@
 package com.ticket.config;
 
 import com.ticket.entity.Permission;
+import com.ticket.entity.User;
 import com.ticket.service.PermissionService;
+import com.ticket.service.UserService;
 import com.ticket.util.UserContext;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,6 +25,9 @@ public class PermissionInterceptor implements HandlerInterceptor {
     @Resource
     private PermissionService permissionService;
 
+    @Resource
+    private UserService userService;
+
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         Long userId = UserContext.getCurrentUserId();
@@ -36,6 +41,13 @@ public class PermissionInterceptor implements HandlerInterceptor {
 
         // 白名单：公开API不需要权限检查
         if (isPublicApi(requestUri)) {
+            return true;
+        }
+
+        // 方案3：super_admin角色直接放行
+        User user = userService.getById(userId);
+        if (user != null && user.getRoleId() != null && user.getRoleId() == 1) {
+            // role_id = 1 是超级管理员（根据初始化SQL）
             return true;
         }
 
@@ -85,7 +97,14 @@ public class PermissionInterceptor implements HandlerInterceptor {
             return true;
         }
         
-        return false;
+        // 方案1：用户端自身数据操作接口加入白名单
+        // 用户个人信息接口（已认证用户可访问自己的信息）
+        if (uri.startsWith("/api/user/")) {
+            return true;
+        }
+        
+        // 用户订单和乘客接口（已认证用户可访问自己的数据）
+        return uri.startsWith("/api/orders/") || uri.startsWith("/api/passengers/");
     }
 
     /**

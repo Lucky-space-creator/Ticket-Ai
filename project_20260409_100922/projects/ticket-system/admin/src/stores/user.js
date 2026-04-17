@@ -27,10 +27,19 @@ export const useUserStore = defineStore('user', () => {
     const res = await request.post('/api/auth/login', { phone, password })
     if (res.code === 200) {
       setToken(res.data.token)
-      // 获取用户信息
-      const userRes = await request.get('/api/user/profile')
-      if (userRes.code === 200) {
-        setUserInfo(userRes.data)
+      // 优先使用登录响应中的用户信息
+      if (res.data.user) {
+        setUserInfo(res.data.user)
+      } else {
+        // 兼容性处理：如果登录响应中没有用户信息，则单独获取
+        try {
+          const userRes = await request.get('/api/user/profile')
+          if (userRes.code === 200) {
+            setUserInfo(userRes.data)
+          }
+        } catch (error) {
+          console.warn('获取用户信息失败，但登录成功:', error)
+        }
       }
       return true
     }

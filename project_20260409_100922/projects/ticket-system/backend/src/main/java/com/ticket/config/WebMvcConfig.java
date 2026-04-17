@@ -46,7 +46,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/trains/**",
                         "/api/stations/**",
                         "/api/knowledge/list",
-                        "/api/chat/**"
+                        "/api/chat/**",
+                        // 方案1：用户端自身数据操作接口加入白名单
+                        "/api/user/**",
+                        "/api/orders/**",
+                        "/api/passengers/**"
                 );
     }
 }
