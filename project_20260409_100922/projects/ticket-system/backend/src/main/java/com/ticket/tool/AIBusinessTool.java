@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * AI调用业务工具类
@@ -245,5 +246,35 @@ public class AIBusinessTool {
             throw new RuntimeException("用户未登录");
         }
         return passengerService.deletePassenger(passengerId, userId);
+    }
+
+    /**
+     * 获取当前用户个人信息
+     * @return 用户个人信息（包含真实姓名和身份证号）
+     */
+    @Tool("获取当前用户个人信息")
+    public java.util.Map<String, String> getUserProfile() {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new RuntimeException("用户未登录");
+        }
+        com.ticket.entity.User user = userService.getById(userId);
+        if (user == null) {
+            throw new RuntimeException("用户不存在");
+        }
+        java.util.Map<String, String> profile = new java.util.HashMap<>();
+        profile.put("realName", user.getRealName());
+        String encryptedIdCard = user.getIdCard();
+        if (encryptedIdCard != null && !encryptedIdCard.trim().isEmpty()) {
+            try {
+                String decryptedIdCard = CryptoUtil.decrypt(encryptedIdCard);
+                profile.put("idCard", decryptedIdCard);
+            } catch (Exception e) {
+                profile.put("idCard", null);
+            }
+        } else {
+            profile.put("idCard", null);
+        }
+        return profile;
     }
 }
