@@ -1,7 +1,9 @@
 package com.ticket.controller;
 
 import com.ticket.entity.User;
+import com.ticket.entity.Role;
 import com.ticket.service.UserService;
+import com.ticket.service.RoleService;
 import com.ticket.util.CryptoUtil;
 import com.ticket.util.ResponseUtil;
 import com.ticket.util.UserContext;
@@ -21,6 +23,9 @@ public class UserController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private RoleService roleService;
 
     /**
      * 获取个人信息
@@ -47,6 +52,14 @@ public class UserController {
             // 返回解密后的身份证（用于购票）
             userInfo.put("idCard", user.getIdCard() != null ? CryptoUtil.decrypt(user.getIdCard()) : null);
             userInfo.put("status", user.getStatus());
+            userInfo.put("roleId", user.getRoleId());
+            // 获取角色显示名称
+            if (user.getRoleId() != null) {
+                Role role = roleService.getById(user.getRoleId());
+                if (role != null) {
+                    userInfo.put("roleName", role.getRoleDisplayName());
+                }
+            }
 
             return ResponseUtil.success(userInfo);
         } catch (Exception e) {

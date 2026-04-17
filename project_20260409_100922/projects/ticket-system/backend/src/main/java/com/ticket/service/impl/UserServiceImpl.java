@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ticket.enums.CacheKey;
 import com.ticket.entity.User;
 import com.ticket.mapper.UserMapper;
+import com.ticket.service.PermissionService;
 import com.ticket.service.UserService;
 import com.ticket.util.RedisUtil;
 import com.ticket.util.CryptoUtil;
@@ -19,6 +20,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Resource
     private RedisUtil redisUtil;
+
+    @Resource
+    private PermissionService permissionService;
 
     @Override
     public User register(String phone, String password, String realName, String idCard) {
@@ -108,6 +112,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 清除缓存
         redisUtil.delete(String.format(CacheKey.USER_INFO, userId));
 
+        return result;
+    }
+
+    @Override
+    public boolean updateUserRole(Long userId, Long roleId) {
+        User user = new User();
+        user.setId(userId);
+        user.setRoleId(roleId);
+        boolean result = updateById(user);
+        // 清除用户缓存
+        redisUtil.delete(String.format(CacheKey.USER_INFO, userId));
+        // 清除用户权限缓存
+        permissionService.clearUserPermissionCache(userId);
         return result;
     }
 }

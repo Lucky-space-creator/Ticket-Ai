@@ -15,6 +15,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Resource
     private AuthenticationInterceptor authenticationInterceptor;
 
+    @Resource
+    private PermissionInterceptor permissionInterceptor;
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
@@ -26,12 +29,24 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // 认证拦截器（先执行）
         registry.addInterceptor(authenticationInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
                         "/api/auth/**",
                         "/api/trains/**",
                         "/api/stations/**"
+                );
+        
+        // 权限拦截器（后执行）
+        registry.addInterceptor(permissionInterceptor)
+                .addPathPatterns("/api/**")
+                .excludePathPatterns(
+                        "/api/auth/**",
+                        "/api/trains/**",
+                        "/api/stations/**",
+                        "/api/knowledge/list",
+                        "/api/chat/**"
                 );
     }
 }

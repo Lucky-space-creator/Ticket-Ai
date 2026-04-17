@@ -44,6 +44,11 @@ public class User {
     private Integer status;
 
     /**
+     * 角色ID
+     */
+    private Long roleId;
+
+    /**
      * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)

@@ -27,4 +27,9 @@ public interface UserService extends IService<User> {
      * 更新用户信息
      */
     boolean updateProfile(Long userId, String realName, String idCard);
+
+    /**
+     * 更新用户角色
+     */
+    boolean updateUserRole(Long userId, Long roleId);
 }

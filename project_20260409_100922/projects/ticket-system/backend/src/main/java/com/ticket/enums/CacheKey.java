@@ -100,4 +100,10 @@ public class CacheKey {
      * 格式: train:stations:{trainId}
      */
     public static final String TRAIN_STATIONS = "train:stations:%d";
+
+    /**
+     * 用户权限缓存（10分钟）
+     * 格式: user:permissions:{userId}
+     */
+    public static final String USER_PERMISSIONS = "user:permissions:%d";
 }

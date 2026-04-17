@@ -4,7 +4,9 @@ import com.ticket.enums.CacheKey;
 import com.ticket.enums.ResponseCode;
 import com.ticket.dto.UserLoginRequest;
 import com.ticket.dto.UserRegisterRequest;
+import com.ticket.entity.Role;
 import com.ticket.entity.User;
+import com.ticket.service.RoleService;
 import com.ticket.service.UserService;
 import com.ticket.util.CryptoUtil;
 import com.ticket.util.RedisUtil;
@@ -30,6 +32,9 @@ public class AuthController {
     private UserService userService;
 
     @Resource
+    private RoleService roleService;
+
+    @Resource
     private JwtUtil jwtUtil;
 
     @Resource
@@ -48,8 +53,18 @@ public class AuthController {
                     request.getIdCard()
             );
 
-            // 生成 Token
-            String token = jwtUtil.generateToken(user.getId(), user.getPhone());
+            // 获取角色信息
+            Long roleId = user.getRoleId();
+            String roleName = null;
+            if (roleId != null) {
+                Role role = roleService.getById(roleId);
+                if (role != null) {
+                    roleName = role.getRoleDisplayName();
+                }
+            }
+
+            // 生成 Token（包含角色信息）
+            String token = jwtUtil.generateToken(user.getId(), user.getPhone(), roleId, roleName);
 
             // 缓存用户信息（Token 7天，用户信息 30分钟）
             redisUtil.set(String.format(CacheKey.USER_TOKEN, user.getId()), token, 7, TimeUnit.DAYS);
@@ -73,8 +88,18 @@ public class AuthController {
         try {
             User user = userService.login(request.getPhone(), request.getPassword());
 
-            // 生成 Token
-            String token = jwtUtil.generateToken(user.getId(), user.getPhone());
+            // 获取角色信息
+            Long roleId = user.getRoleId();
+            String roleName = null;
+            if (roleId != null) {
+                Role role = roleService.getById(roleId);
+                if (role != null) {
+                    roleName = role.getRoleDisplayName();
+                }
+            }
+
+            // 生成 Token（包含角色信息）
+            String token = jwtUtil.generateToken(user.getId(), user.getPhone(), roleId, roleName);
 
             // 缓存用户信息（Token 7天，用户信息 30分钟）
             redisUtil.set(String.format(CacheKey.USER_TOKEN, user.getId()), token, 7, TimeUnit.DAYS);
@@ -101,6 +126,14 @@ public class AuthController {
         // 返回解密后的身份证（用于购票）
         info.put("idCard", user.getIdCard() != null ? CryptoUtil.decrypt(user.getIdCard()) : null);
         info.put("status", user.getStatus());
+        info.put("roleId", user.getRoleId());
+        // 获取角色显示名称
+        if (user.getRoleId() != null) {
+            Role role = roleService.getById(user.getRoleId());
+            if (role != null) {
+                info.put("roleName", role.getRoleDisplayName());
+            }
+        }
         return info;
     }
 }

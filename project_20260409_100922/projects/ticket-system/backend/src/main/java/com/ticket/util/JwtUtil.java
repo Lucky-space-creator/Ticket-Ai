@@ -123,4 +123,42 @@ public class JwtUtil {
             return null;
         }
     }
+
+    /**
+     * 生成带角色信息的 Token
+     */
+    public String generateToken(Long userId, String phone, Long roleId, String roleName) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put("phone", phone);
+        claims.put("roleId", roleId);
+        claims.put("roleName", roleName);
+        return generateToken(claims);
+    }
+
+    /**
+     * 从 Token 中获取角色ID
+     */
+    public Long getRoleIdFromToken(String token) {
+        Claims claims = getClaimsFromToken(token);
+        if (claims != null) {
+            Object roleId = claims.get("roleId");
+            if (roleId == null) {
+                return null;
+            }
+            if (roleId instanceof Integer) {
+                return ((Integer) roleId).longValue();
+            }
+            return (Long) roleId;
+        }
+        return null;
+    }
+
+    /**
+     * 从 Token 中获取角色名称
+     */
+    public String getRoleNameFromToken(String token) {
+        Claims claims = getClaimsFromToken(token);
+        return claims != null ? claims.get("roleName", String.class) : null;
+    }
 }
