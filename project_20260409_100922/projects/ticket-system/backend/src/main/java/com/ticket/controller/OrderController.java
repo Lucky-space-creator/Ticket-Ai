@@ -52,14 +52,23 @@ public class OrderController {
 
             // 转换订单明细
             List<OrderItem> items = new ArrayList<>();
-            if (request.getItems() != null) {
-                for (CreateOrderRequest.OrderItemRequest itemRequest : request.getItems()) {
-                    OrderItem item = new OrderItem();
-                    item.setPassengerName(itemRequest.getPassengerName());
-                    item.setIdCard(CryptoUtil.encrypt(itemRequest.getIdCard()));
-                    item.setPrice(seatPrice); // 使用真实票价
-                    items.add(item);
+            if (request.getItems() == null || request.getItems().isEmpty()) {
+                throw new RuntimeException("至少需要一个乘客");
+            }
+            for (CreateOrderRequest.OrderItemRequest itemRequest : request.getItems()) {
+                String passengerName = itemRequest.getPassengerName();
+                String idCard = itemRequest.getIdCard();
+                if (passengerName == null || passengerName.trim().isEmpty()) {
+                    throw new RuntimeException("乘客姓名不能为空");
                 }
+                if (idCard == null || idCard.trim().isEmpty()) {
+                    throw new RuntimeException("身份证号不能为空");
+                }
+                OrderItem item = new OrderItem();
+                item.setPassengerName(passengerName.trim());
+                item.setIdCard(CryptoUtil.encrypt(idCard.trim()));
+                item.setPrice(seatPrice); // 使用真实票价
+                items.add(item);
             }
 
             Order order = orderService.createOrder(

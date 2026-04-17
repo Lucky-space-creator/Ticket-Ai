@@ -103,6 +103,20 @@ public class AIBusinessTool {
         if (names.length != cards.length) {
             throw new RuntimeException("乘客姓名和身份证号不匹配");
         }
+        if (names.length == 0) {
+            throw new RuntimeException("至少需要一个乘客");
+        }
+        // 验证姓名和身份证号非空
+        for (int i = 0; i < names.length; i++) {
+            String name = names[i].trim();
+            String card = cards[i].trim();
+            if (name.isEmpty()) {
+                throw new RuntimeException("乘客姓名不能为空");
+            }
+            if (card.isEmpty()) {
+                throw new RuntimeException("身份证号不能为空");
+            }
+        }
         // 查询真实票价
         BigDecimal seatPrice = trainService.getSeatPrice(trainId, trainDate, startStation, endStation, seatType);
         // 转换订单明细
