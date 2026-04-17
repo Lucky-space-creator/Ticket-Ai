@@ -34,7 +34,10 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
     @Override
     public List<Train> searchTrains(String startStation, String endStation, String trainDate) {
         // 先查Redis缓存
-        String cacheKey = String.format(CacheKey.TRAIN_SEARCH, startStation == null ? "" : startStation, endStation == null ? "" : endStation, trainDate == null ? "" : trainDate);
+        String cacheKey = String.format(CacheKey.TRAIN_SEARCH,
+                startStation == null ? "" : startStation,
+                endStation == null ? "" : endStation,
+                trainDate == null ? "" : trainDate);
         List<Train> cached = redisUtil.get(cacheKey);
         if (cached != null) {
             return cached;

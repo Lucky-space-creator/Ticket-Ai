@@ -48,13 +48,10 @@ public class AIBusinessTool {
      */
     @Tool("查询车次信息，根据出发地、目的地和日期返回可用车次列表")
     public List<Train> searchTrains(
-            @P(value = "出发地", required = false) String from,
-            @P(value = "目的地", required = false) String to,
-            @P(value = "出发日期", required = false) String date) {
+            @P(value = "出发地", required = true) String from,
+            @P(value = "目的地", required = true) String to,
+            @P(value = "出发日期", required = true) String date) {
 
-        from = from == null ? "" : from;
-        to = to == null ? "" : to;
-        date = date == null ? "" : date;
 
         return trainService.searchTrains(from, to, date);
     }
@@ -88,7 +85,7 @@ public class AIBusinessTool {
             @P(value = "到达站", required = true) String endStation,
             @P(value = "座位类型", required = true) Integer seatType,
             @P(value = "乘客姓名", required = true) String passengerNames,
-            @P(value = "身份证号", required = false) String idCards) {
+            @P(value = "身份证号", required = true) String idCards) {
         Long userId = UserContext.getCurrentUserId();
         if (userId == null) {
             throw new RuntimeException("用户未登录");
@@ -161,7 +158,8 @@ public class AIBusinessTool {
      * @return 订单详情
      */
     @Tool("查询订单详情，根据订单号返回订单详细信息")
-    public Order getOrderDetail(String orderNo) {
+    public Order getOrderDetail(
+            @P(value = "订单号", required = true) String orderNo) {
         return orderService.getOrderDetail(orderNo);
     }
 

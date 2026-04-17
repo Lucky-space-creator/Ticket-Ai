@@ -1,6 +1,7 @@
 package com.ticket.controller;
 
 import com.ticket.entity.KnowledgeBase;
+import com.ticket.service.DocumentIngestionService;
 import com.ticket.service.KnowledgeBaseService;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
@@ -18,6 +19,9 @@ public class KnowledgeController {
 
     @Resource
     private KnowledgeBaseService knowledgeBaseService;
+
+    @Resource
+    private DocumentIngestionService documentIngestionService;
 
 
     /**
@@ -101,6 +105,20 @@ public class KnowledgeController {
             return ResponseUtil.success("同步成功");
         } catch (Exception e) {
             return ResponseUtil.error("同步失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 加载知识库文件到向量数据库
+     * 手动触发从文件系统加载所有文档
+     */
+    @PostMapping("/load-files")
+    public ResponseUtil.Result<?> loadFiles() {
+        try {
+            documentIngestionService.loadDocuments();
+            return ResponseUtil.success("文件加载完成");
+        } catch (Exception e) {
+            return ResponseUtil.error("文件加载失败: " + e.getMessage());
         }
     }
 

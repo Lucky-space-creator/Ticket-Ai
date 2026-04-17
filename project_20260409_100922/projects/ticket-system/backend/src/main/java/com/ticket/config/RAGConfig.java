@@ -18,6 +18,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import reactor.core.publisher.Flux;
@@ -78,7 +80,10 @@ public class RAGConfig {
         }
 
         private ChatMemory getDelegate() {
+            // 获取当前用户ID
             String userId = getCurrentUserId();
+            //插入日期到map中
+            chatMemoryMap.putIfAbsent(LocalDateTime.now().toString(), MessageWindowChatMemory.withMaxMessages(10));
             return chatMemoryMap.computeIfAbsent(userId, k -> MessageWindowChatMemory.withMaxMessages(10));
         }
     }

@@ -20,6 +20,7 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -64,7 +65,11 @@ public class DocumentIngestionService {
         });
     }
 
-    private void loadDocuments() {
+    /**
+     * 加载知识库目录中的所有文档到向量数据库
+     * 可用于API手动触发文件加载
+     */
+    public void loadDocuments() {
         log.info("=== 开始加载知识库 ===");
 
         // 先测试 embedding 模型连接
@@ -83,8 +88,18 @@ public class DocumentIngestionService {
         }
 
         try {
+            // 清除现有向量库，避免重复累积
+            try {
+                embeddingStore.removeAll();
+                log.info("已清空向量数据库中的旧数据");
+            } catch (Exception e) {
+                log.warn("清空向量数据库失败: {}", e.getMessage());
+                // 继续执行，因为可能向量库本来就为空或清空操作不被支持
+            }
+            
             Path path = Paths.get(knowledgeBasePath);
             File dir = path.toFile();
+            log.debug("知识库目录绝对路径: {}", dir.getAbsolutePath());
 
             if (!dir.exists()) {
                 log.info("知识库目录不存在，创建目录: {}", knowledgeBasePath);
@@ -99,21 +114,46 @@ public class DocumentIngestionService {
                 return;
             }
 
-            List<Document> documents = FileSystemDocumentLoader.loadDocuments(
-                    path,
-                    new TextDocumentParser()
+            // 获取目录下所有文件
+            File[] allFiles = dir.listFiles();
+            if (allFiles != null) {
+                log.debug("目录下所有文件 ({} 个):", allFiles.length);
+                for (File f : allFiles) {
+                    log.debug("  - {}", f.getName());
+                }
+            }
+            File[] files = dir.listFiles((d, name) -> 
+                name.toLowerCase().endsWith(".txt") || name.toLowerCase().endsWith(".md")
             );
-
-            if (documents.isEmpty()) {
+            
+            if (files != null) {
+                log.debug("过滤后文件 ({} 个):", files.length);
+                for (File f : files) {
+                    log.debug("  - {}", f.getName());
+                }
+            }
+            
+            if (files == null || files.length == 0) {
                 log.info("知识库目录中没有找到文档");
                 createSampleDocument();
                 return;
+            }
+            
+            List<Document> documents = new ArrayList<>();
+            for (File file : files) {
+                try {
+                    Document document = FileSystemDocumentLoader.loadDocument(file.toPath(), new TextDocumentParser());
+                    documents.add(document);
+                    log.info("加载文档: {}", file.getName());
+                } catch (Exception e) {
+                    log.warn("加载文档失败: {} - {}", file.getName(), e.getMessage(), e);
+                }
             }
 
             log.info("找到 {} 个文档", documents.size());
 
             EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
-                    .documentSplitter(DocumentSplitters.recursive(500, 100))
+                    .documentSplitter(DocumentSplitters.recursive(1000, 100))
                     .embeddingModel(embeddingModel)
                     .embeddingStore(embeddingStore)
                     .build();

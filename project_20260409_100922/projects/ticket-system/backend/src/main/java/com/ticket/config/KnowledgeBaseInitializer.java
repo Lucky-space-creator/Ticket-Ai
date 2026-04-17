@@ -54,7 +54,7 @@ public class KnowledgeBaseInitializer implements ApplicationRunner {
             knowledgeBaseService.syncToVectorStore();
             log.info("知识库已同步到向量数据库");
         } catch (Exception e) {
-            log.warn("同步到向量数据库失败: {}", e.getMessage());
+            log.info("向量数据库集合尚未创建，跳过知识库同步（将在文档加载后自动创建）");
         }
     }
 

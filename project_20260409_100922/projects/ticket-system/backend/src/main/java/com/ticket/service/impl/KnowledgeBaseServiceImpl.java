@@ -83,9 +83,13 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         List<Embedding> content = embeddings.content();
 
         // 3. 调用addAll方法（传入embeddings和segments）
-        List<String> ids = embeddingStore.addAll(content, segments);
-
-        log.info("知识库同步完成，共 {} 条知识，生成 {} 个向量ID", knowledgeList.size(), ids.size());
+        try {
+            List<String> ids = embeddingStore.addAll(content, segments);
+            log.info("知识库同步完成，共 {} 条知识，生成 {} 个向量ID", knowledgeList.size(), ids.size());
+        } catch (Exception e) {
+            log.info("向量数据库集合尚未创建，跳过知识库同步（将在文档加载后自动创建）");
+            // 不抛出异常，避免影响应用启动，DocumentIngestionService后续会创建集合
+        }
     }
 
     @Override

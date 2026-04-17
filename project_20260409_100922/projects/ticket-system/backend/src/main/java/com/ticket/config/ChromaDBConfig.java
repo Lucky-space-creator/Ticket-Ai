@@ -12,13 +12,13 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class ChromaDBConfig {
 
-    @Value("${chromadb.host}")
+    @Value("${chroma.host}")
     private String host;
 
-    @Value("${chromadb.port}")
+    @Value("${chroma.port}")
     private int port;
 
-    @Value("${chromadb.collection}")
+    @Value("${chroma.collection}")
     private String collectionName;
 
     @Bean

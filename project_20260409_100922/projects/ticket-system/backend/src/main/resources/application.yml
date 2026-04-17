@@ -78,7 +78,7 @@ logging:
 # 智能客服相关配置
 
 # ChromaDB 向量数据库配置
-chromadb:
+chroma:
   host: 192.168.48.133
   port: 8000
   collection: ticket_knowledge
@@ -144,8 +144,8 @@ ai:
 
 # 知识库配置
 knowledge:
-  base-path: ../knowledge-base     # 知识库文件目录（相对于backend目录）
-  init-on-startup: false
+  base-path: knowledge-base     # 知识库文件目录（相对于项目根目录）
+  init-on-startup: true        # 启动时初始化知识库
 
 # RAG 检索配置
 rag:
