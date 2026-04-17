@@ -67,7 +67,7 @@ public class TrainController {
     @GetMapping("/{id}")
     public ResponseUtil.Result<?> getTrainDetail(@PathVariable Long id) {
         try {
-            Train train = trainService.getTrainDetail(id);
+            Train train = trainService.getTrainDetailById(id);
 
             if (train == null) {
                 return ResponseUtil.error("车次不存在");

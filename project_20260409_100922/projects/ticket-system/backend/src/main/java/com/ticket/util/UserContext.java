@@ -6,6 +6,7 @@ package com.ticket.util;
  */
 public class UserContext {
 
+    // 存储当前用户ID的 ThreadLocal
     private static final ThreadLocal<Long> USER_ID_HOLDER = new ThreadLocal<>();
 
     /**

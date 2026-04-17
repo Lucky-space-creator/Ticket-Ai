@@ -36,6 +36,12 @@ public class CacheKey {
     public static final String TRAIN_DETAIL = "train:detail:%d";
 
     /**
+     * 车次详情缓存（按车次号）（1小时）
+     * 格式: train:detail:no:{trainNo}
+     */
+    public static final String TRAIN_DETAIL_NO = "train:detail:no:%s";
+
+    /**
      * 订单缓存（30分钟）
      * 格式: order:info:{orderId}
      */

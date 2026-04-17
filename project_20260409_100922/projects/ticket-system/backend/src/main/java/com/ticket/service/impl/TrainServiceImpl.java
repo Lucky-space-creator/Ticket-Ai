@@ -76,7 +76,32 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
     }
 
     @Override
-    public Train getTrainDetail(Long trainId) {
+    public Train getTrainDetail(String trainNo) {
+        // 先查缓存（按车次号）
+        String cacheKey = String.format(CacheKey.TRAIN_DETAIL_NO, trainNo);
+        Train cached = redisUtil.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
+        // 按车次号查询
+        LambdaQueryWrapper<Train> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Train::getTrainNo, trainNo)
+               .eq(Train::getStatus, 1);
+        Train train = getOne(wrapper);
+
+        if (train != null) {
+            long expireTime = getExpireTrainTime(train);
+            if (expireTime > 0) {
+                redisUtil.set(cacheKey, train, expireTime, TimeUnit.MINUTES);
+            }
+        }
+
+        return train;
+    }
+
+    @Override
+    public Train getTrainDetailById(Long trainId) {
         // 先查缓存
         String cacheKey = String.format(CacheKey.TRAIN_DETAIL, trainId);
         Train cached = redisUtil.get(cacheKey);
@@ -87,9 +112,7 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
         Train train = getById(trainId);
 
         if (train != null) {
-            //车次最终战到达时间和当前时间差，设置过期时间，防止车已经停运还出现买票的情况
             long expireTime = getExpireTrainTime(train);
-
             if (expireTime > 0) {
                 redisUtil.set(cacheKey, train, expireTime, TimeUnit.MINUTES);
             }

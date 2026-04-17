@@ -174,34 +174,24 @@ async function sendMessage() {
 
   loading.value = true
 
-  // 创建占位符助手消息
-  const assistantMessage = {
-    role: 'assistant',
-    content: '',
-    time: new Date()
-  }
-  messages.value.push(assistantMessage)
-  const messageIndex = messages.value.length - 1
-
   try {
     // 使用同步端点
     const result = await request.post('/chat/ask', { question: text })
     // result.data 是 ChatResponse 对象
-    assistantMessage.content = result.data.answer
-    // 触发响应式更新
-    messages.value = [...messages.value]
+    // 添加助手消息
+    messages.value.push({
+      role: 'assistant',
+      content: result.data.answer,
+      time: new Date()
+    })
     scrollToBottom()
     
-    // 接收完成
-    assistantMessage.time = new Date()
     // 如果窗口最小化，显示未读数
     if (isMinimized.value) {
       unreadCount.value++
     }
   } catch (error) {
     ElMessage.error('发送失败，请重试')
-    // 移除占位符消息
-    messages.value.splice(messageIndex, 1)
   } finally {
     loading.value = false
     scrollToBottom()

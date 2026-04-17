@@ -58,12 +58,19 @@ public class AIBusinessTool {
 
     /**
      * 获取车次详情
-     * @param trainId 车次ID
+     * @param trainNo 车次号（如 "G1234"）
      * @return 车次详情
      */
-    @Tool("获取车次详情，根据车次ID返回详细信息")
-    public Train getTrainDetail(@P(value = "车次ID", required = true) Long trainId) {
-        return trainService.getTrainDetail(trainId);
+    @Tool("获取车次详情，根据车次号返回详细信息。注意：参数必须是车次号字符串（如 'G1234'），不是数据库ID。")
+    public Train getTrainDetail(@P(value = "车次号", required = true) String trainNo) {
+        return trainService.getTrainDetail(trainNo);
+    }
+
+    /**
+     * 获取车次详情（按车次ID）- 内部使用，不暴露给AI
+     */
+    public Train getTrainDetailById(@P(value = "车次ID", required = true) Long trainId) {
+        return trainService.getTrainDetailById(trainId);
     }
 
     /**

@@ -17,9 +17,15 @@ public interface TrainService extends IService<Train> {
     List<Train> searchTrains(String startStation, String endStation, String trainDate);
 
     /**
-     * 获取车次详情
+     * 获取车次详情（按车次号）
+     * @param trainNo 车次号（如 "G1234"）
      */
-    Train getTrainDetail(Long trainId);
+    Train getTrainDetail(String trainNo);
+
+    /**
+     * 获取车次详情（按车次ID）- 内部使用
+     */
+    Train getTrainDetailById(Long trainId);
 
     /**
      * 获取余票信息
