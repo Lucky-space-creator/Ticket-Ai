@@ -6,6 +6,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 订单实体
@@ -85,4 +86,10 @@ public class Order {
      */
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
+
+    /**
+     * 订单明细列表（非数据库字段）
+     */
+    @TableField(exist = false)
+    private List<OrderItem> items;
 }

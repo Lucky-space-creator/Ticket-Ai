@@ -35,4 +35,9 @@ public interface OrderService extends IService<Order> {
      * 获取订单详情
      */
     Order getOrderDetail(String orderNo);
+
+    /**
+     * 管理端订单分页查询
+     */
+    com.baomidou.mybatisplus.extension.plugins.pagination.Page<Order> adminPage(String orderNo, String phone, Integer status, int page, int size);
 }

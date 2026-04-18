@@ -28,20 +28,38 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
         String token = request.getHeader("Authorization");
         if (token != null && token.startsWith("Bearer ")) {
             token = token.substring(7);
-            Long userId = jwtUtil.getUserIdFromToken(token);
-            if (userId != null) {
-                // 验证用户是否在缓存中存在（可选，增强安全性）
-                String userInfoKey = String.format("user:token:%d", userId);
-                String userInfo = redisUtil.get(userInfoKey);
-                if (userInfo != null) {
-                    log.info("用户信息已验证，用户ID: {}", userId);
-                    //解析token中用户信息，存储到UserContext
-                    userId = jwtUtil.getUserIdFromToken(token);
-                    UserContext.setCurrentUserId(userId);
-                } else {
-                    log.warn("用户信息不在缓存中，可能已过期，用户ID: {}", userId);
-                    // 仍然设置userId，因为JWT有效，但需要重新登录
-                    UserContext.setCurrentUserId(userId);
+            
+            // 验证Token有效性
+            if (!jwtUtil.validateToken(token)) {
+                log.warn("Token无效或已过期");
+                return true; // 继续执行，由后续权限拦截器处理
+            }
+            
+            // 判断用户类型
+            String userType = jwtUtil.getUserTypeFromToken(token);
+            
+            if (JwtUtil.USER_TYPE_EMPLOYEE.equals(userType)) {
+                // 员工令牌
+                Long employeeId = jwtUtil.getEmployeeIdFromToken(token);
+                if (employeeId != null) {
+                    log.info("员工登录，员工ID: {}", employeeId);
+                    UserContext.setCurrentEmployeeId(employeeId);
+                }
+            } else {
+                // 默认为用户令牌（兼容旧版）
+                Long userId = jwtUtil.getUserIdFromToken(token);
+                if (userId != null) {
+                    // 验证用户是否在缓存中存在（可选，增强安全性）
+                    String userInfoKey = String.format("user:token:%d", userId);
+                    String userInfo = redisUtil.get(userInfoKey);
+                    if (userInfo != null) {
+                        log.info("用户信息已验证，用户ID: {}", userId);
+                        UserContext.setCurrentUserId(userId);
+                    } else {
+                        log.warn("用户信息不在缓存中，可能已过期，用户ID: {}", userId);
+                        // 仍然设置userId，因为JWT有效，但需要重新登录
+                        UserContext.setCurrentUserId(userId);
+                    }
                 }
             }
         }

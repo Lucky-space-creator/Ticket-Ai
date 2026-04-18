@@ -30,6 +30,26 @@ public class PermissionInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        // 检查用户类型
+        String userType = UserContext.getCurrentUserType();
+        
+        // 员工登录处理
+        if (UserContext.isEmployeeLogin()) {
+            String requestUri = request.getRequestURI();
+            // 员工只能访问管理端接口 (/api/admin/**)
+            if (requestUri.startsWith("/api/admin/")) {
+                log.info("员工访问管理接口: {}", requestUri);
+                return true;
+            }
+            // 非管理接口，拒绝访问
+            log.warn("员工尝试访问非管理接口: {}", requestUri);
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"code\":403,\"message\":\"员工无权限访问该接口\"}");
+            return false;
+        }
+        
+        // 普通用户登录处理
         Long userId = UserContext.getCurrentUserId();
         if (userId == null) {
             // 如果没有用户ID（认证拦截器未设置），直接放行，由认证拦截器处理
@@ -104,7 +124,12 @@ public class PermissionInterceptor implements HandlerInterceptor {
         }
         
         // 用户订单和乘客接口（已认证用户可访问自己的数据）
-        return uri.startsWith("/api/orders/") || uri.startsWith("/api/passengers/");
+        if (uri.startsWith("/api/orders/") || uri.startsWith("/api/passengers/")) {
+            return true;
+        }
+        
+        // 管理端订单接口（临时白名单）
+        return uri.startsWith("/api/admin/orders");
     }
 
     /**

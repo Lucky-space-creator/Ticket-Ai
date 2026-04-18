@@ -32,7 +32,7 @@
         <el-card class="stat-card">
           <div class="stat-content">
             <div class="stat-icon" style="background-color: #E6A23C;">
-              <el-icon><Train /></el-icon>
+              <el-icon><Box /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value">{{ stats.trainCount || 0 }}</div>
@@ -87,7 +87,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { User, List, Train, ChatDotRound } from '@element-plus/icons-vue'
+import { User, List, Box, ChatDotRound } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 
 const stats = ref({})
@@ -118,10 +118,13 @@ const fetchStats = async () => {
   try {
     // 获取统计数据
     const statsRes = await request.get('/api/admin/stats/overview')
+    console.log('statsRes:', statsRes)
     if (statsRes.code === 200) {
       stats.value = statsRes.data
+      console.log('stats data:', statsRes.data)
     } else {
       // 如果接口无权限或未实现，使用模拟数据
+      console.warn('stats API returned non-200 code:', statsRes.code)
       stats.value = {
         userCount: 0,
         orderCount: 0,
@@ -136,7 +139,9 @@ const fetchStats = async () => {
     // 获取最近订单
     const ordersRes = await request.get('/api/admin/orders')
     if (ordersRes.code === 200) {
-      recentOrders.value = ordersRes.data.slice(0, 5)
+      // 分页响应中 data.records 是订单数组
+      const orders = ordersRes.data.records || ordersRes.data
+      recentOrders.value = Array.isArray(orders) ? orders.slice(0, 5) : []
     }
     // 获取服务器时间
     serverTime.value = new Date().toLocaleString()

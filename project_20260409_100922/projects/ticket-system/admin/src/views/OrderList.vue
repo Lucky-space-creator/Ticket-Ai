@@ -133,15 +133,20 @@ const statusText = (status) => {
 const fetchData = async () => {
   loading.value = true
   try {
-    // 调用管理端订单接口（待实现）
-    // 暂时使用模拟数据
-    const res = await request.get('/api/orders')
+    const params = {
+      orderNo: filters.orderNo,
+      phone: filters.phone,
+      status: filters.status,
+      page: page.value,
+      size: pageSize.value
+    }
+    const res = await request.get('/api/admin/orders', { params })
     if (res.code === 200) {
-      orderList.value = res.data.map(order => ({
+      orderList.value = res.data.records.map(order => ({
         ...order,
         seatTypeName: getSeatTypeName(order.seatType)
       }))
-      total.value = orderList.value.length
+      total.value = res.data.total
     }
   } catch (error) {
     console.error('获取订单列表失败:', error)
@@ -166,12 +171,13 @@ const resetFilters = () => {
   filters.orderNo = ''
   filters.phone = ''
   filters.status = ''
+  page.value = 1
   fetchData()
 }
 
 const viewDetail = async (row) => {
   try {
-    const res = await request.get(`/api/orders/${row.orderNo}`)
+    const res = await request.get(`/api/admin/orders/${row.orderNo}`)
     if (res.code === 200) {
       currentOrder.value = res.data
       detailVisible.value = true
@@ -186,7 +192,7 @@ const refundOrder = (row) => {
     type: 'warning'
   }).then(async () => {
     try {
-      await request.post(`/api/orders/${row.orderNo}/refund`)
+      await request.post(`/api/admin/orders/${row.orderNo}/refund`)
       ElMessage.success('退票成功')
       fetchData()
     } catch (error) {

@@ -24,22 +24,15 @@ export const useUserStore = defineStore('user', () => {
   }
 
   const login = async (phone, password) => {
-    const res = await request.post('/api/auth/login', { phone, password })
+    const res = await request.post('/api/admin/auth/login', { phone, password })
     if (res.code === 200) {
       setToken(res.data.token)
-      // 优先使用登录响应中的用户信息
-      if (res.data.user) {
-        setUserInfo(res.data.user)
+      // 优先使用登录响应中的员工信息
+      if (res.data.employee) {
+        setUserInfo(res.data.employee)
       } else {
-        // 兼容性处理：如果登录响应中没有用户信息，则单独获取
-        try {
-          const userRes = await request.get('/api/user/profile')
-          if (userRes.code === 200) {
-            setUserInfo(userRes.data)
-          }
-        } catch (error) {
-          console.warn('获取用户信息失败，但登录成功:', error)
-        }
+        // 兼容性处理：如果登录响应中没有员工信息，则使用默认信息
+        setUserInfo({ phone })
       }
       return true
     }

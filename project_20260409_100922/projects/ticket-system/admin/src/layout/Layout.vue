@@ -17,7 +17,7 @@
             <span>仪表盘</span>
           </el-menu-item>
           <el-menu-item index="/trains">
-            <el-icon><Train /></el-icon>
+            <el-icon><Box /></el-icon>
             <span>车次管理</span>
           </el-menu-item>
           <el-menu-item index="/orders">
@@ -51,7 +51,7 @@
             <el-dropdown>
               <span class="user-info">
                 <el-avatar :size="30" :src="userStore.userInfo.avatar || ''" />
-                {{ userStore.userInfo.realName || userStore.userInfo.phone }}
+                {{ userStore.userInfo.name || userStore.userInfo.phone }}
                 <el-icon><ArrowDown /></el-icon>
               </span>
               <template #dropdown>
@@ -73,7 +73,7 @@
 <script setup>
 import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
-import { PieChart, Train, List, User, ChatDotRound, ArrowDown, Setting, Key } from '@element-plus/icons-vue'
+import { PieChart, Box, List, User, ChatDotRound, ArrowDown, Setting, Key } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const router = useRouter()

@@ -147,6 +147,7 @@ public class AIModelConfig {
                     return OllamaEmbeddingModel.builder()
                             .baseUrl(ollamaBaseUrl)
                             .modelName(ollamaEmbeddingModelName)
+                            .timeout(Duration.ofSeconds(ollamaTimeoutSeconds))
                             .build();
                             
                 case "openai":
@@ -156,6 +157,7 @@ public class AIModelConfig {
                     return OpenAiEmbeddingModel.builder()
                             .apiKey(getEffectiveApiKey())
                             .modelName("text-embedding-ada-002")
+                            .timeout(Duration.ofSeconds(httpApiTimeoutSeconds))
                             .build();
                             
                 default:
@@ -163,6 +165,7 @@ public class AIModelConfig {
                     return OllamaEmbeddingModel.builder()
                             .baseUrl(ollamaBaseUrl)
                             .modelName(ollamaEmbeddingModelName)
+                            .timeout(Duration.ofSeconds(ollamaTimeoutSeconds))
                             .build();
             }
         } catch (Exception e) {
@@ -175,6 +178,7 @@ public class AIModelConfig {
                     return OpenAiEmbeddingModel.builder()
                             .apiKey(getEffectiveApiKey())
                             .modelName("text-embedding-ada-002")
+                            .timeout(Duration.ofSeconds(httpApiTimeoutSeconds))
                             .build();
                 } catch (Exception ex) {
                     log.error("备用向量化模型也失败: {}", ex.getMessage(), ex);

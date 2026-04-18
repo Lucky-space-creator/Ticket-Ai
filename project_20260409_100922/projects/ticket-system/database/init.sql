@@ -358,3 +358,59 @@ CREATE TABLE `operation_log` (
     INDEX `idx_created_at` (`created_at`),
     INDEX `idx_operation` (`operation`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作日志表';
+
+-- ========================================
+-- 8. 员工管理模块（与用户表严格隔离）
+-- ========================================
+
+-- 部门表
+DROP TABLE IF EXISTS `department`;
+CREATE TABLE `department` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '部门ID',
+    `dept_code` VARCHAR(50) NOT NULL COMMENT '部门编码',
+    `dept_name` VARCHAR(100) NOT NULL COMMENT '部门名称',
+    `description` VARCHAR(500) COMMENT '部门描述',
+    `status` TINYINT DEFAULT 1 COMMENT '状态 0-禁用 1-启用',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_dept_code` (`dept_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='部门表';
+
+-- 员工表
+DROP TABLE IF EXISTS `employee`;
+CREATE TABLE `employee` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '员工ID',
+    `employee_no` VARCHAR(50) NOT NULL COMMENT '员工工号（唯一）',
+    `name` VARCHAR(50) NOT NULL COMMENT '员工姓名',
+    `gender` TINYINT COMMENT '性别 0-未知 1-男 2-女',
+    `phone` VARCHAR(20) COMMENT '手机号',
+    `password` VARCHAR(100) NOT NULL COMMENT '加密密码' DEFAULT '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa',
+    `email` VARCHAR(100) COMMENT '邮箱',
+    `department_id` BIGINT COMMENT '所属部门ID',
+    `position` VARCHAR(100) COMMENT '职位',
+    `hire_date` DATE COMMENT '入职日期',
+    `id_card` VARCHAR(100) COMMENT '身份证号（加密存储）',
+    `status` TINYINT DEFAULT 1 COMMENT '状态 0-离职 1-在职',
+    `remark` VARCHAR(500) COMMENT '备注',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_employee_no` (`employee_no`),
+    UNIQUE KEY `uk_phone` (`phone`),
+    UNIQUE KEY `uk_email` (`email`),
+    INDEX `idx_department_id` (`department_id`),
+    INDEX `idx_status` (`status`),
+    CONSTRAINT `fk_employee_department` FOREIGN KEY (`department_id`) REFERENCES `department` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='员工表';
+
+-- 插入初始部门数据
+INSERT INTO `department` (`dept_code`, `dept_name`, `description`, `status`) VALUES
+('IT', '技术部', '负责系统开发与维护', 1),
+('HR', '人力资源部', '负责招聘与员工关系', 1),
+('OP', '运营部', '负责业务运营与客服', 1),
+('FIN', '财务部', '负责财务管理', 1);
+
+-- 插入初始员工数据
+INSERT INTO `employee` (`employee_no`, `name`, `gender`, `phone`, `password`, `email`, `department_id`, `position`, `hire_date`, `id_card`, `status`, `remark`) VALUES
+('EMP001', '王经理', 1, '13900139000', '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa', 'wang@example.com', (SELECT id FROM department WHERE dept_code = 'IT'), '技术经理', '2020-01-01', '110101198001011234', 1, '技术负责人'),
+('EMP002', '李主管', 2, '13900139001', '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa', 'li@example.com', (SELECT id FROM department WHERE dept_code = 'HR'), '人事主管', '2021-03-15', '110101198102022345', 1, '招聘负责人'),
+('EMP003', '张运营', 1, '13900139002', '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa', 'zhang@example.com', (SELECT id FROM department WHERE dept_code = 'OP'), '运营专员', '2022-06-20', '110101198203033456', 1, '客服运营');

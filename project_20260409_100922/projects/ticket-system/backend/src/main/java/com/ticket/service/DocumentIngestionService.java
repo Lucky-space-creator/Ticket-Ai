@@ -13,13 +13,11 @@ import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -45,6 +43,12 @@ public class DocumentIngestionService {
 
     @Value("${knowledge.init-on-startup}")
     private boolean initOnStartup;
+
+    @Value("${ai.ollama.base-url}")
+    private String ollamaBaseUrl;
+
+    @Value("${ai.ollama.embedding-model}")
+    private String ollamaEmbeddingModelName;
 
     @PostConstruct
     public void ingestDocuments() {
@@ -72,15 +76,28 @@ public class DocumentIngestionService {
     public void loadDocuments() {
         log.info("=== 开始加载知识库 ===");
 
-        // 先测试 embedding 模型连接
-        if (!testEmbeddingModel()) {
-            log.warn("Embedding 模型连接失败，将在30秒后重试");
+        // 先测试 embedding 模型连接，最多重试3次
+        int maxRetries = 3;
+        int retryCount = 0;
+        long waitSeconds = 30;
+
+        while (retryCount < maxRetries) {
+            if (testEmbeddingModel()) {
+                break; // 连接成功，继续执行
+            }
+            
+            retryCount++;
+            if (retryCount >= maxRetries) {
+                log.error("Embedding 模型连接失败，已重试 {} 次，跳过知识库加载。请检查 Ollama 服务是否运行。", maxRetries);
+                log.error("Ollama 服务地址: {}，请确认服务已启动且可访问。", ollamaBaseUrl);
+                return;
+            }
+            
+            log.warn("Embedding 模型连接失败，第 {} 次重试，等待 {} 秒后重试", retryCount, waitSeconds);
             try {
-                TimeUnit.SECONDS.sleep(30);
-                if (!testEmbeddingModel()) {
-                    log.error("Embedding 模型仍然不可用，跳过知识库加载");
-                    return;
-                }
+                TimeUnit.SECONDS.sleep(waitSeconds);
+                // 每次重试等待时间加倍
+                waitSeconds *= 2;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
@@ -170,12 +187,18 @@ public class DocumentIngestionService {
     private boolean testEmbeddingModel() {
         try {
             log.info("测试 Embedding 模型连接...");
+            log.info("Ollama 服务地址: {}", ollamaBaseUrl);
+            log.info("嵌入模型名称: {}", ollamaEmbeddingModelName);
             // 使用一个小文本测试 embedding
             embeddingModel.embed("test");
             log.info("Embedding 模型连接成功");
             return true;
         } catch (Exception e) {
-            log.warn("Embedding 模型连接失败: {}", e.getMessage());
+            log.warn("Embedding 模型连接失败: {} (异常类型: {})", e.getMessage(), e.getClass().getSimpleName());
+            log.warn("请检查 Ollama 服务是否运行，配置地址: {}", ollamaBaseUrl);
+            log.warn("嵌入模型名称: {}，请确认模型已下载（使用命令: ollama pull {}）", ollamaEmbeddingModelName, ollamaEmbeddingModelName);
+            log.warn("如果使用远程服务，请确认配置文件中的 ai.ollama.base-url 设置正确");
+            log.warn("错误详情:", e);
             return false;
         }
     }

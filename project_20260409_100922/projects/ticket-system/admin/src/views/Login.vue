@@ -2,7 +2,7 @@
   <div class="login-container">
     <div class="login-box">
       <div class="logo">
-        <h2>12306后台管理系统</h2>
+        <h2>12306666后台管理系统</h2>
         <p>管理员登录</p>
       </div>
       <el-form

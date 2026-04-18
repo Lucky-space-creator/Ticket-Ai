@@ -31,6 +31,16 @@ public class JwtUtil {
     private Long expiration;
 
     /**
+     * 用户类型：普通用户
+     */
+    public static final String USER_TYPE_USER = "user";
+
+    /**
+     * 用户类型：员工
+     */
+    public static final String USER_TYPE_EMPLOYEE = "employee";
+
+    /**
      * 生成 Token
      */
     public String generateToken(Long userId, String phone) {
@@ -160,5 +170,41 @@ public class JwtUtil {
     public String getRoleNameFromToken(String token) {
         Claims claims = getClaimsFromToken(token);
         return claims != null ? claims.get("roleName", String.class) : null;
+    }
+
+    /**
+     * 生成员工令牌
+     */
+    public String generateEmployeeToken(Long employeeId, String phone, String employeeNo, String name) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("employeeId", employeeId);
+        claims.put("phone", phone);
+        claims.put("employeeNo", employeeNo);
+        claims.put("name", name);
+        claims.put("userType", USER_TYPE_EMPLOYEE);
+        return generateToken(claims);
+    }
+
+    /**
+     * 从令牌中获取用户类型
+     */
+    public String getUserTypeFromToken(String token) {
+        Claims claims = getClaimsFromToken(token);
+        return claims != null ? claims.get("userType", String.class) : null;
+    }
+
+    /**
+     * 从令牌中获取员工ID
+     */
+    public Long getEmployeeIdFromToken(String token) {
+        Claims claims = getClaimsFromToken(token);
+        if (claims != null) {
+            Object employeeId = claims.get("employeeId");
+            if (employeeId instanceof Integer) {
+                return ((Integer) employeeId).longValue();
+            }
+            return (Long) employeeId;
+        }
+        return null;
     }
 }

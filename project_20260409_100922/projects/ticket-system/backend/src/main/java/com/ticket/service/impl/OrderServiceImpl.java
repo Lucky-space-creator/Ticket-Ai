@@ -2,10 +2,12 @@ package com.ticket.service.impl;
 
 import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ticket.entity.Order;
 import com.ticket.entity.OrderItem;
 import com.ticket.entity.Train;
+import com.ticket.entity.User;
 import com.ticket.enums.BusinessStatus;
 import com.ticket.enums.CacheKey;
 import com.ticket.enums.ResponseCode;
@@ -13,6 +15,7 @@ import com.ticket.mapper.OrderItemMapper;
 import com.ticket.mapper.OrderMapper;
 import com.ticket.service.OrderService;
 import com.ticket.service.TrainService;
+import com.ticket.service.UserService;
 import com.ticket.util.RedisUtil;
 import com.ticket.util.SnowflakeIdUtil;
 import jakarta.annotation.Resource;
@@ -25,6 +28,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -41,6 +45,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Resource
     private RedisUtil redisUtil;
+
+    @Resource
+    private UserService userService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -200,5 +207,43 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
 
         return order;
+    }
+
+    @Override
+    public Page<Order> adminPage(String orderNo, String phone, Integer status, int page, int size) {
+        Page<Order> pageObj = new Page<>(page, size);
+        LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
+        
+        // 订单号模糊查询
+        if (orderNo != null && !orderNo.trim().isEmpty()) {
+            wrapper.like(Order::getOrderNo, "%" + orderNo.trim() + "%");
+        }
+        
+        // 状态精确查询
+        if (status != null) {
+            wrapper.eq(Order::getStatus, status);
+        }
+        
+        // 用户手机号模糊查询
+        if (phone != null && !phone.trim().isEmpty()) {
+            // 通过手机号模糊查询用户ID列表
+            LambdaQueryWrapper<User> userWrapper = new LambdaQueryWrapper<>();
+            userWrapper.like(User::getPhone, "%" + phone.trim() + "%");
+            List<Long> userIds = userService.list(userWrapper)
+                    .stream()
+                    .map(User::getId)
+                    .collect(Collectors.toList());
+            if (!userIds.isEmpty()) {
+                wrapper.in(Order::getUserId, userIds);
+            } else {
+                // 如果没有匹配的用户，确保返回空结果
+                wrapper.eq(Order::getId, -1L);
+            }
+        }
+        
+        // 按创建时间倒序
+        wrapper.orderByDesc(Order::getCreatedAt);
+        
+        return page(pageObj, wrapper);
     }
 }
