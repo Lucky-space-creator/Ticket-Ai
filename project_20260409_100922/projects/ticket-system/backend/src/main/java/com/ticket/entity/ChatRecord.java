@@ -35,9 +35,19 @@ public class ChatRecord {
     private String message;
 
     /**
-     * 类型 1-用户 2-机器人
+     * 消息类型: 'user'-用户消息, 'robot'-机器人回复, 员工号-客服消息
      */
-    private Integer msgType;
+    private String msgType;
+
+    /**
+     * 客服员工ID（仅当 msg_type 为员工号时有效）
+     */
+    private Long employeeId;
+
+    /**
+     * 是否已读 0-未读 1-已读
+     */
+    private Integer isRead;
 
     /**
      * 置信度

@@ -72,6 +72,12 @@ const routes = [
         name: 'OrderStats',
         component: () => import('@/views/OrderStats.vue'),
         meta: { title: '订单统计' }
+      },
+      {
+        path: 'customer-service',
+        name: 'CustomerService',
+        component: () => import('@/views/CustomerService.vue'),
+        meta: { title: '客服工作台' }
       }
     ]
   }

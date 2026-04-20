@@ -140,18 +140,21 @@ CREATE TABLE `knowledge_base` (
     FULLTEXT INDEX `ft_question` (`question`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI客服知识库';
 
--- 客服对话记录表（简化：移除置信度等AI细节字段）
+-- 客服对话记录表（支持用户、机器人、客服三种消息类型）
 DROP TABLE IF EXISTS `chat_record`;
 CREATE TABLE `chat_record` (
     `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `user_id` BIGINT COMMENT '用户ID（未登录为NULL）',
     `session_id` VARCHAR(64) NOT NULL COMMENT '会话ID',
     `message` TEXT NOT NULL COMMENT '消息内容',
-    `msg_type` TINYINT NOT NULL COMMENT '类型 1-用户 2-机器人',
+    `msg_type` VARCHAR(20) NOT NULL COMMENT '类型: user-用户, robot-机器人, 员工号-客服',
+    `employee_id` BIGINT COMMENT '客服员工ID（仅当 msg_type 为员工号时有效）',
+    `is_read` TINYINT NOT NULL DEFAULT 0 COMMENT '是否已读 0-未读 1-已读',
     `confidence` DECIMAL(3,2) COMMENT '置信度',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX `idx_session` (`session_id`, `created_at`),
-    INDEX `idx_user_id` (`user_id`)
+    INDEX `idx_user_id` (`user_id`),
+    INDEX `idx_employee_id` (`employee_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='客服对话记录';
 
 -- ========================================
@@ -192,6 +195,13 @@ INSERT INTO `knowledge_base` (`category`, `question`, `answer`, `keywords`, `sta
 ('refund', '如何退票？', '您可以在订单列表中找到需要退票的订单，点击退票按钮即可。退票后，票款将原路返回到您的支付账户。请注意，开车前一定时间退票可能会收取手续费。', '退票,退款,如何退', 1),
 ('query', '如何查询订单？', '登录后，点击"我的订单"即可查看您的所有订单。您可以按订单状态（待支付、已支付、已退票等）进行筛选。', '订单,查询,查订单', 1),
 ('common', '可以携带多少行李？', '每名旅客免费携带物品重量为：成人20千克，儿童10千克。携带物品的长、宽、高相加不得超过130厘米。超过规定重量或体积的物品需要办理托运。', '行李,携带,托运', 1);
+
+-- 插入测试客服对话记录（演示 msg_type 新规则）
+-- 注意：需要先获取用户ID和员工ID，这里使用子查询动态获取
+INSERT INTO `chat_record` (`user_id`, `session_id`, `message`, `msg_type`, `employee_id`, `is_read`, `confidence`) VALUES
+((SELECT id FROM `user` WHERE phone = '13800138000' LIMIT 1), 'session_001', '你好，我想查询车票。', 'user', NULL, 0, NULL),
+((SELECT id FROM `user` WHERE phone = '13800138000' LIMIT 1), 'session_001', '您好，请问您要查询哪里的车票？', 'robot', NULL, 1, 0.95),
+((SELECT id FROM `user` WHERE phone = '13800138000' LIMIT 1), 'session_001', '我可以帮您查询，请提供出发站和到达站。', 'EMP001', (SELECT id FROM `employee` WHERE employee_no = 'EMP001' LIMIT 1), 1, 0.98);
 
 -- ========================================
 -- 6. RBAC权限模块
@@ -401,6 +411,12 @@ CREATE TABLE `employee` (
     INDEX `idx_status` (`status`),
     CONSTRAINT `fk_employee_department` FOREIGN KEY (`department_id`) REFERENCES `department` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='员工表';
+
+-- 添加 chat_record 表的外键约束（引用 employee 表）
+ALTER TABLE `chat_record`
+ADD CONSTRAINT `fk_chat_record_employee`
+FOREIGN KEY (`employee_id`) REFERENCES `employee` (`id`)
+ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- 插入初始部门数据
 INSERT INTO `department` (`dept_code`, `dept_name`, `description`, `status`) VALUES

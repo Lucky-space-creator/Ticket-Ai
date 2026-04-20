@@ -40,6 +40,10 @@
             <el-icon><Key /></el-icon>
             <span>权限管理</span>
           </el-menu-item>
+          <el-menu-item index="/customer-service">
+            <el-icon><Headset /></el-icon>
+            <span>客服工作台</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       <el-container>
@@ -73,7 +77,7 @@
 <script setup>
 import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
-import { PieChart, Box, List, User, ChatDotRound, ArrowDown, Setting, Key } from '@element-plus/icons-vue'
+import { PieChart, Box, List, User, ChatDotRound, ArrowDown, Setting, Key, Headset } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const router = useRouter()

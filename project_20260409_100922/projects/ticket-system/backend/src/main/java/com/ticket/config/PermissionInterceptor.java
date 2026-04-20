@@ -36,9 +36,9 @@ public class PermissionInterceptor implements HandlerInterceptor {
         // 员工登录处理
         if (UserContext.isEmployeeLogin()) {
             String requestUri = request.getRequestURI();
-            // 员工只能访问管理端接口 (/api/admin/**)
-            if (requestUri.startsWith("/api/admin/")) {
-                log.info("员工访问管理接口: {}", requestUri);
+            // 员工只能访问管理端接口 (/api/admin/**) 和客服工作台接口 (/api/customer-service/**)
+            if (requestUri.startsWith("/api/admin/") || requestUri.startsWith("/api/customer-service/")) {
+                log.info("员工访问管理/客服接口: {}", requestUri);
                 return true;
             }
             // 非管理接口，拒绝访问
