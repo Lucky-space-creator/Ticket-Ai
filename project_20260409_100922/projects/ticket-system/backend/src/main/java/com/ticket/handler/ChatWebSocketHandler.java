@@ -7,6 +7,7 @@ import com.ticket.mapper.ChatRecordMapper;
 
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -42,7 +43,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 建立连接后触发
      */
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+    public void afterConnectionEstablished(@NotNull WebSocketSession session) throws Exception {
         String sessionId = extractSessionId(session);
         if (sessionId == null) {
             log.warn("连接建立失败，sessionId 为空");
@@ -58,7 +59,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 收到消息时触发
      */
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+    protected void handleTextMessage(@NotNull WebSocketSession session, TextMessage message) {
         String payload = message.getPayload();
         log.debug("收到 WebSocket 消息: {}", payload);
 

@@ -3,9 +3,13 @@ package com.ticket.config;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import java.util.List;
 
 /**
  * Web MVC 配置
@@ -54,5 +58,15 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/orders/**",
                         "/api/passengers/**"
                 );
+    }
+
+    @Override
+    public void extendMessageConverters(List<HttpMessageConverter<?>> converters) {
+        // 确保 Jackson 转换器存在，用于处理 application/json 请求
+        boolean hasJackson = converters.stream()
+                .anyMatch(converter -> converter instanceof MappingJackson2HttpMessageConverter);
+        if (!hasJackson) {
+            converters.add(new MappingJackson2HttpMessageConverter());
+        }
     }
 }

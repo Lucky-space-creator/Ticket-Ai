@@ -10,6 +10,7 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,10 +20,10 @@ import org.springframework.context.annotation.Configuration;
 import java.time.Duration;
 import java.util.List;
 
+@Slf4j
 @Getter
 @Configuration
 public class AIModelConfig {
-    private static final Logger log = LoggerFactory.getLogger(AIModelConfig.class);
 
     @Value("${ai.model-type}")
     private String modelType;
@@ -123,7 +124,7 @@ public class AIModelConfig {
                     log.error("备用模式也失败: {}", ex.getMessage(), ex);
                 }
             }
-            
+
             log.warn("所有AI模型初始化失败，使用虚拟模型");
             return null;
         }
@@ -159,7 +160,7 @@ public class AIModelConfig {
                             .modelName("text-embedding-ada-002")
                             .timeout(Duration.ofSeconds(httpApiTimeoutSeconds))
                             .build();
-                            
+
                 default:
                     log.warn("未知的模型类型: {}, 使用默认的Ollama嵌入模型", modelType);
                     return OllamaEmbeddingModel.builder()
@@ -170,7 +171,7 @@ public class AIModelConfig {
             }
         } catch (Exception e) {
             log.error("初始化向量化模型失败: {}", e.getMessage(), e);
-            
+
             // 如果启用了回退机制
             if (fallbackEnabled) {
                 try {
@@ -184,22 +185,22 @@ public class AIModelConfig {
                     log.error("备用向量化模型也失败: {}", ex.getMessage(), ex);
                 }
             }
-            
+
             log.warn("所有向量化模型初始化失败，使用虚拟模型");
             return null;
         }
     }
-    
+
     @Bean
     public StreamingChatLanguageModel streamingChatLanguageModel() {
         if (!aiEnabled) {
             log.info("=== AI流式模型已禁用 ===");
             return null;
         }
-        
+
         log.info("=== 初始化AI流式对话模型 ===");
         log.info("模型类型: {}", modelType);
-        
+
         try {
             switch (modelType.toLowerCase()) {
                 case "ollama":
@@ -211,7 +212,7 @@ public class AIModelConfig {
                             .temperature(ollamaTemperature)
                             .timeout(Duration.ofSeconds(ollamaTimeoutSeconds))
                             .build();
-                            
+
                 case "http-api":
                     log.info("使用HTTP API流式模型");
                     log.info("API地址: {}", httpApiBaseUrl);
@@ -222,7 +223,7 @@ public class AIModelConfig {
                             .temperature(httpApiTemperature)
                             .timeout(Duration.ofSeconds(httpApiTimeoutSeconds))
                             .build();
-                            
+
                 default:
                     log.warn("未知的模型类型: {}, 使用默认的Ollama流式配置", modelType);
                     return OllamaStreamingChatModel.builder()
@@ -234,7 +235,7 @@ public class AIModelConfig {
             }
         } catch (Exception e) {
             log.error("初始化流式模型失败: {}", e.getMessage(), e);
-            
+
             // 如果启用了回退机制
             if (fallbackEnabled) {
                 log.info("尝试使用备用流式模式: {}", fallbackType);
@@ -254,12 +255,12 @@ public class AIModelConfig {
                     log.error("备用流式模式也失败: {}", ex.getMessage(), ex);
                 }
             }
-            
+
             log.warn("所有流式AI模型初始化失败，使用虚拟模型");
             return null;
         }
     }
-    
+
     private ChatLanguageModel createOllamaChatModel() {
         return OllamaChatModel.builder()
                 .baseUrl(ollamaBaseUrl)
@@ -269,19 +270,19 @@ public class AIModelConfig {
                 .build();
     }
 
-    
+
     private ChatLanguageModel createHttpApiChatModel() {
         String apiKey = httpApiKey;
         String baseUrl = httpApiBaseUrl;
-        
+
         if (apiKey == null || apiKey.trim().isEmpty()) {
             throw new RuntimeException("HTTP API密钥未配置");
         }
-        
+
         if (baseUrl == null || baseUrl.trim().isEmpty()) {
             throw new RuntimeException("HTTP API基础地址未配置");
         }
-        
+
         return OpenAiChatModel.builder()
                 .apiKey(apiKey)
                 .baseUrl(baseUrl)
@@ -291,16 +292,16 @@ public class AIModelConfig {
                 .build();
     }
 
-    
+
     private String getEffectiveApiKey() {
         // 返回有效的API密钥，修复空指针异常
-        
+
         if ("http-api".equalsIgnoreCase(modelType)) {
             if (httpApiKey != null && !httpApiKey.trim().isEmpty()) {
                 return httpApiKey.trim();
             }
         }
-        
+
         // 回退逻辑
         if (fallbackEnabled) {
             if ("http-api".equalsIgnoreCase(fallbackType)) {
@@ -312,7 +313,7 @@ public class AIModelConfig {
                 return httpApiKey.trim();
             }
         }
-        
+
         throw new RuntimeException("未找到有效的API密钥。请配置ai.openai.api-key或ai.http-api.api-key环境变量");
     }
 }

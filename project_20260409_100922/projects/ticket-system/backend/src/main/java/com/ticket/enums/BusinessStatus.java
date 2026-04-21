@@ -62,6 +62,7 @@ public class BusinessStatus {
     public static final String MSG_TYPE_USER = "user";   // 用户
     public static final String MSG_TYPE_ROBOT = "robot";  // 机器人
     public static final String MSG_TYPE_PENDING = "pending";  // 用户请求人工客服，等待接入
+    public static final String MSG_TYPE_ENDED = "ended";  // 会话已结束
 
     /**
      * 知识库状态

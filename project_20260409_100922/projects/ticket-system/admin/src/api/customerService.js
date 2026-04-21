@@ -64,3 +64,11 @@ export function requestHumanService(data) {
     data
   })
 }
+
+// 获取已结束的会话列表
+export function getEndedSessions() {
+  return request({
+    url: '/api/customer-service/ended-sessions',
+    method: 'get'
+  })
+}

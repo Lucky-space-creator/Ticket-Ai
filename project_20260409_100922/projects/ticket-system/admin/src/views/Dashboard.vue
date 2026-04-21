@@ -123,7 +123,7 @@ const fetchStats = async () => {
       stats.value = statsRes.data
       console.log('stats data:', statsRes.data)
     } else {
-      // 如果接口无权限或未实现，使用模拟数据
+      // 如果接口无权限或未实现，显示零数据
       console.warn('stats API returned non-200 code:', statsRes.code)
       stats.value = {
         userCount: 0,
@@ -133,21 +133,27 @@ const fetchStats = async () => {
         todayUserCount: 0,
         todayOrderCount: 0,
         runningTrainCount: 0,
-        todayChatCount: 0
+        todayChatCount: 0,
+        todaySales: 0
       }
     }
     // 获取最近订单
-    const ordersRes = await request.get('/api/admin/orders')
-    if (ordersRes.code === 200) {
-      // 分页响应中 data.records 是订单数组
-      const orders = ordersRes.data.records || ordersRes.data
-      recentOrders.value = Array.isArray(orders) ? orders.slice(0, 5) : []
+    try {
+      const ordersRes = await request.get('/api/admin/orders')
+      if (ordersRes.code === 200) {
+        // 分页响应中 data.records 是订单数组
+        const orders = ordersRes.data.records || ordersRes.data
+        recentOrders.value = Array.isArray(orders) ? orders.slice(0, 5) : []
+      }
+    } catch (orderError) {
+      console.warn('获取最近订单失败:', orderError)
+      recentOrders.value = []
     }
     // 获取服务器时间
     serverTime.value = new Date().toLocaleString()
   } catch (error) {
     console.error('获取统计数据失败:', error)
-    // 使用模拟数据
+    // 显示零数据
     stats.value = {
       userCount: 0,
       orderCount: 0,
@@ -156,7 +162,8 @@ const fetchStats = async () => {
       todayUserCount: 0,
       todayOrderCount: 0,
       runningTrainCount: 0,
-      todayChatCount: 0
+      todayChatCount: 0,
+      todaySales: 0
     }
   }
 }

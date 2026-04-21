@@ -52,6 +52,27 @@
               </div>
             </div>
           </el-tab-pane>
+          <el-tab-pane label="已结束" name="ended">
+            <div class="session-list">
+              <div v-for="session in endedSessions" :key="session.sessionId" 
+                   class="session-item" 
+                   :class="{active: activeSessionId === session.sessionId}"
+                   @click="selectSession(session)">
+                <div class="session-info">
+                  <div class="session-user">
+                    <el-icon><User /></el-icon>
+                    <span class="user-id">用户 {{ session.userId || '匿名' }}</span>
+                  </div>
+                  <div class="session-preview">{{ session.lastMessage }}</div>
+                  <div class="session-time">{{ formatTime(session.lastMessageTime) }}</div>
+                </div>
+                <el-tag type="info" size="small" effect="plain">已结束</el-tag>
+              </div>
+              <div v-if="endedSessions.length === 0" class="empty-tip">
+                <el-empty description="暂无已结束会话" />
+              </div>
+            </div>
+          </el-tab-pane>
         </el-tabs>
       </el-col>
 
@@ -62,12 +83,13 @@
             <el-icon><ChatDotRound /></el-icon>
             <span class="session-title">用户 {{ activeSession.userId || '匿名' }}</span>
             <el-tag type="info" size="small">{{ activeSessionId }}</el-tag>
+            <el-tag v-if="isSessionEnded" type="info" size="small" effect="plain">已结束</el-tag>
           </div>
           <div class="header-right">
             <el-button type="success" size="small" v-if="activeTab === 'pending'" @click="acceptSession">
               接入会话
             </el-button>
-            <el-button type="danger" size="small" @click="endSession" v-else>
+            <el-button type="danger" size="small" v-else-if="activeTab === 'serving' && !isSessionEnded" @click="endSession">
               结束会话
             </el-button>
           </div>
@@ -86,17 +108,22 @@
             <el-empty description="暂无消息记录" />
           </div>
         </div>
-        <div class="chat-input" v-if="activeSession">
-          <el-input
-              v-model="inputMessage"
-              type="textarea"
-              :rows="3"
-              placeholder="输入消息..."
-              resize="none"
-              @keydown.enter.prevent="sendMessage"
-          />
-          <div class="input-actions">
-            <el-button type="primary" @click="sendMessage" :loading="sending">发送</el-button>
+        <div v-if="activeSession">
+          <div class="chat-input" v-if="!isSessionEnded">
+            <el-input
+                v-model="inputMessage"
+                type="textarea"
+                :rows="3"
+                placeholder="输入消息..."
+                resize="none"
+                @keydown.enter.prevent="sendMessage"
+            />
+            <div class="input-actions">
+              <el-button type="primary" @click="sendMessage" :loading="sending">发送</el-button>
+            </div>
+          </div>
+          <div v-else class="chat-ended-tip">
+            <el-alert type="info" title="会话已结束，无法发送新消息" :closable="false" center />
           </div>
         </div>
         <div v-else class="chat-placeholder">
@@ -111,7 +138,7 @@
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { User, ChatDotRound } from '@element-plus/icons-vue'
-import { getPendingSessions, getServingSessions, acceptSession as apiAcceptSession, endSession as apiEndSession, getHistory, sendMessage as apiSendMessage } from '@/api/customerService'
+import { getPendingSessions, getServingSessions, getEndedSessions, acceptSession as apiAcceptSession, endSession as apiEndSession, getHistory, sendMessage as apiSendMessage } from '@/api/customerService'
 import { formatTime } from '@/utils/date'
 import { useWebSocket } from '@/composables/useWebSocket'
 
@@ -119,6 +146,7 @@ import { useWebSocket } from '@/composables/useWebSocket'
 const activeTab = ref('pending')
 const pendingSessions = ref([])
 const servingSessions = ref([])
+const endedSessions = ref([])
 const activeSessionId = ref(null)
 const activeSession = ref(null)
 const messages = ref([])
@@ -133,9 +161,19 @@ const { connect, disconnect, send, isConnected } = useWebSocket()
 const allSessions = computed(() => {
   if (activeTab.value === 'pending') {
     return pendingSessions.value
-  } else {
+  } else if (activeTab.value === 'serving') {
     return servingSessions.value
+  } else {
+    return endedSessions.value
   }
+})
+
+// 会话是否已结束
+const isSessionEnded = computed(() => {
+  return activeTab.value === 'ended' || 
+         (activeSession.value && 
+          activeSession.value.sessionId && 
+          endedSessions.value.some(s => s.sessionId === activeSession.value.sessionId))
 })
 
 // 初始化
@@ -183,15 +221,19 @@ const handleWebSocketMessage = (data) => {
 // 刷新会话列表
 const refreshSessions = async () => {
   try {
-    const [pendingRes, servingRes] = await Promise.all([
+    const [pendingRes, servingRes, endedRes] = await Promise.all([
       getPendingSessions(),
-      getServingSessions()
+      getServingSessions(),
+      getEndedSessions()
     ])
     if (pendingRes.code === 200) {
       pendingSessions.value = pendingRes.data.sessions || []
     }
     if (servingRes.code === 200) {
       servingSessions.value = servingRes.data.sessions || []
+    }
+    if (endedRes.code === 200) {
+      endedSessions.value = endedRes.data.sessions || []
     }
   } catch (error) {
     ElMessage.error('获取会话列表失败')
@@ -288,6 +330,12 @@ const sendMessage = async () => {
   }
   if (!activeSessionId.value || !activeSession.value) {
     ElMessage.warning('请先选择会话')
+    return
+  }
+  
+  // 检查会话是否已结束
+  if (isSessionEnded.value) {
+    ElMessage.warning('会话已结束，无法发送消息')
     return
   }
 
@@ -541,5 +589,11 @@ const scrollToBottom = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.chat-ended-tip {
+  border-top: 1px solid #e6e6e6;
+  padding: 16px;
+  text-align: center;
 }
 </style>

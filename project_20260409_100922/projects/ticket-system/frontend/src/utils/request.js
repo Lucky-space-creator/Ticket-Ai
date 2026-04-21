@@ -14,6 +14,10 @@ request.interceptors.request.use(
       if (userStore.token) {
         config.headers.Authorization = `Bearer ${userStore.token}`
       }
+      // 确保 POST/PUT 请求有正确的 Content-Type
+      if (config.method === 'post' || config.method === 'put' || config.method === 'patch') {
+        config.headers['Content-Type'] = 'application/json'
+      }
       return config
     },
     error => {

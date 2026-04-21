@@ -31,10 +31,10 @@ import reactor.core.publisher.Flux;
 public class RAGConfig {
     private static final Logger log = LoggerFactory.getLogger(RAGConfig.class);
 
-    @Value("${rag.max-results:3}")
+    @Value("${rag.max-results}")
     private int maxResults;
 
-    @Value("${rag.min-score:0.7}")
+    @Value("${rag.min-score}")
     private Double minScore;
 
     // 存储每个用户的聊天记忆
@@ -106,7 +106,7 @@ public class RAGConfig {
             AIBusinessTool aiBusinessTool) {
 
         log.info("=== 初始化 RAG 服务（集成业务工具） ===");
-        
+
         // 验证配置参数
         if (maxResults <= 0 || maxResults > 20) {
             log.warn("maxResults 配置值 {} 超出合理范围 (1-20)，使用默认值 3", maxResults);
@@ -116,15 +116,15 @@ public class RAGConfig {
             log.warn("minScore 配置值 {} 超出合理范围 (0.0-1.0)，使用默认值 0.7", minScore);
             minScore = 0.7;
         }
-        
+
         log.info("最大检索数: {}", maxResults);
         log.info("最低相似度: {}", minScore);
-        
+
         // 检查聊天模型是否有效
         if (chatLanguageModel == null) {
             log.warn("ChatLanguageModel 为 null，RAG 服务可能无法正常工作");
         }
-        
+
         // 检查嵌入模型是否有效
         if (embeddingModel == null) {
             log.warn("EmbeddingModel 为 null，知识检索功能可能无法正常工作");
@@ -148,7 +148,7 @@ public class RAGConfig {
                     .build();
         } catch (Exception e) {
             log.error("初始化 RAG 服务失败: {}", e.getMessage(), e);
-            
+
             // 返回一个降级的服务，当RAG失败时提供有用的信息
             return question -> {
                 log.info("使用降级服务处理问题: {}", question);
@@ -181,7 +181,7 @@ public class RAGConfig {
             AIBusinessTool aiBusinessTool) {
 
         log.info("=== 初始化流式 RAG 服务（集成业务工具） ===");
-        
+
         // 验证配置参数
         if (maxResults <= 0 || maxResults > 20) {
             log.warn("maxResults 配置值 {} 超出合理范围 (1-20)，使用默认值 3", maxResults);
@@ -191,15 +191,15 @@ public class RAGConfig {
             log.warn("minScore 配置值 {} 超出合理范围 (0.0-1.0)，使用默认值 0.7", minScore);
             minScore = 0.7;
         }
-        
+
         log.info("最大检索数: {}", maxResults);
         log.info("最低相似度: {}", minScore);
-        
+
         // 检查聊天模型是否有效
         if (streamingChatLanguageModel == null) {
             log.warn("StreamingChatLanguageModel 为 null，流式 RAG 服务可能无法正常工作");
         }
-        
+
         // 检查嵌入模型是否有效
         if (embeddingModel == null) {
             log.warn("EmbeddingModel 为 null，知识检索功能可能无法正常工作");
@@ -223,7 +223,7 @@ public class RAGConfig {
                     .build();
         } catch (Exception e) {
             log.error("初始化流式 RAG 服务失败: {}", e.getMessage(), e);
-            
+
             // 返回一个降级的服务，当RAG失败时提供有用的信息
             return question -> Flux.just("""
                     抱歉，智能客服系统当前正在维护中，预计10分钟内恢复。

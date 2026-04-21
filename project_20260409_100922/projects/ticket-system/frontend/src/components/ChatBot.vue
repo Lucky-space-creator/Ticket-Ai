@@ -97,13 +97,29 @@
         />
         <div class="input-footer">
           <span class="hint">按 Ctrl+Enter 发送</span>
-          <el-button
-              type="primary"
-              :disabled="!inputText.trim() || loading"
-              @click="sendMessage"
-          >
-            发送
-          </el-button>
+          <div class="input-actions">
+            <el-button
+                type="warning"
+                :loading="transferring"
+                @click="requestHumanService"
+            >
+              转人工客服
+            </el-button>
+            <el-button
+                v-if="isHumanService && !isSessionEnded"
+                type="danger"
+                @click="endSession"
+            >
+              结束对话
+            </el-button>
+            <el-button
+                type="primary"
+                :disabled="!inputText.trim() || loading"
+                @click="sendMessage"
+            >
+              发送
+            </el-button>
+          </div>
         </div>
       </div>
     </div>
@@ -121,8 +137,16 @@ const messages = ref([])
 const inputText = ref('')
 const loading = ref(false)
 const unreadCount = ref(0)
+const transferring = ref(false)
 const messagesRef = ref(null)
 const userStore = useUserStore()
+
+// WebSocket 相关
+const socket = ref(null)
+const isConnected = ref(false)
+const isHumanService = ref(false) // 是否客服已介入
+const isSessionEnded = ref(false) // 会话是否已结束
+const sessionId = ref('')
 
 // 监听用户状态变化
 watch(() => userStore.token, (newToken, oldToken) => {
@@ -131,13 +155,106 @@ watch(() => userStore.token, (newToken, oldToken) => {
     messages.value = []
     unreadCount.value = 0
     inputText.value = ''
+    disconnectWebSocket()
   } else if (oldToken && newToken !== oldToken) {
     // token发生变化（可能是重新登录或切换账户），清空消息
     messages.value = []
     unreadCount.value = 0
     inputText.value = ''
+    disconnectWebSocket()
   }
 })
+
+// 初始化 WebSocket 连接
+onMounted(() => {
+  initWebSocket()
+})
+
+// 初始化 WebSocket
+const initWebSocket = () => {
+  if (!userStore.token) return
+  const userId = userStore.userInfo?.id
+  if (!userId) return
+  sessionId.value = 'user_' + userId
+  const wsUrl = `ws://localhost:8080/ws/chat/${sessionId.value}`
+  socket.value = new WebSocket(wsUrl)
+  
+  socket.value.onopen = () => {
+    console.log('WebSocket 连接成功')
+    isConnected.value = true
+  }
+  
+  socket.value.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (data.type === 'chat') {
+        // 判断消息类型
+        if (data.msgType === 'user') {
+          // 用户消息（可能是自己发送的，已经显示过，忽略）
+        } else if (data.msgType === 'robot') {
+          // AI 回复
+          messages.value.push({
+            role: 'assistant',
+            content: data.content,
+            time: new Date(data.timestamp)
+          })
+          scrollToBottom()
+        } else if (data.msgType === 'ended') {
+          // 会话结束消息
+          isSessionEnded.value = true
+          isHumanService.value = false
+          messages.value.push({
+            role: 'assistant',
+            content: data.content,
+            time: new Date(data.timestamp)
+          })
+          scrollToBottom()
+        } else {
+          // 客服消息
+          isHumanService.value = true
+          messages.value.push({
+            role: 'assistant',
+            content: data.content,
+            time: new Date(data.timestamp)
+          })
+          scrollToBottom()
+        }
+        // 如果窗口最小化，增加未读计数
+        if (isMinimized.value) {
+          unreadCount.value++
+        }
+      }
+    } catch (error) {
+      console.error('解析 WebSocket 消息失败', error)
+    }
+  }
+  
+  socket.value.onclose = () => {
+    console.log('WebSocket 连接关闭')
+    isConnected.value = false
+  }
+  
+  socket.value.onerror = (error) => {
+    console.error('WebSocket 错误', error)
+  }
+}
+
+// 组件卸载时断开连接
+onUnmounted(() => {
+  disconnectWebSocket()
+})
+
+// 断开 WebSocket 连接
+const disconnectWebSocket = () => {
+  if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+    socket.value.close()
+  }
+  socket.value = null
+  isConnected.value = false
+  isHumanService.value = false
+  isSessionEnded.value = false
+  sessionId.value = ''
+}
 
 const quickQuestions = [
   '如何购买火车票',
@@ -154,6 +271,26 @@ function toggleChat() {
     nextTick(() => {
       scrollToBottom()
     })
+  }
+}
+
+// 结束对话（用户主动结束）
+async function endSession() {
+  if (!sessionId.value) return
+  try {
+    const result = await request.post('/customer-service/user-end-session', {
+      sessionId: sessionId.value
+    })
+    if (result.code === 200) {
+      ElMessage.success('会话已结束')
+      isSessionEnded.value = true
+      isHumanService.value = false
+    } else {
+      ElMessage.error(result.message || '结束会话失败')
+    }
+  } catch (error) {
+    ElMessage.error('结束会话失败')
+    console.error(error)
   }
 }
 
@@ -207,7 +344,7 @@ function sendQuickQuestion(question) {
 // 清空历史
 async function clearHistory() {
   try {
-    await request.post('/api/chat/clear')
+    await request.post('/chat/clear')
     ElMessage.success('会话已清空')
   } catch (error) {
     ElMessage.error('清空会话失败')
@@ -215,6 +352,29 @@ async function clearHistory() {
   messages.value = []
   unreadCount.value = 0
   inputText.value = ''
+}
+
+// 转接人工客服
+async function requestHumanService() {
+  if (transferring.value) return;
+  transferring.value = true;
+  try {
+    const result = await request.post('/customer-service/request-human', {
+      reason: '用户主动点击转接按钮'
+    });
+    ElMessage.success(result.data || '转人工请求已提交，请稍候');
+    // 可以添加一条系统消息到聊天窗口
+    messages.value.push({
+      role: 'assistant',
+      content: '已为您转接人工客服，请稍候，客服人员将很快为您服务。',
+      time: new Date()
+    });
+    scrollToBottom();
+  } catch (error) {
+    ElMessage.error('转人工请求失败，请重试');
+  } finally {
+    transferring.value = false;
+  }
 }
 
 // 滚动到底部
@@ -487,6 +647,11 @@ function formatTime(date) {
     .hint {
       font-size: 12px;
       color: #909399;
+    }
+
+    .input-actions {
+      display: flex;
+      gap: 8px;
     }
   }
 }

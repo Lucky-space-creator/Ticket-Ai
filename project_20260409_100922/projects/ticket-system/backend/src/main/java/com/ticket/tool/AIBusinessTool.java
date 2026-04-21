@@ -4,27 +4,34 @@ import com.ticket.entity.Order;
 import com.ticket.entity.OrderItem;
 import com.ticket.entity.Passenger;
 import com.ticket.entity.Train;
+import com.ticket.entity.ChatRecord;
 import com.ticket.service.OrderService;
 import com.ticket.service.PassengerService;
 import com.ticket.service.TrainService;
 import com.ticket.service.UserService;
+import com.ticket.mapper.ChatRecordMapper;
 import com.ticket.util.CryptoUtil;
 import com.ticket.util.UserContext;
+import com.ticket.enums.BusinessStatus;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * AI调用业务工具类
  * 将所有可暴露的API整合起来，形成一个业务工具类，可调用具体的业务
  * 每个方法使用 @Tool 注解，可以被AI自动调用
  */
+@Slf4j
 @Component
 public class AIBusinessTool {
 
@@ -40,6 +47,8 @@ public class AIBusinessTool {
     @Resource
     private PassengerService passengerService;
 
+    @Resource
+    private ChatRecordMapper chatRecordMapper;
     /**
      * 查询车次信息
      * @param from 出发城市
@@ -276,5 +285,39 @@ public class AIBusinessTool {
             profile.put("idCard", null);
         }
         return profile;
+    }
+
+    /**
+     * 转接人工客服，将当前会话转接给人工客服，可提供转接原因
+     * @param reason 转接原因（可选）
+     * @return 转接结果消息
+     */
+    @Tool("转接人工客服，将当前会话转接给人工客服，可提供转接原因,")
+    public String transferToHuman(@P(value = "转接原因", required = false) String reason) {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new RuntimeException("用户未登录");
+        }
+        String sessionId = "user_" + userId;
+        
+        // 构建消息内容，包含转接原因
+        String message = "用户请求转人工客服";
+        if (reason != null && !reason.trim().isEmpty()) {
+            message += "，原因：" + reason.trim();
+        }
+        
+        // 保存一条 pending 消息，表示用户请求人工客服
+        ChatRecord pendingMsg = new ChatRecord();
+        pendingMsg.setSessionId(sessionId);
+        pendingMsg.setUserId(userId);
+        pendingMsg.setMessage(message);
+        pendingMsg.setMsgType(BusinessStatus.MSG_TYPE_PENDING);
+        pendingMsg.setIsRead(0);
+        pendingMsg.setConfidence(BigDecimal.ONE);
+        pendingMsg.setCreatedAt(LocalDateTime.now());
+        chatRecordMapper.insert(pendingMsg);
+        
+        log.info("AI触发转人工客服，用户 {}，会话ID: {}，原因: {}", userId, sessionId, reason);
+        return "已为您转接人工客服，请稍候，客服人员将很快为您服务。";
     }
 }
