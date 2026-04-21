@@ -50,12 +50,12 @@ public class KnowledgeBaseInitializer implements ApplicationRunner {
         }
 
         // 每次启动都同步到向量数据库，确保向量库与MySQL数据一致
-        try {
-            knowledgeBaseService.syncToVectorStore();
-            log.info("知识库已同步到向量数据库");
-        } catch (Exception e) {
-            log.info("向量数据库集合尚未创建，跳过知识库同步（将在文档加载后自动创建）");
-        }
+//        try {
+//            knowledgeBaseService.syncToVectorStore();
+//            log.info("知识库已同步到向量数据库");
+//        } catch (Exception e) {
+//            log.info("向量数据库集合尚未创建，跳过知识库同步（将在文档加载后自动创建）");
+//        }
     }
 
     /**

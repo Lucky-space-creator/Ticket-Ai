@@ -13,8 +13,20 @@
         <div class="header-info">
           <el-icon size="20"><Service /></el-icon>
           <span>智能客服</span>
+          <span class="connection-status" :class="connectionStatusClass">
+            {{ connectionStatusText }}
+          </span>
         </div>
         <div class="header-actions">
+          <el-button
+              type="primary"
+              link
+              size="small"
+              @click="loadHistory"
+              :loading="loadingHistory"
+          >
+            刷新
+          </el-button>
           <el-button
               type="primary"
               link
@@ -127,7 +139,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, nextTick, onMounted, onUnmounted, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 import { useUserStore } from '@/stores/user'
@@ -147,6 +159,28 @@ const isConnected = ref(false)
 const isHumanService = ref(false) // 是否客服已介入
 const isSessionEnded = ref(false) // 会话是否已结束
 const sessionId = ref('')
+const reconnectAttempts = ref(0)
+const maxReconnectAttempts = 5
+const reconnectDelay = 3000
+const heartbeatInterval = ref(null)
+const loadingHistory = ref(false)
+const connectionStatus = ref('disconnected') // 'connecting', 'connected', 'disconnected'
+
+// 连接状态计算属性
+const connectionStatusClass = computed(() => {
+  switch (connectionStatus.value) {
+    case 'connected': return 'status-connected'
+    case 'connecting': return 'status-connecting'
+    default: return 'status-disconnected'
+  }
+})
+const connectionStatusText = computed(() => {
+  switch (connectionStatus.value) {
+    case 'connected': return '在线'
+    case 'connecting': return '连接中'
+    default: return '离线'
+  }
+})
 
 // 监听用户状态变化
 watch(() => userStore.token, (newToken, oldToken) => {
@@ -176,73 +210,130 @@ const initWebSocket = () => {
   const userId = userStore.userInfo?.id
   if (!userId) return
   sessionId.value = 'user_' + userId
+  connectWebSocket()
+}
+
+// 连接 WebSocket（支持重连）
+const connectWebSocket = () => {
+  if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+    console.log('WebSocket 已连接')
+    return
+  }
+
+  // 更新连接状态
+  connectionStatus.value = 'connecting'
+  
   const wsUrl = `ws://localhost:8080/ws/chat/${sessionId.value}`
-  socket.value = new WebSocket(wsUrl)
-  
-  socket.value.onopen = () => {
-    console.log('WebSocket 连接成功')
-    isConnected.value = true
-    // 加载历史消息
-    loadHistory()
-  }
-  
-  socket.value.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data)
-      if (data.type === 'chat') {
-        // 判断消息类型
-        if (data.msgType === 'user') {
-          // 用户消息（可能是自己发送的，已经显示过，忽略）
-        } else if (data.msgType === 'robot') {
-          // AI 回复
-          messages.value.push({
-            role: 'assistant',
-            content: data.content,
-            time: new Date(data.timestamp)
-          })
-          scrollToBottom()
-        } else if (data.msgType === 'ended') {
-          // 会话结束消息
-          isSessionEnded.value = true
-          isHumanService.value = false
-          messages.value.push({
-            role: 'assistant',
-            content: data.content,
-            time: new Date(data.timestamp)
-          })
-          scrollToBottom()
-        } else {
-          // 客服消息
-          isHumanService.value = true
-          messages.value.push({
-            role: 'assistant',
-            content: data.content,
-            time: new Date(data.timestamp)
-          })
-          scrollToBottom()
-        }
-        // 如果窗口最小化，增加未读计数
-        if (isMinimized.value) {
-          unreadCount.value++
-        }
-      }
-    } catch (error) {
-      console.error('解析 WebSocket 消息失败', error)
+  try {
+    socket.value = new WebSocket(wsUrl)
+    
+    socket.value.onopen = () => {
+      console.log('WebSocket 连接成功')
+      isConnected.value = true
+      connectionStatus.value = 'connected'
+      reconnectAttempts.value = 0
+      // 启动心跳
+      startHeartbeat()
+      // 加载历史消息
+      loadHistory()
     }
+    
+    socket.value.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'chat') {
+          // 判断消息类型
+          if (data.msgType === 'user') {
+            // 用户消息（可能是自己发送的，已经显示过，忽略）
+          } else if (data.msgType === 'robot') {
+            // AI 回复
+            messages.value.push({
+              role: 'assistant',
+              content: data.content,
+              time: new Date(data.timestamp)
+            })
+            scrollToBottom()
+          } else if (data.msgType === 'ended') {
+            // 会话结束消息
+            isSessionEnded.value = true
+            isHumanService.value = false
+            messages.value.push({
+              role: 'assistant',
+              content: data.content,
+              time: new Date(data.timestamp)
+            })
+            scrollToBottom()
+          } else if (data.msgType === 'pending') {
+            // 待接入消息，忽略（避免重复显示）
+          } else {
+            // 客服消息（msgType 为员工号）
+            isHumanService.value = true
+            messages.value.push({
+              role: 'assistant',
+              content: data.content,
+              time: new Date(data.timestamp)
+            })
+            scrollToBottom()
+          }
+          // 如果窗口最小化，增加未读计数
+          if (isMinimized.value) {
+            unreadCount.value++
+          }
+        }
+      } catch (error) {
+        console.error('解析 WebSocket 消息失败', error)
+      }
+    }
+    
+    socket.value.onclose = (event) => {
+      console.log('WebSocket 连接关闭', event.code, event.reason)
+      isConnected.value = false
+      connectionStatus.value = 'disconnected'
+      stopHeartbeat()
+      
+      // 尝试重连
+      if (reconnectAttempts.value < maxReconnectAttempts) {
+        reconnectAttempts.value++
+        console.log(`尝试重连 (${reconnectAttempts.value}/${maxReconnectAttempts})...`)
+        setTimeout(() => {
+          connectWebSocket()
+        }, reconnectDelay)
+      } else {
+        console.log('重连次数已达上限，停止重连')
+      }
+    }
+    
+    socket.value.onerror = (error) => {
+      console.error('WebSocket 错误', error)
+      connectionStatus.value = 'disconnected'
+    }
+  } catch (error) {
+    console.error('创建 WebSocket 连接失败', error)
+    connectionStatus.value = 'disconnected'
   }
-  
-  socket.value.onclose = () => {
-    console.log('WebSocket 连接关闭')
-    isConnected.value = false
-  }
-  
-  socket.value.onerror = (error) => {
-    console.error('WebSocket 错误', error)
+}
+
+// 启动心跳
+const startHeartbeat = () => {
+  stopHeartbeat()
+  heartbeatInterval.value = setInterval(() => {
+    if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+      socket.value.send(JSON.stringify({ type: 'heartbeat' }))
+    }
+  }, 30000) // 每30秒发送一次心跳
+}
+
+// 停止心跳
+const stopHeartbeat = () => {
+  if (heartbeatInterval.value) {
+    clearInterval(heartbeatInterval.value)
+    heartbeatInterval.value = null
   }
 }
 
 // 加载历史消息
 async function loadHistory() {
+  loadingHistory.value = true
   try {
     const result = await request.get('/customer-service/user-history')
     if (result.code === 200 && result.data.messages) {
@@ -258,6 +349,9 @@ async function loadHistory() {
     }
   } catch (error) {
     console.error('加载历史消息失败', error)
+    ElMessage.error('加载历史消息失败，请重试')
+  } finally {
+    loadingHistory.value = false
   }
 }
 
@@ -268,11 +362,13 @@ onUnmounted(() => {
 
 // 断开 WebSocket 连接
 const disconnectWebSocket = () => {
+  stopHeartbeat()
   if (socket.value && socket.value.readyState === WebSocket.OPEN) {
     socket.value.close()
   }
   socket.value = null
   isConnected.value = false
+  connectionStatus.value = 'disconnected'
   isHumanService.value = false
   isSessionEnded.value = false
   sessionId.value = ''
@@ -491,6 +587,27 @@ function formatTime(date) {
     gap: 8px;
     font-size: 16px;
     font-weight: 500;
+    
+    .connection-status {
+      font-size: 12px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      margin-left: 8px;
+      font-weight: normal;
+      
+      &.status-connected {
+        background-color: rgba(255, 255, 255, 0.2);
+      }
+      
+      &.status-connecting {
+        background-color: rgba(255, 193, 7, 0.2);
+        animation: pulse 1.5s infinite;
+      }
+      
+      &.status-disconnected {
+        background-color: rgba(220, 53, 69, 0.2);
+      }
+    }
   }
 
   .header-actions {
@@ -662,6 +779,11 @@ function formatTime(date) {
   40% {
     transform: scale(1);
   }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .chat-input {

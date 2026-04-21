@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -620,12 +621,16 @@ public class CustomerServiceController {
         
         String sessionId = "user_" + userId;
         
-        // 获取最近10条消息，按时间升序
+        // 获取最近10条消息，按时间升序，排除pending消息
         LambdaQueryWrapper<ChatRecord> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ChatRecord::getSessionId, sessionId)
-                .orderByAsc(ChatRecord::getCreatedAt)
+                .ne(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_PENDING)
+                // 按时间降序 可以获得最新消息，否则按时间升序 可以获得最老消息
+                .orderByDesc(ChatRecord::getCreatedAt)
                 .last("LIMIT 10");
         List<ChatRecord> records = chatRecordMapper.selectList(wrapper);
+        //数组反转顺序
+        Collections.reverse(records);
         
         Map<String, Object> result = new HashMap<>();
         result.put("messages", records);

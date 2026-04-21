@@ -2,11 +2,13 @@ package com.ticket.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.ticket.entity.ChatRecord;
+import com.ticket.entity.ChatSession;
 import com.ticket.mapper.ChatRecordMapper;
 import com.ticket.service.AIChatService;
 import com.ticket.service.KnowledgeAssistant;
 import com.ticket.service.KnowledgeBaseService;
 import com.ticket.service.StreamingKnowledgeAssistant;
+import com.ticket.service.ChatSessionService;
 import dev.langchain4j.memory.ChatMemory;
 import com.ticket.util.SnowflakeIdUtil;
 import com.ticket.util.UserContext;
@@ -48,6 +50,9 @@ public class AIChatServiceImpl implements AIChatService {
 
     @Resource
     private ChatWebSocketHandler chatWebSocketHandler;
+
+    @Resource
+    private ChatSessionService chatSessionService;
     @Override
     @Transactional
     public String chat(String question) {
@@ -55,13 +60,6 @@ public class AIChatServiceImpl implements AIChatService {
         String sessionId = getSessionId();
         // 保存用户消息
         saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0);
-
-        // 检查会话是否已结束
-        if (isSessionEnded(sessionId)) {
-            String answer = "会话已结束，若需要客服介入，请点击转客服按钮";
-            saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
-            return answer;
-        }
 
         // 检查会话是否已被客服接管
         if (isSessionHandledByHuman(sessionId)) {
@@ -273,6 +271,14 @@ public class AIChatServiceImpl implements AIChatService {
         if (sessionId == null) {
             return false;
         }
+        
+        // 1. 检查会话表状态
+        ChatSession session = chatSessionService.getById(sessionId);
+        if (session != null && ChatSession.STATUS_ENDED.equals(session.getStatus())) {
+            return true;
+        }
+        
+        // 2. 回退到聊天记录检查（兼容旧逻辑）
         LambdaQueryWrapper<ChatRecord> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ChatRecord::getSessionId, sessionId)
                 .eq(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_ENDED);
@@ -281,13 +287,32 @@ public class AIChatServiceImpl implements AIChatService {
 
     /**
      * 检查会话是否已被客服接管（存在客服工号消息，且未结束）
-     * 优化：只有当客服已接入但尚未发送第一条消息时才返回true
-     * 一旦客服发送了消息，AI就不再介入，让用户和客服直接对话
+     * 优化：首先检查会话表状态，再检查聊天记录
      */
     private boolean isSessionHandledByHuman(String sessionId) {
         if (sessionId == null) {
             return false;
         }
+        
+        // 1. 检查会话表状态
+        ChatSession session = chatSessionService.getById(sessionId);
+        if (session != null) {
+            // 如果会话已结束，AI不介入（但isSessionEnded会处理）
+            if (ChatSession.STATUS_ENDED.equals(session.getStatus())) {
+                return false;
+            }
+            // 如果会话状态为active且有客服员工ID，说明客服已接入
+            if (ChatSession.STATUS_ACTIVE.equals(session.getStatus()) && session.getEmployeeId() != null) {
+                return true;
+            }
+            // 如果会话状态为pending，客服尚未接入
+            if (ChatSession.STATUS_PENDING.equals(session.getStatus())) {
+                return false;
+            }
+            // 其他状态（ai_only）继续检查聊天记录
+        }
+        
+        // 2. 回退到聊天记录检查（兼容旧逻辑）
         // 查找是否存在pending消息（用户请求人工客服但尚未被接入）
         LambdaQueryWrapper<ChatRecord> pendingWrapper = new LambdaQueryWrapper<>();
         pendingWrapper.eq(ChatRecord::getSessionId, sessionId)
@@ -308,15 +333,7 @@ public class AIChatServiceImpl implements AIChatService {
                 .ne(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_ENDED);
         List<ChatRecord> records = chatRecordMapper.selectList(wrapper);
         
-        // 如果存在客服消息，但客服还没有发送过消息（只有系统消息），则AI可以介入
-        // 这里简化逻辑：只要客服已接入（pending消息被转为客服工号），AI就不介入
-        // 实际应该检查是否有客服发送的消息（不仅仅是系统消息）
-        // 我们先检查是否有员工ID非空的消息
-        boolean hasEmployeeMessage = records.stream()
-                .anyMatch(record -> record.getEmployeeId() != null);
-        
-        // 如果有客服消息但没有客服发送的具体消息，可能是系统消息，AI仍可介入
-        // 但为了简单起见，只要客服接入（pending被处理），AI就不介入
+        // 只要存在客服消息（非user/robot/pending/ended），就认为客服已介入
         return !records.isEmpty();
     }
 

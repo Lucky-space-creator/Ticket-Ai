@@ -246,10 +246,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 同时发送到全局连接，以便客服端接收
         try {
             // 解析消息，添加会话ID
-            com.alibaba.fastjson2.JSONObject json = com.alibaba.fastjson2.JSON.parseObject(message);
+            JSONObject json = JSON.parseObject(message);
             json.put("sessionId", sessionId);
             json.put("notificationType", "chat_message");
-            sendMessageToGlobal(com.alibaba.fastjson2.JSON.toJSONString(json));
+            sendMessageToGlobal(JSON.toJSONString(json));
         } catch (Exception e) {
             log.warn("发送到全局连接失败", e);
         }
