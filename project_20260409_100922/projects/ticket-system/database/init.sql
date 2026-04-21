@@ -7,6 +7,9 @@ CREATE DATABASE IF NOT EXISTS `ticket_system` DEFAULT CHARACTER SET utf8mb4 COLL
 
 USE `ticket_system`;
 
+-- 禁用外键检查（确保建表顺序不受外键依赖影响）
+SET FOREIGN_KEY_CHECKS = 0;
+
 -- ========================================
 -- 1. 用户模块
 -- ========================================
@@ -401,6 +404,7 @@ CREATE TABLE `employee` (
     `hire_date` DATE COMMENT '入职日期',
     `id_card` VARCHAR(100) COMMENT '身份证号（加密存储）',
     `status` TINYINT DEFAULT 1 COMMENT '状态 0-离职 1-在职',
+    `role_id` BIGINT DEFAULT NULL COMMENT '角色ID',
     `remark` VARCHAR(500) COMMENT '备注',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -409,7 +413,9 @@ CREATE TABLE `employee` (
     UNIQUE KEY `uk_email` (`email`),
     INDEX `idx_department_id` (`department_id`),
     INDEX `idx_status` (`status`),
-    CONSTRAINT `fk_employee_department` FOREIGN KEY (`department_id`) REFERENCES `department` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+    INDEX `idx_role_id` (`role_id`),
+    CONSTRAINT `fk_employee_department` FOREIGN KEY (`department_id`) REFERENCES `department` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT `fk_employee_role` FOREIGN KEY (`role_id`) REFERENCES `role` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='员工表';
 
 -- 添加 chat_record 表的外键约束（引用 employee 表）
@@ -426,7 +432,10 @@ INSERT INTO `department` (`dept_code`, `dept_name`, `description`, `status`) VAL
 ('FIN', '财务部', '负责财务管理', 1);
 
 -- 插入初始员工数据
-INSERT INTO `employee` (`employee_no`, `name`, `gender`, `phone`, `password`, `email`, `department_id`, `position`, `hire_date`, `id_card`, `status`, `remark`) VALUES
-('EMP001', '王经理', 1, '13900139000', '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa', 'wang@example.com', (SELECT id FROM department WHERE dept_code = 'IT'), '技术经理', '2020-01-01', '110101198001011234', 1, '技术负责人'),
-('EMP002', '李主管', 2, '13900139001', '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa', 'li@example.com', (SELECT id FROM department WHERE dept_code = 'HR'), '人事主管', '2021-03-15', '110101198102022345', 1, '招聘负责人'),
-('EMP003', '张运营', 1, '13900139002', '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa', 'zhang@example.com', (SELECT id FROM department WHERE dept_code = 'OP'), '运营专员', '2022-06-20', '110101198203033456', 1, '客服运营');
+INSERT INTO `employee` (`employee_no`, `name`, `gender`, `phone`, `password`, `email`, `department_id`, `position`, `hire_date`, `id_card`, `status`, `role_id`, `remark`) VALUES
+('EMP001', '王经理', 1, '13900139000', '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa', 'wang@example.com', (SELECT id FROM department WHERE dept_code = 'IT'), '技术经理', '2020-01-01', '110101198001011234', 1, (SELECT id FROM role WHERE role_name = 'admin'), '技术负责人'),
+('EMP002', '李主管', 2, '13900139001', '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa', 'li@example.com', (SELECT id FROM department WHERE dept_code = 'HR'), '人事主管', '2021-03-15', '110101198102022345', 1, (SELECT id FROM role WHERE role_name = 'operator'), '招聘负责人'),
+('EMP003', '张运营', 1, '13900139002', '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa', 'zhang@example.com', (SELECT id FROM department WHERE dept_code = 'OP'), '运营专员', '2022-06-20', '110101198203033456', 1, (SELECT id FROM role WHERE role_name = 'operator'), '客服运营');
+
+-- 启用外键检查（恢复数据库完整性约束）
+SET FOREIGN_KEY_CHECKS = 1;

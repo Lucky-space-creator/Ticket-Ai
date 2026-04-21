@@ -186,6 +186,21 @@ public class JwtUtil {
     }
 
     /**
+     * 生成带角色信息的员工令牌
+     */
+    public String generateEmployeeTokenWithRole(Long employeeId, String phone, String employeeNo, String name, Long roleId, String roleName) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("employeeId", employeeId);
+        claims.put("phone", phone);
+        claims.put("employeeNo", employeeNo);
+        claims.put("name", name);
+        claims.put("userType", USER_TYPE_EMPLOYEE);
+        claims.put("roleId", roleId);
+        claims.put("roleName", roleName);
+        return generateToken(claims);
+    }
+
+    /**
      * 从令牌中获取用户类型
      */
     public String getUserTypeFromToken(String token) {

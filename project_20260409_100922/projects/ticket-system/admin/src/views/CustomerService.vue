@@ -153,6 +153,7 @@ const messages = ref([])
 const inputMessage = ref('')
 const sending = ref(false)
 const messagesContainer = ref(null)
+let intervalId = null
 
 // WebSocket 连接
 const { connect, disconnect, send, isConnected } = useWebSocket()
@@ -180,10 +181,15 @@ const isSessionEnded = computed(() => {
 onMounted(() => {
   initWebSocket()
   refreshSessions()
+  // 添加定期刷新，30秒一次（作为WebSocket的后备）
+  intervalId = setInterval(refreshSessions, 30000)
 })
 
 onUnmounted(() => {
   disconnect()
+  if (intervalId) {
+    clearInterval(intervalId)
+  }
 })
 
 // 初始化 WebSocket
@@ -215,6 +221,19 @@ const handleWebSocketMessage = (data) => {
   } else if (data.type === 'pong') {
     // 心跳响应
     console.log('收到 pong')
+  } else if (data.type === 'notification') {
+    // 全局通知
+    console.log('收到全局通知:', data)
+    if (data.notificationType === 'new_pending_session') {
+      // 新待接入会话通知
+      if (activeTab.value === 'pending') {
+        // 如果在待接入标签页，自动刷新列表
+        refreshSessions()
+      } else {
+        // 在其他标签页，显示提示
+        ElMessage.info('有新的用户请求人工客服')
+      }
+    }
   }
 }
 
@@ -339,25 +358,27 @@ const sendMessage = async () => {
     return
   }
 
+  const content = inputMessage.value.trim()
   sending.value = true
   try {
     const res = await apiSendMessage({
       sessionId: activeSessionId.value,
-      content: inputMessage.value,
+      content: content,
       userId: activeSession.value.userId
     })
     if (res.code === 200) {
+      // 在本地添加消息，以便立即显示
+      messages.value.push({
+        id: Date.now(),
+        message: content,
+        msgType: 'employee', // 占位符，实际员工ID由后端确定
+        employeeId: null,
+        userId: activeSession.value.userId,
+        createdAt: new Date()
+      })
+      scrollToBottom()
       // 清空输入框
       inputMessage.value = ''
-      // 通过 WebSocket 发送消息给用户端
-      send(JSON.stringify({
-        type: 'chat',
-        sessionId: activeSessionId.value,
-        content: inputMessage.value,
-        msgType: 'employee', // 前端需要根据当前员工工号替换
-        employeeId: null, // 需要从用户信息中获取
-        userId: activeSession.value.userId
-      }))
     } else {
       ElMessage.error(res.message || '发送失败')
     }

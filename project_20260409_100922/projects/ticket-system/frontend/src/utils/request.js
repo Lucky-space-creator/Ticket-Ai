@@ -56,7 +56,7 @@ request.interceptors.response.use(
             break
           case 403:
             ElMessage.error({
-              message: '拒绝访问',
+              message: '该用户目前无访问权限',
               duration: 1000
             })
             break

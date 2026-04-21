@@ -75,6 +75,11 @@ public class Employee {
     private Integer status;
 
     /**
+     * 角色ID
+     */
+    private Long roleId;
+
+    /**
      * 备注
      */
     private String remark;

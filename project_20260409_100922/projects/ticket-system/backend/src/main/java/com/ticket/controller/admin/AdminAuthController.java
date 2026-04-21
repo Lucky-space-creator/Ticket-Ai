@@ -2,7 +2,9 @@ package com.ticket.controller.admin;
 
 import com.ticket.dto.UserLoginRequest;
 import com.ticket.entity.Employee;
+import com.ticket.entity.Role;
 import com.ticket.service.EmployeeService;
+import com.ticket.service.RoleService;
 import com.ticket.util.JwtUtil;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
@@ -25,6 +27,9 @@ public class AdminAuthController {
     private EmployeeService employeeService;
 
     @Resource
+    private RoleService roleService;
+
+    @Resource
     private JwtUtil jwtUtil;
 
     /**
@@ -37,11 +42,21 @@ public class AdminAuthController {
             Employee employee = employeeService.login(request.getPhone(), request.getPassword());
 
             // 生成员工令牌
-            String token = jwtUtil.generateEmployeeToken(
+            Long roleId = employee.getRoleId();
+            String roleName = "";
+            if (roleId != null) {
+                Role role = roleService.getById(roleId);
+                if (role != null) {
+                    roleName = role.getRoleDisplayName();
+                }
+            }
+            String token = jwtUtil.generateEmployeeTokenWithRole(
                     employee.getId(),
                     employee.getPhone(),
                     employee.getEmployeeNo(),
-                    employee.getName()
+                    employee.getName(),
+                    roleId,
+                    roleName
             );
 
             // 构造返回数据

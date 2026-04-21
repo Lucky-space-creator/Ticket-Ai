@@ -2,83 +2,130 @@ package com.ticket.util;
 
 /**
  * 用户上下文工具类
- * 用于在当前线程中存储和获取当前登录用户ID或员工ID
+ * 用于在当前线程中存储和获取当前登录用户ID、员工ID、角色ID和用户类型
  */
 public class UserContext {
 
-    // 存储当前用户ID的 ThreadLocal
-    private static final ThreadLocal<Long> USER_ID_HOLDER = new ThreadLocal<>();
-    // 存储当前员工ID的 ThreadLocal
-    private static final ThreadLocal<Long> EMPLOYEE_ID_HOLDER = new ThreadLocal<>();
-    // 存储当前用户类型的 ThreadLocal
-    private static final ThreadLocal<String> USER_TYPE_HOLDER = new ThreadLocal<>();
+    /**
+     * 上下文数据持有类
+     */
+    private static class Context {
+        Long userId;
+        Long employeeId;
+        String userType;
+        Long roleId;
+    }
+
+    // 使用单个 ThreadLocal 存储所有上下文数据
+    private static final ThreadLocal<Context> CONTEXT_HOLDER = new ThreadLocal<>();
+
+    /**
+     * 获取当前上下文，如果不存在则返回 null
+     */
+    private static Context getContext() {
+        return CONTEXT_HOLDER.get();
+    }
+
+    /**
+     * 获取或创建当前上下文（如果不存在则创建）
+     */
+    private static Context getOrCreateContext() {
+        Context ctx = CONTEXT_HOLDER.get();
+        if (ctx == null) {
+            ctx = new Context();
+            CONTEXT_HOLDER.set(ctx);
+        }
+        return ctx;
+    }
 
     /**
      * 设置当前用户ID（用户类型为"user"）
      */
     public static void setCurrentUserId(Long userId) {
-        USER_ID_HOLDER.set(userId);
-        EMPLOYEE_ID_HOLDER.remove();
-        USER_TYPE_HOLDER.set(JwtUtil.USER_TYPE_USER);
+        Context ctx = getOrCreateContext();
+        ctx.userId = userId;
+        ctx.employeeId = null;
+        ctx.userType = JwtUtil.USER_TYPE_USER;
     }
 
     /**
      * 设置当前员工ID（用户类型为"employee"）
      */
     public static void setCurrentEmployeeId(Long employeeId) {
-        EMPLOYEE_ID_HOLDER.set(employeeId);
-        USER_ID_HOLDER.remove();
-        USER_TYPE_HOLDER.set(JwtUtil.USER_TYPE_EMPLOYEE);
+        Context ctx = getOrCreateContext();
+        ctx.userId = null;
+        ctx.employeeId = employeeId;
+        ctx.userType = JwtUtil.USER_TYPE_EMPLOYEE;
+    }
+
+    /**
+     * 设置当前角色ID
+     */
+    public static void setCurrentRoleId(Long roleId) {
+        Context ctx = getOrCreateContext();
+        ctx.roleId = roleId;
     }
 
     /**
      * 获取当前用户ID（仅当用户类型为"user"时返回）
      */
     public static Long getCurrentUserId() {
-        return USER_ID_HOLDER.get();
+        Context ctx = getContext();
+        return ctx != null ? ctx.userId : null;
     }
 
     /**
      * 获取当前员工ID（仅当用户类型为"employee"时返回）
      */
     public static Long getCurrentEmployeeId() {
-        return EMPLOYEE_ID_HOLDER.get();
+        Context ctx = getContext();
+        return ctx != null ? ctx.employeeId : null;
     }
 
     /**
      * 获取当前用户类型 ("user" 或 "employee")
      */
     public static String getCurrentUserType() {
-        return USER_TYPE_HOLDER.get();
+        Context ctx = getContext();
+        return ctx != null ? ctx.userType : null;
+    }
+
+    /**
+     * 获取当前角色ID
+     */
+    public static Long getCurrentRoleId() {
+        Context ctx = getContext();
+        return ctx != null ? ctx.roleId : null;
     }
 
     /**
      * 检查是否有登录用户（包括员工）
      */
     public static boolean hasLoginUser() {
-        return USER_ID_HOLDER.get() != null || EMPLOYEE_ID_HOLDER.get() != null;
+        Context ctx = getContext();
+        return ctx != null && (ctx.userId != null || ctx.employeeId != null);
     }
 
     /**
      * 检查当前是否为员工登录
      */
     public static boolean isEmployeeLogin() {
-        return JwtUtil.USER_TYPE_EMPLOYEE.equals(USER_TYPE_HOLDER.get());
+        Context ctx = getContext();
+        return ctx != null && JwtUtil.USER_TYPE_EMPLOYEE.equals(ctx.userType);
     }
 
     /**
      * 检查当前是否为普通用户登录
      */
     public static boolean isUserLogin() {
-        return JwtUtil.USER_TYPE_USER.equals(USER_TYPE_HOLDER.get());
+        Context ctx = getContext();
+        return ctx != null && JwtUtil.USER_TYPE_USER.equals(ctx.userType);
     }
 
     /**
      * 清除所有上下文
      */
     public static void clear() {
-        USER_ID_HOLDER.remove();
-        EMPLOYEE_ID_HOLDER.remove();
-        USER_TYPE_HOLDER.remove();
+        CONTEXT_HOLDER.remove();
     }
 }

@@ -127,7 +127,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, nextTick, onMounted, watch } from 'vue'
+import { ref, reactive, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 import { useUserStore } from '@/stores/user'
@@ -182,6 +182,8 @@ const initWebSocket = () => {
   socket.value.onopen = () => {
     console.log('WebSocket 连接成功')
     isConnected.value = true
+    // 加载历史消息
+    loadHistory()
   }
   
   socket.value.onmessage = (event) => {
@@ -236,6 +238,26 @@ const initWebSocket = () => {
   
   socket.value.onerror = (error) => {
     console.error('WebSocket 错误', error)
+  }
+}
+
+// 加载历史消息
+async function loadHistory() {
+  try {
+    const result = await request.get('/customer-service/user-history')
+    if (result.code === 200 && result.data.messages) {
+      // 将历史消息转换为前端格式并添加到消息列表
+      const historyMessages = result.data.messages.map(msg => ({
+        role: msg.msgType === 'user' ? 'user' : 'assistant',
+        content: msg.message,
+        time: new Date(msg.createdAt)
+      }))
+      // 清空现有消息，添加历史消息
+      messages.value = historyMessages
+      scrollToBottom()
+    }
+  } catch (error) {
+    console.error('加载历史消息失败', error)
   }
 }
 
@@ -312,16 +334,32 @@ async function sendMessage() {
   loading.value = true
 
   try {
-    // 使用同步端点
-    const result = await request.post('/chat/ask', { question: text })
-    // result.data 是 ChatResponse 对象
-    // 添加助手消息
-    messages.value.push({
-      role: 'assistant',
-      content: result.data.answer,
-      time: new Date()
-    })
-    scrollToBottom()
+    if (isHumanService.value && !isSessionEnded.value) {
+      // 客服已介入，使用用户发送消息API
+      const result = await request.post('/customer-service/user-send-message', { 
+        sessionId: sessionId.value,
+        content: text
+      })
+      if (result.code === 200) {
+        // 消息已发送给客服，客服的回复将通过WebSocket接收
+        // 不需要添加助手消息
+      } else {
+        ElMessage.error(result.message || '发送失败')
+      }
+    } else {
+      // 使用AI聊天端点
+      const result = await request.post('/chat/ask', { question: text })
+      // result.data 是 ChatResponse 对象
+      // 添加助手消息
+      if (result.data.answer && result.data.answer.trim() !== '') {
+        messages.value.push({
+          role: 'assistant',
+          content: result.data.answer,
+          time: new Date()
+        })
+        scrollToBottom()
+      }
+    }
     
     // 如果窗口最小化，显示未读数
     if (isMinimized.value) {

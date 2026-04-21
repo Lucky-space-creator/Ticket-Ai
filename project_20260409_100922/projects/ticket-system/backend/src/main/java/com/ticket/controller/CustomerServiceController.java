@@ -2,9 +2,12 @@ package com.ticket.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.ticket.entity.ChatRecord;
+import com.ticket.entity.ChatSession;
 import com.ticket.enums.BusinessStatus;
 import com.ticket.enums.ResponseCode;
 import com.ticket.mapper.ChatRecordMapper;
+import com.ticket.mapper.ChatSessionMapper;
+import com.ticket.service.ChatSessionService;
 import com.ticket.handler.ChatWebSocketHandler;
 import com.ticket.util.ResponseUtil;
 import com.ticket.util.UserContext;
@@ -32,6 +35,12 @@ public class CustomerServiceController {
     private ChatRecordMapper chatRecordMapper;
 
     @Resource
+    private ChatSessionMapper chatSessionMapper;
+
+    @Resource
+    private ChatSessionService chatSessionService;
+
+    @Resource
     private ChatWebSocketHandler chatWebSocketHandler;
 
     /**
@@ -44,28 +53,31 @@ public class CustomerServiceController {
             return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
         }
 
-        LambdaQueryWrapper<ChatRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_PENDING)
-                .orderByDesc(ChatRecord::getCreatedAt);
-        List<ChatRecord> records = chatRecordMapper.selectList(wrapper);
-
-        List<Map<String, Object>> sessions = records.stream()
-                .collect(Collectors.collectingAndThen(
-                        Collectors.toMap(
-                                ChatRecord::getSessionId,
-                                record -> {
-                                    Map<String, Object> map = new HashMap<>();
-                                    map.put("sessionId", record.getSessionId());
-                                    map.put("userId", record.getUserId());
-                                    map.put("lastMessage", record.getMessage());
-                                    map.put("lastMessageTime", record.getCreatedAt());
-                                    map.put("unreadCount", 0);
-                                    return map;
-                                },
-                                (existing, replacement) -> existing
-                        ),
-                        map -> map.values().stream().collect(Collectors.toList())
-                ));
+        // 使用会话表获取待接入会话
+        List<ChatSession> pendingSessions = chatSessionService.getPendingSessions();
+        
+        List<Map<String, Object>> sessions = pendingSessions.stream().map(session -> {
+            // 获取会话的最后一条消息（pending消息）
+            LambdaQueryWrapper<ChatRecord> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(ChatRecord::getSessionId, session.getId())
+                    .eq(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_PENDING)
+                    .orderByDesc(ChatRecord::getCreatedAt)
+                    .last("LIMIT 1");
+            ChatRecord lastRecord = chatRecordMapper.selectOne(wrapper);
+            
+            Map<String, Object> map = new HashMap<>();
+            map.put("sessionId", session.getId());
+            map.put("userId", session.getUserId());
+            if (lastRecord != null) {
+                map.put("lastMessage", lastRecord.getMessage());
+                map.put("lastMessageTime", lastRecord.getCreatedAt());
+            } else {
+                map.put("lastMessage", "");
+                map.put("lastMessageTime", session.getLastMessageAt());
+            }
+            map.put("unreadCount", 0); // pending会话没有未读消息
+            return map;
+        }).collect(Collectors.toList());
 
         Map<String, Object> result = new HashMap<>();
         result.put("sessions", sessions);
@@ -82,35 +94,38 @@ public class CustomerServiceController {
             return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
         }
 
-        // 找出所有包含该客服员工ID的消息（排除pending和ended类型）
-        LambdaQueryWrapper<ChatRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ChatRecord::getEmployeeId, employeeId)
-                .ne(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_PENDING)
-                .ne(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_ENDED)
-                .orderByDesc(ChatRecord::getCreatedAt);
-        List<ChatRecord> allRecords = chatRecordMapper.selectList(wrapper);
+        // 使用会话表获取该客服正在服务的活跃会话
+        LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ChatSession::getEmployeeId, employeeId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_ACTIVE)
+                .orderByDesc(ChatSession::getLastMessageAt);
+        List<ChatSession> activeSessions = chatSessionMapper.selectList(wrapper);
 
-        // 按会话ID分组，取每个会话的最新一条记录
-        Map<String, ChatRecord> latestRecords = allRecords.stream()
-                .collect(Collectors.toMap(
-                        ChatRecord::getSessionId,
-                        record -> record,
-                        (existing, replacement) -> existing // 保留第一个（因为已按时间降序排序）
-                ));
-
-        List<Map<String, Object>> sessions = latestRecords.values().stream().map(record -> {
+        List<Map<String, Object>> sessions = activeSessions.stream().map(session -> {
+            // 获取会话的最后一条消息
+            LambdaQueryWrapper<ChatRecord> lastMsgWrapper = new LambdaQueryWrapper<>();
+            lastMsgWrapper.eq(ChatRecord::getSessionId, session.getId())
+                    .orderByDesc(ChatRecord::getCreatedAt)
+                    .last("LIMIT 1");
+            ChatRecord lastRecord = chatRecordMapper.selectOne(lastMsgWrapper);
+            
             // 计算未读消息数（用户发送的未读消息）
             LambdaQueryWrapper<ChatRecord> unreadWrapper = new LambdaQueryWrapper<>();
-            unreadWrapper.eq(ChatRecord::getSessionId, record.getSessionId())
+            unreadWrapper.eq(ChatRecord::getSessionId, session.getId())
                     .eq(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_USER)
                     .eq(ChatRecord::getIsRead, 0);
             int unreadCount = chatRecordMapper.selectCount(unreadWrapper).intValue();
 
             Map<String, Object> map = new HashMap<>();
-            map.put("sessionId", record.getSessionId());
-            map.put("userId", record.getUserId());
-            map.put("lastMessage", record.getMessage());
-            map.put("lastMessageTime", record.getCreatedAt());
+            map.put("sessionId", session.getId());
+            map.put("userId", session.getUserId());
+            if (lastRecord != null) {
+                map.put("lastMessage", lastRecord.getMessage());
+                map.put("lastMessageTime", lastRecord.getCreatedAt());
+            } else {
+                map.put("lastMessage", "");
+                map.put("lastMessageTime", session.getLastMessageAt());
+            }
             map.put("unreadCount", unreadCount);
             return map;
         }).collect(Collectors.toList());
@@ -130,27 +145,31 @@ public class CustomerServiceController {
             return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
         }
 
-        // 找出该客服已结束的会话（msg_type为ended，且employee_id为该客服）
-        LambdaQueryWrapper<ChatRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ChatRecord::getEmployeeId, employeeId)
-                .eq(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_ENDED)
-                .orderByDesc(ChatRecord::getCreatedAt);
-        List<ChatRecord> allRecords = chatRecordMapper.selectList(wrapper);
+        // 使用会话表获取该客服已结束的会话
+        LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ChatSession::getEmployeeId, employeeId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_ENDED)
+                .orderByDesc(ChatSession::getLastMessageAt);
+        List<ChatSession> endedSessions = chatSessionMapper.selectList(wrapper);
 
-        // 按会话ID分组，取每个会话的最新一条记录
-        Map<String, ChatRecord> latestRecords = allRecords.stream()
-                .collect(Collectors.toMap(
-                        ChatRecord::getSessionId,
-                        record -> record,
-                        (existing, replacement) -> existing // 保留第一个（因为已按时间降序排序）
-                ));
-
-        List<Map<String, Object>> sessions = latestRecords.values().stream().map(record -> {
+        List<Map<String, Object>> sessions = endedSessions.stream().map(session -> {
+            // 获取会话的最后一条消息（通常是结束消息）
+            LambdaQueryWrapper<ChatRecord> lastMsgWrapper = new LambdaQueryWrapper<>();
+            lastMsgWrapper.eq(ChatRecord::getSessionId, session.getId())
+                    .orderByDesc(ChatRecord::getCreatedAt)
+                    .last("LIMIT 1");
+            ChatRecord lastRecord = chatRecordMapper.selectOne(lastMsgWrapper);
+            
             Map<String, Object> map = new HashMap<>();
-            map.put("sessionId", record.getSessionId());
-            map.put("userId", record.getUserId());
-            map.put("lastMessage", record.getMessage());
-            map.put("lastMessageTime", record.getCreatedAt());
+            map.put("sessionId", session.getId());
+            map.put("userId", session.getUserId());
+            if (lastRecord != null) {
+                map.put("lastMessage", lastRecord.getMessage());
+                map.put("lastMessageTime", lastRecord.getCreatedAt());
+            } else {
+                map.put("lastMessage", "");
+                map.put("lastMessageTime", session.getLastMessageAt());
+            }
             map.put("unreadCount", 0); // 已结束的会话没有未读消息
             return map;
         }).collect(Collectors.toList());
@@ -175,15 +194,32 @@ public class CustomerServiceController {
             return ResponseUtil.error(ResponseCode.PARAM_ERROR);
         }
 
-        // 检查会话是否已结束
-        LambdaQueryWrapper<ChatRecord> endedWrapper = new LambdaQueryWrapper<>();
-        endedWrapper.eq(ChatRecord::getSessionId, sessionId)
-                .eq(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_ENDED);
-        if (chatRecordMapper.selectCount(endedWrapper) > 0) {
+        // 检查会话是否已结束（通过会话表）
+        ChatSession session = chatSessionMapper.selectById(sessionId);
+        if (session != null && ChatSession.STATUS_ENDED.equals(session.getStatus())) {
             return ResponseUtil.error("会话已结束，无法再次接入");
         }
 
-        // 1. 将 pending 消息改为客服工号，表示客服已接入
+        // 1. 更新会话表状态
+        if (session == null) {
+            // 如果会话不存在，创建新会话（可能是直接创建的情况）
+            session = new ChatSession();
+            session.setId(sessionId);
+            session.setUserId(null); // 可能需要从pending记录中获取
+            session.setStatus(ChatSession.STATUS_ACTIVE);
+            session.setEmployeeId(employeeId);
+            session.setMessageCount(0);
+            session.setLastMessageAt(LocalDateTime.now());
+            chatSessionMapper.insert(session);
+        } else {
+            // 更新现有会话
+            session.setStatus(ChatSession.STATUS_ACTIVE);
+            session.setEmployeeId(employeeId);
+            session.setUpdatedAt(LocalDateTime.now());
+            chatSessionMapper.updateById(session);
+        }
+
+        // 2. 将 pending 消息改为客服工号，表示客服已接入
         LambdaQueryWrapper<ChatRecord> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ChatRecord::getSessionId, sessionId)
                 .eq(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_PENDING);
@@ -195,7 +231,7 @@ public class CustomerServiceController {
             chatRecordMapper.updateById(pendingRecord);
         }
 
-        // 2. 发送一条系统提示消息
+        // 3. 发送一条系统提示消息
         ChatRecord systemMsg = new ChatRecord();
         systemMsg.setSessionId(sessionId);
         systemMsg.setUserId(pendingRecord != null ? pendingRecord.getUserId() : null);
@@ -207,7 +243,11 @@ public class CustomerServiceController {
         systemMsg.setCreatedAt(LocalDateTime.now());
         chatRecordMapper.insert(systemMsg);
 
-        // 3. 通过 WebSocket 广播系统消息
+        // 4. 增加会话消息计数
+        chatSessionService.incrementMessageCount(sessionId);
+        chatSessionService.updateLastMessageTime(sessionId);
+
+        // 5. 通过 WebSocket 广播系统消息
         try {
             chatWebSocketHandler.sendMessageToSession(sessionId, com.alibaba.fastjson2.JSON.toJSONString(Map.of(
                     "type", "chat",
@@ -240,15 +280,30 @@ public class CustomerServiceController {
             return ResponseUtil.error(ResponseCode.PARAM_ERROR);
         }
 
-        // 检查会话是否已结束，避免重复插入
-        LambdaQueryWrapper<ChatRecord> endedWrapper = new LambdaQueryWrapper<>();
-        endedWrapper.eq(ChatRecord::getSessionId, sessionId)
-                .eq(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_ENDED);
-        if (chatRecordMapper.selectCount(endedWrapper) > 0) {
+        // 检查会话是否已结束（通过会话表）
+        ChatSession session = chatSessionMapper.selectById(sessionId);
+        if (session != null && ChatSession.STATUS_ENDED.equals(session.getStatus())) {
             return ResponseUtil.success("会话已结束");
         }
 
-        // 发送一条结束会话的系统消息
+        // 1. 更新会话表状态
+        if (session == null) {
+            // 如果会话不存在，创建已结束的会话记录
+            session = new ChatSession();
+            session.setId(sessionId);
+            session.setEmployeeId(employeeId);
+            session.setStatus(ChatSession.STATUS_ENDED);
+            session.setMessageCount(0);
+            session.setLastMessageAt(LocalDateTime.now());
+            chatSessionMapper.insert(session);
+        } else {
+            // 更新现有会话状态
+            session.setStatus(ChatSession.STATUS_ENDED);
+            session.setUpdatedAt(LocalDateTime.now());
+            chatSessionMapper.updateById(session);
+        }
+
+        // 2. 发送一条结束会话的系统消息
         ChatRecord endMsg = new ChatRecord();
         endMsg.setSessionId(sessionId);
         endMsg.setMessage("客服会话已结束，若还需要客服接入，请点击转客服按钮");
@@ -259,7 +314,11 @@ public class CustomerServiceController {
         endMsg.setCreatedAt(LocalDateTime.now());
         chatRecordMapper.insert(endMsg);
 
-        // 通过 WebSocket 广播结束消息
+        // 3. 增加会话消息计数
+        chatSessionService.incrementMessageCount(sessionId);
+        chatSessionService.updateLastMessageTime(sessionId);
+
+        // 4. 通过 WebSocket 广播结束消息
         try {
             chatWebSocketHandler.sendMessageToSession(sessionId, com.alibaba.fastjson2.JSON.toJSONString(Map.of(
                     "type", "chat",
@@ -324,6 +383,25 @@ public class CustomerServiceController {
             sessionId = "user_" + userId;
         }
 
+        // 检查会话是否已存在，如果存在则更新状态为pending，否则创建新的pending会话
+        ChatSession session = chatSessionMapper.selectById(sessionId);
+        if (session == null) {
+            session = new ChatSession();
+            session.setId(sessionId);
+            session.setUserId(userId);
+            session.setStatus(ChatSession.STATUS_PENDING);
+            session.setTitle("用户请求转人工客服");
+            session.setMessageCount(0);
+            session.setLastMessageAt(LocalDateTime.now());
+            chatSessionMapper.insert(session);
+        } else if (!ChatSession.STATUS_PENDING.equals(session.getStatus())) {
+            // 如果会话存在但不是pending状态，更新为pending
+            session.setStatus(ChatSession.STATUS_PENDING);
+            session.setTitle("用户请求转人工客服");
+            session.setUpdatedAt(LocalDateTime.now());
+            chatSessionMapper.updateById(session);
+        }
+
         // 构建消息内容，包含转接原因
         String message = "用户请求转人工客服";
         if (reason != null && !reason.trim().isEmpty()) {
@@ -340,6 +418,24 @@ public class CustomerServiceController {
         pendingMsg.setConfidence(BigDecimal.ONE);
         pendingMsg.setCreatedAt(LocalDateTime.now());
         chatRecordMapper.insert(pendingMsg);
+
+        // 增加会话消息计数
+        chatSessionService.incrementMessageCount(sessionId);
+        chatSessionService.updateLastMessageTime(sessionId);
+
+        // 发送全局通知给所有客服
+        try {
+            chatWebSocketHandler.sendMessageToGlobal(com.alibaba.fastjson2.JSON.toJSONString(Map.of(
+                    "type", "notification",
+                    "notificationType", "new_pending_session",
+                    "sessionId", sessionId,
+                    "userId", userId,
+                    "content", message,
+                    "timestamp", System.currentTimeMillis()
+            )));
+        } catch (Exception e) {
+            log.warn("发送全局通知失败，但不影响主要流程", e);
+        }
 
         log.info("用户 {} 请求转人工客服，会话ID: {}，原因: {}", userId, sessionId, reason);
         return ResponseUtil.success("转人工请求已提交");
@@ -369,15 +465,30 @@ public class CustomerServiceController {
             sessionId = "user_" + userId;
         }
 
-        // 检查会话是否已结束
-        LambdaQueryWrapper<ChatRecord> endedWrapper = new LambdaQueryWrapper<>();
-        endedWrapper.eq(ChatRecord::getSessionId, sessionId)
-                .eq(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_ENDED);
-        if (chatRecordMapper.selectCount(endedWrapper) > 0) {
+        // 检查会话是否已结束（通过会话表）
+        ChatSession session = chatSessionMapper.selectById(sessionId);
+        if (session != null && ChatSession.STATUS_ENDED.equals(session.getStatus())) {
             return ResponseUtil.success("会话已结束");
         }
 
-        // 发送一条结束会话的系统消息
+        // 1. 更新会话表状态
+        if (session == null) {
+            // 如果会话不存在，创建已结束的会话记录
+            session = new ChatSession();
+            session.setId(sessionId);
+            session.setUserId(userId);
+            session.setStatus(ChatSession.STATUS_ENDED);
+            session.setMessageCount(0);
+            session.setLastMessageAt(LocalDateTime.now());
+            chatSessionMapper.insert(session);
+        } else {
+            // 更新现有会话状态
+            session.setStatus(ChatSession.STATUS_ENDED);
+            session.setUpdatedAt(LocalDateTime.now());
+            chatSessionMapper.updateById(session);
+        }
+
+        // 2. 发送一条结束会话的系统消息
         ChatRecord endMsg = new ChatRecord();
         endMsg.setSessionId(sessionId);
         endMsg.setUserId(userId);
@@ -388,7 +499,11 @@ public class CustomerServiceController {
         endMsg.setCreatedAt(LocalDateTime.now());
         chatRecordMapper.insert(endMsg);
 
-        // 通过 WebSocket 广播结束消息
+        // 3. 增加会话消息计数
+        chatSessionService.incrementMessageCount(sessionId);
+        chatSessionService.updateLastMessageTime(sessionId);
+
+        // 4. 通过 WebSocket 广播结束消息
         try {
             chatWebSocketHandler.sendMessageToSession(sessionId, com.alibaba.fastjson2.JSON.toJSONString(Map.of(
                     "type", "chat",
@@ -442,12 +557,22 @@ public class CustomerServiceController {
             return ResponseUtil.error(ResponseCode.PARAM_ERROR);
         }
 
-        // 检查会话是否已结束
-        LambdaQueryWrapper<ChatRecord> endedWrapper = new LambdaQueryWrapper<>();
-        endedWrapper.eq(ChatRecord::getSessionId, sessionId)
-                .eq(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_ENDED);
-        if (chatRecordMapper.selectCount(endedWrapper) > 0) {
+        // 检查会话是否已结束（通过会话表）
+        ChatSession session = chatSessionMapper.selectById(sessionId);
+        if (session != null && ChatSession.STATUS_ENDED.equals(session.getStatus())) {
             return ResponseUtil.error("会话已结束，无法发送消息");
+        }
+
+        // 如果会话不存在，创建新会话（理论上应该存在）
+        if (session == null) {
+            session = new ChatSession();
+            session.setId(sessionId);
+            session.setUserId(userId);
+            session.setEmployeeId(employeeId);
+            session.setStatus(ChatSession.STATUS_ACTIVE);
+            session.setMessageCount(0);
+            session.setLastMessageAt(LocalDateTime.now());
+            chatSessionMapper.insert(session);
         }
 
         ChatRecord record = new ChatRecord();
@@ -460,6 +585,10 @@ public class CustomerServiceController {
         record.setConfidence(BigDecimal.ONE);
         record.setCreatedAt(LocalDateTime.now());
         chatRecordMapper.insert(record);
+
+        // 增加会话消息计数
+        chatSessionService.incrementMessageCount(sessionId);
+        chatSessionService.updateLastMessageTime(sessionId);
 
         // 通过 WebSocket 广播消息
         try {
@@ -476,6 +605,104 @@ public class CustomerServiceController {
         }
 
         log.info("客服 {} 发送消息到会话 {}: {}", employeeId, sessionId, content);
+        return ResponseUtil.success("消息发送成功");
+    }
+
+    /**
+     * 获取用户聊天历史（用户端调用）
+     */
+    @GetMapping("/user-history")
+    public ResponseUtil.Result<?> getUserHistory() {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
+        }
+        
+        String sessionId = "user_" + userId;
+        
+        // 获取最近10条消息，按时间升序
+        LambdaQueryWrapper<ChatRecord> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ChatRecord::getSessionId, sessionId)
+                .orderByAsc(ChatRecord::getCreatedAt)
+                .last("LIMIT 10");
+        List<ChatRecord> records = chatRecordMapper.selectList(wrapper);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("messages", records);
+        return ResponseUtil.success(result);
+    }
+
+    /**
+     * 用户发送消息给客服（用户端调用）
+     */
+    @PostMapping(value = "/user-send-message", consumes = "application/json")
+    public ResponseUtil.Result<?> userSendMessage(@RequestBody Map<String, Object> params) {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
+        }
+
+        String sessionId = (String) params.get("sessionId");
+        String content = (String) params.get("content");
+        
+        // 如果未提供sessionId，使用用户ID生成
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            sessionId = "user_" + userId;
+        }
+
+        // 检查消息内容是否为空
+        if (content == null || content.trim().isEmpty()) {
+            return ResponseUtil.error(ResponseCode.PARAM_ERROR.getCode(), "消息内容不能为空");
+        }
+
+        // 检查会话是否已结束（通过会话表）
+        ChatSession session = chatSessionMapper.selectById(sessionId);
+        if (session != null && ChatSession.STATUS_ENDED.equals(session.getStatus())) {
+            return ResponseUtil.error("会话已结束，无法发送消息");
+        }
+
+        // 如果会话不存在，创建新会话（可能是AI对话或新会话）
+        if (session == null) {
+            session = new ChatSession();
+            session.setId(sessionId);
+            session.setUserId(userId);
+            // 默认状态为ai_only（如果用户直接发送消息，没有客服参与）
+            session.setStatus(ChatSession.STATUS_AI_ONLY);
+            session.setMessageCount(0);
+            session.setLastMessageAt(LocalDateTime.now());
+            chatSessionMapper.insert(session);
+        }
+
+        // 保存用户消息
+        ChatRecord record = new ChatRecord();
+        record.setSessionId(sessionId);
+        record.setUserId(userId);
+        record.setMessage(content);
+        record.setMsgType(BusinessStatus.MSG_TYPE_USER);
+        record.setIsRead(0);
+        record.setConfidence(BigDecimal.ONE);
+        record.setCreatedAt(LocalDateTime.now());
+        chatRecordMapper.insert(record);
+
+        // 增加会话消息计数
+        chatSessionService.incrementMessageCount(sessionId);
+        chatSessionService.updateLastMessageTime(sessionId);
+
+        // 通过 WebSocket 广播消息给客服端
+        try {
+            chatWebSocketHandler.sendMessageToSession(sessionId, com.alibaba.fastjson2.JSON.toJSONString(Map.of(
+                    "type", "chat",
+                    "content", content,
+                    "msgType", BusinessStatus.MSG_TYPE_USER,
+                    "employeeId", null,
+                    "userId", userId,
+                    "timestamp", System.currentTimeMillis()
+            )));
+        } catch (Exception e) {
+            log.warn("WebSocket 广播失败，但不影响主要流程", e);
+        }
+
+        log.info("用户 {} 发送消息到会话 {}: {}", userId, sessionId, content);
         return ResponseUtil.success("消息发送成功");
     }
 }

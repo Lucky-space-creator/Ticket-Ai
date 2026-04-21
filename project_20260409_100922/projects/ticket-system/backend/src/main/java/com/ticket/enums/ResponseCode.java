@@ -20,7 +20,7 @@ public enum ResponseCode {
      */
     ERROR(400, "操作失败"),
     UNAUTHORIZED(401, "未授权，请登录"),
-    FORBIDDEN(403, "拒绝访问"),
+    FORBIDDEN(403, "该用户目前无访问权限"),
     NOT_FOUND(404, "资源不存在"),
     METHOD_NOT_ALLOWED(405, "请求方法不支持"),
 

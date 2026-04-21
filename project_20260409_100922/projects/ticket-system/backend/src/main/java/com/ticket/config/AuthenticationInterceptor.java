@@ -38,11 +38,17 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
             // 判断用户类型
             String userType = jwtUtil.getUserTypeFromToken(token);
             
+            // 提取角色ID（如果token中包含）
+            Long roleId = jwtUtil.getRoleIdFromToken(token);
+            if (roleId != null) {
+                UserContext.setCurrentRoleId(roleId);
+            }
+            
             if (JwtUtil.USER_TYPE_EMPLOYEE.equals(userType)) {
                 // 员工令牌
                 Long employeeId = jwtUtil.getEmployeeIdFromToken(token);
                 if (employeeId != null) {
-                    log.info("员工登录，员工ID: {}", employeeId);
+                    log.info("员工登录，员工ID: {}, 角色ID: {}", employeeId, roleId);
                     UserContext.setCurrentEmployeeId(employeeId);
                 }
             } else {
@@ -53,10 +59,10 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
                     String userInfoKey = String.format("user:token:%d", userId);
                     String userInfo = redisUtil.get(userInfoKey);
                     if (userInfo != null) {
-                        log.info("用户信息已验证，用户ID: {}", userId);
+                        log.info("用户信息已验证，用户ID: {}, 角色ID: {}", userId, roleId);
                         UserContext.setCurrentUserId(userId);
                     } else {
-                        log.warn("用户信息不在缓存中，可能已过期，用户ID: {}", userId);
+                        log.warn("用户信息不在缓存中，可能已过期，用户ID: {}, 角色ID: {}", userId, roleId);
                         // 仍然设置userId，因为JWT有效，但需要重新登录
                         UserContext.setCurrentUserId(userId);
                     }

@@ -36,6 +36,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      */
     private final Map<String, Set<WebSocketSession>> sessionPool = new ConcurrentHashMap<>();
 
+    /**
+     * 全局连接池，用于客服接收全局通知
+     * 客服连接到 /ws/chat/global 时会加入此集合
+     */
+    private final Set<WebSocketSession> globalSessions = new CopyOnWriteArraySet<>();
+
+    /**
+     * 全局会话ID常量
+     */
+    private static final String GLOBAL_SESSION_ID = "global";
+
     @Resource
     private ChatRecordMapper chatRecordMapper;
 
@@ -50,9 +61,16 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             session.close(CloseStatus.BAD_DATA);
             return;
         }
-        sessionPool.computeIfAbsent(sessionId, k -> new CopyOnWriteArraySet<>()).add(session);
-        log.info("WebSocket 连接建立，sessionId: {}, 当前会话数: {}, 连接数: {}", 
-                sessionId, sessionPool.size(), getConnectionCount());
+        
+        // 全局连接特殊处理
+        if (GLOBAL_SESSION_ID.equals(sessionId)) {
+            globalSessions.add(session);
+            log.info("WebSocket 全局连接建立，当前全局连接数: {}", globalSessions.size());
+        } else {
+            sessionPool.computeIfAbsent(sessionId, k -> new CopyOnWriteArraySet<>()).add(session);
+            log.info("WebSocket 连接建立，sessionId: {}, 当前会话数: {}, 连接数: {}", 
+                    sessionId, sessionPool.size(), getConnectionCount());
+        }
     }
 
     /**
@@ -122,6 +140,18 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 "userId", userId,
                 "timestamp", System.currentTimeMillis()
         )));
+
+        // 如果是 pending 消息（用户请求人工客服），发送全局通知给所有客服
+        if ("pending".equals(msgType)) {
+            sendMessageToGlobal(JSON.toJSONString(Map.of(
+                    "type", "notification",
+                    "notificationType", "new_pending_session",
+                    "sessionId", sessionId,
+                    "userId", userId,
+                    "content", content,
+                    "timestamp", System.currentTimeMillis()
+            )));
+        }
     }
 
     /**
@@ -140,24 +170,41 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 }
             }
         }
+        
+        // 同时发送到全局连接，以便客服端接收
+        try {
+            // 解析消息，添加会话ID
+            com.alibaba.fastjson2.JSONObject json = com.alibaba.fastjson2.JSON.parseObject(message);
+            json.put("sessionId", sessionId);
+            json.put("notificationType", "chat_message");
+            sendMessageToGlobal(com.alibaba.fastjson2.JSON.toJSONString(json));
+        } catch (Exception e) {
+            log.warn("发送到全局连接失败", e);
+        }
     }
 
     /**
      * 连接关闭后触发
      */
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
+    public void afterConnectionClosed(@NotNull WebSocketSession session, @NotNull CloseStatus status) throws Exception {
         String sessionId = extractSessionId(session);
         if (sessionId != null) {
-            Set<WebSocketSession> sessions = sessionPool.get(sessionId);
-            if (sessions != null) {
-                sessions.remove(session);
-                if (sessions.isEmpty()) {
-                    sessionPool.remove(sessionId);
+            // 全局连接特殊处理
+            if (GLOBAL_SESSION_ID.equals(sessionId)) {
+                globalSessions.remove(session);
+                log.info("WebSocket 全局连接关闭，关闭原因: {}, 当前全局连接数: {}", status, globalSessions.size());
+            } else {
+                Set<WebSocketSession> sessions = sessionPool.get(sessionId);
+                if (sessions != null) {
+                    sessions.remove(session);
+                    if (sessions.isEmpty()) {
+                        sessionPool.remove(sessionId);
+                    }
                 }
+                log.info("WebSocket 连接关闭，sessionId: {}, 关闭原因: {}, 当前会话数: {}, 连接数: {}", 
+                        sessionId, status, sessionPool.size(), getConnectionCount());
             }
-            log.info("WebSocket 连接关闭，sessionId: {}, 关闭原因: {}, 当前会话数: {}, 连接数: {}", 
-                    sessionId, status, sessionPool.size(), getConnectionCount());
         }
     }
 
@@ -192,6 +239,32 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     } catch (IOException e) {
                         log.error("发送消息失败", e);
                     }
+                }
+            }
+        }
+        
+        // 同时发送到全局连接，以便客服端接收
+        try {
+            // 解析消息，添加会话ID
+            com.alibaba.fastjson2.JSONObject json = com.alibaba.fastjson2.JSON.parseObject(message);
+            json.put("sessionId", sessionId);
+            json.put("notificationType", "chat_message");
+            sendMessageToGlobal(com.alibaba.fastjson2.JSON.toJSONString(json));
+        } catch (Exception e) {
+            log.warn("发送到全局连接失败", e);
+        }
+    }
+
+    /**
+     * 发送消息给所有全局连接（客服工作台）
+     */
+    public void sendMessageToGlobal(String message) {
+        for (WebSocketSession targetSession : globalSessions) {
+            if (targetSession.isOpen()) {
+                try {
+                    targetSession.sendMessage(new TextMessage(message));
+                } catch (IOException e) {
+                    log.error("发送全局消息失败", e);
                 }
             }
         }

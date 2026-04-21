@@ -31,7 +31,23 @@ public interface PermissionService extends IService<Permission> {
     List<Permission> getPermissionsByUserId(Long userId);
 
     /**
+     * 根据员工ID获取权限列表
+     */
+    List<Permission> getPermissionsByEmployeeId(Long employeeId);
+
+    /**
      * 清除用户权限缓存
      */
     void clearUserPermissionCache(Long userId);
+
+    /**
+     * 根据角色ID获取权限列表
+     */
+    List<Permission> getPermissionsByRoleId(Long roleId);
+
+    /**
+     * 获取当前登录主体的权限列表
+     * 根据UserContext自动识别身份类型（员工或用户）
+     */
+    List<Permission> getCurrentPermissions();
 }

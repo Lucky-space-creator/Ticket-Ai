@@ -1,6 +1,7 @@
 package com.ticket.config;
 
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -30,6 +31,9 @@ public class JacksonConfig {
         // 注册 Java 8 时间模块
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+        // 忽略 JSON 中的未知字段
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
         // 注册 Long 转 String 模块（解决雪花算法 ID 精度丢失）
         mapper.registerModule(getLongToStringModule());

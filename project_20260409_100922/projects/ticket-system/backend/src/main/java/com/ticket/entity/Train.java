@@ -1,6 +1,7 @@
 package com.ticket.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -11,6 +12,7 @@ import java.time.LocalTime;
  */
 @Data
 @TableName("train")
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Train {
 
     /**
