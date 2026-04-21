@@ -165,6 +165,8 @@ const reconnectDelay = 3000
 const heartbeatInterval = ref(null)
 const loadingHistory = ref(false)
 const connectionStatus = ref('disconnected') // 'connecting', 'connected', 'disconnected'
+const autoRefreshInterval = ref(null)
+const isRefreshing = ref(false)
 
 // 连接状态计算属性
 const connectionStatusClass = computed(() => {
@@ -202,6 +204,12 @@ watch(() => userStore.token, (newToken, oldToken) => {
 // 初始化 WebSocket 连接
 onMounted(() => {
   initWebSocket()
+  // 启动自动刷新，每500ms检查新消息
+  autoRefreshInterval.value = setInterval(() => {
+    if (!isRefreshing.value && !loadingHistory.value && sessionId.value) {
+      autoRefresh()
+    }
+  }, 500)
 })
 
 // 初始化 WebSocket
@@ -355,9 +363,43 @@ async function loadHistory() {
   }
 }
 
+// 自动刷新消息（轮询后备）
+async function autoRefresh() {
+  if (isRefreshing.value || loadingHistory.value || !sessionId.value) {
+    return
+  }
+  isRefreshing.value = true
+  try {
+    // 调用历史消息接口，获取最新消息
+    const result = await request.get('/customer-service/user-history')
+    if (result.code === 200 && result.data.messages) {
+      // 将历史消息转换为前端格式
+      const historyMessages = result.data.messages.map(msg => ({
+        role: msg.msgType === 'user' ? 'user' : 'assistant',
+        content: msg.message,
+        time: new Date(msg.createdAt)
+      }))
+      // 如果消息数量不同，则更新（简单去重）
+      if (historyMessages.length !== messages.value.length) {
+        messages.value = historyMessages
+        scrollToBottom()
+      }
+    }
+  } catch (error) {
+    // 静默失败，避免频繁报错
+    console.error('自动刷新消息失败', error)
+  } finally {
+    isRefreshing.value = false
+  }
+}
+
 // 组件卸载时断开连接
 onUnmounted(() => {
   disconnectWebSocket()
+  if (autoRefreshInterval.value) {
+    clearInterval(autoRefreshInterval.value)
+    autoRefreshInterval.value = null
+  }
 })
 
 // 断开 WebSocket 连接

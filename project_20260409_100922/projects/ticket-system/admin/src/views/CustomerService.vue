@@ -154,6 +154,7 @@ const inputMessage = ref('')
 const sending = ref(false)
 const messagesContainer = ref(null)
 let intervalId = null
+let messageRefreshInterval = null
 
 // WebSocket 连接
 const { connect, disconnect, send, isConnected } = useWebSocket()
@@ -183,12 +184,17 @@ onMounted(() => {
   refreshSessions()
   // 添加定期刷新，30秒一次（作为WebSocket的后备）
   intervalId = setInterval(refreshSessions, 30000)
+  // 添加消息自动刷新，每500ms一次
+  messageRefreshInterval = setInterval(refreshCurrentSessionMessages, 500)
 })
 
 onUnmounted(() => {
   disconnect()
   if (intervalId) {
     clearInterval(intervalId)
+  }
+  if (messageRefreshInterval) {
+    clearInterval(messageRefreshInterval)
   }
 })
 
@@ -257,6 +263,31 @@ const refreshSessions = async () => {
   } catch (error) {
     ElMessage.error('获取会话列表失败')
     console.error(error)
+  }
+}
+
+// 刷新当前会话的消息（轮询后备）
+const refreshCurrentSessionMessages = async () => {
+  if (!activeSessionId.value || !activeSession.value) {
+    return
+  }
+  // 如果会话已结束，不需要刷新
+  if (isSessionEnded.value) {
+    return
+  }
+  try {
+    const res = await getHistory({ sessionId: activeSessionId.value })
+    if (res.code === 200) {
+      const newMessages = res.data.messages || []
+      // 简单去重：如果消息数量不同，则替换
+      if (newMessages.length !== messages.value.length) {
+        messages.value = newMessages
+        scrollToBottom()
+      }
+    }
+  } catch (error) {
+    // 静默失败，避免频繁报错
+    console.error('刷新消息失败', error)
   }
 }
 
