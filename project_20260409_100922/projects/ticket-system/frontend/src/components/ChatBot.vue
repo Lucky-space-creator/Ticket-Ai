@@ -204,20 +204,33 @@ watch(() => userStore.token, (newToken, oldToken) => {
 // 初始化 WebSocket 连接
 onMounted(() => {
   initWebSocket()
-  // 启动自动刷新，每500ms检查新消息
+  // 启动自动刷新，每2s检查新消息
   autoRefreshInterval.value = setInterval(() => {
     if (!isRefreshing.value && !loadingHistory.value && sessionId.value) {
       autoRefresh()
     }
-  }, 500)
+  }, 2000)
 })
 
 // 初始化 WebSocket
-const initWebSocket = () => {
+const initWebSocket = async () => {
   if (!userStore.token) return
   const userId = userStore.userInfo?.id
   if (!userId) return
-  sessionId.value = 'user_' + userId
+  try {
+    // 从后端获取或创建会话ID
+    const result = await request.get('/customer-service/session-id')
+    if (result.code === 200 && result.data.sessionId) {
+      sessionId.value = result.data.sessionId
+    } else {
+      // 后备方案：使用用户ID生成（兼容旧版本）
+      sessionId.value = 'user_' + userId
+    }
+  } catch (error) {
+    console.error('获取会话ID失败', error)
+    // 后备方案：使用用户ID生成
+    sessionId.value = 'user_' + userId
+  }
   connectWebSocket()
 }
 
@@ -251,35 +264,47 @@ const connectWebSocket = () => {
         const data = JSON.parse(event.data)
         if (data.type === 'chat') {
           // 判断消息类型
-          if (data.msgType === 'user') {
+          const msgType = data.msgType
+          const content = data.content
+          const timestamp = data.timestamp
+          if (msgType === 'user') {
             // 用户消息（可能是自己发送的，已经显示过，忽略）
-          } else if (data.msgType === 'robot') {
+            // 但如果是其他用户的消息（在客服端），可以忽略
+          } else if (msgType === 'robot') {
             // AI 回复
             messages.value.push({
               role: 'assistant',
-              content: data.content,
-              time: new Date(data.timestamp)
+              content: content,
+              time: new Date(timestamp)
             })
             scrollToBottom()
-          } else if (data.msgType === 'ended') {
+          } else if (msgType === 'ended') {
             // 会话结束消息
             isSessionEnded.value = true
             isHumanService.value = false
             messages.value.push({
               role: 'assistant',
-              content: data.content,
-              time: new Date(data.timestamp)
+              content: content,
+              time: new Date(timestamp)
             })
             scrollToBottom()
-          } else if (data.msgType === 'pending') {
+          } else if (msgType === 'pending') {
             // 待接入消息，忽略（避免重复显示）
           } else {
-            // 客服消息（msgType 为员工号）
-            isHumanService.value = true
+            // 其他类型（客服消息或未知类型）都视为客服消息
+            // 如果msgType是数字字符串，则为客服工号
+            if (msgType && !isNaN(msgType)) {
+              // 延迟5秒后标记为客服已介入，让用户看到"客服已接入"的消息后再切换按钮
+              if (!isHumanService.value) {
+                setTimeout(() => {
+                  isHumanService.value = true
+                }, 5000)
+              }
+            }
             messages.value.push({
               role: 'assistant',
-              content: data.content,
-              time: new Date(data.timestamp)
+              content: content,
+              time: new Date(timestamp)
             })
             scrollToBottom()
           }
@@ -536,6 +561,7 @@ async function requestHumanService() {
   transferring.value = true;
   try {
     const result = await request.post('/customer-service/request-human', {
+      sessionId: sessionId.value,
       reason: '用户主动点击转接按钮'
     });
     ElMessage.success(result.data || '转人工请求已提交，请稍候');

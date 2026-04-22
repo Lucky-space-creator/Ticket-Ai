@@ -1,0 +1,13 @@
+---
+description: 
+alwaysApply: true
+enabled: true
+updatedAt: 2026-04-22T08:46:55.262Z
+provider: 
+---
+
+要点	说明
+避免使用 Map.of() 处理业务数据	业务字段经常可能为 null，使用 HashMap 更安全
+不要静默吞掉异常	catch 块至少应记录完整的堆栈信息
+Java API 细节很重要	Map.of()、List.of() 等 Java 9+ 不可变集合工厂方法均不允许 null 值
+WebSocket 调试困难	缺少请求-响应机制，消息丢失不易察觉，需要仔细检查每条发送路径

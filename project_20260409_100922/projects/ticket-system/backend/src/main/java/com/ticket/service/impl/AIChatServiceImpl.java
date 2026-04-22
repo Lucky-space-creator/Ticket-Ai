@@ -1,5 +1,6 @@
 package com.ticket.service.impl;
 
+import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.ticket.entity.ChatRecord;
 import com.ticket.entity.ChatSession;
@@ -27,6 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 /**
  * 智能客服服务实现
@@ -57,28 +59,34 @@ public class AIChatServiceImpl implements AIChatService {
     @Transactional
     public String chat(String question) {
         log.info("开始处理问题：{}", question);
-        String sessionId = getSessionId();
         // 保存用户消息
-        saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0);
+        String sessionId = getSessionId();
 
-        // 检查会话是否已被客服接管
-        if (isSessionHandledByHuman(sessionId)) {
-            // 客服已介入，不返回AI回复，让用户和客服直接对话
-            // 用户消息已经在第57行保存并广播
-            return "";
-        }
 
         // 检查是否包含转人工关键字
         if (containsHumanServiceKeyword(question)) {
+            //xian创建会话
+            sessionId = chatSessionService.createSession(UserContext.getCurrentUserId(), "");
+            //保存会话
             String answer = triggerHumanService(sessionId);
             // 保存AI回复（实际上是人工资讯）
             saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
             return answer;
+        } else {
+            //确定是不是转人工在选择性保存session_id
+            saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0);
         }
 
-        //将问题中的{}替换为具体信息
-//        question = KnowledgeBaseServiceImpl.getSystemPrompt(UserContext.getCurrentUserId(), String.valueOf(LocalDateTime.now()));
-
+        // 检查会话状态，如果是人工客服会话，不调用AI
+        if (sessionId != null) {
+            ChatSession session = chatSessionService.getById(sessionId);
+            if (session != null && ChatSession.STATUS_ACTIVE.equals(session.getStatus())) {
+//                String answer = "当前正在与客服对话，请直接在聊天框中发送消息。";
+//                saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
+                return "";
+            }
+        }
+        
         // 调用AI
         String answer = knowledgeAssistant.chat(question);
         // 保存AI回复
@@ -101,13 +109,7 @@ public class AIChatServiceImpl implements AIChatService {
             return Flux.just(answer);
         }
         
-        // 检查会话是否已被客服接管
-        if (isSessionHandledByHuman(sessionId)) {
-            // 客服已介入，不返回AI回复
-            // 用户消息已经在第97行保存并广播
-            return Flux.just("");
-        }
-        
+
         // 检查是否包含转人工关键字
         if (containsHumanServiceKeyword(question)) {
             String answer = triggerHumanService(sessionId);
@@ -115,6 +117,16 @@ public class AIChatServiceImpl implements AIChatService {
             saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
             // 返回包含转人工消息的Flux
             return Flux.just(answer);
+        }
+        
+        // 检查会话状态，如果是人工客服会话，不调用AI
+        if (sessionId != null) {
+            ChatSession session = chatSessionService.getById(sessionId);
+            if (session != null && ChatSession.STATUS_ACTIVE.equals(session.getStatus())) {
+                String answer = "当前正在与客服对话，请直接在聊天框中发送消息。";
+                saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
+                return Flux.just(answer);
+            }
         }
         
         Flux<String> flux = streamingKnowledgeAssistant.chat(question);
@@ -140,7 +152,7 @@ public class AIChatServiceImpl implements AIChatService {
      * @param message 消息内容
      * @param msgType 消息类型 'user'-用户 'robot'-机器人 员工号-客服
      * @param confidence 置信度（AI回复时可为1.0）
-     * @param sessionId 会话ID
+     * @param sessionId 会话ID (可填可不填)
      * @param employeeId 客服员工ID（可选）
      * @param isRead 是否已读（可选，默认0）
      */
@@ -161,14 +173,16 @@ public class AIChatServiceImpl implements AIChatService {
             
             // 通过 WebSocket 广播消息
             try {
-                chatWebSocketHandler.sendMessageToSession(sessionId, com.alibaba.fastjson2.JSON.toJSONString(Map.of(
-                        "type", "chat",
-                        "content", message,
-                        "msgType", msgType,
-                        "employeeId", employeeId,
-                        "userId", userId,
-                        "timestamp", System.currentTimeMillis()
-                )));
+                Map<String, Object> wsMessage = new HashMap<>();
+                wsMessage.put("type", "chat");
+                wsMessage.put("content", message);
+                wsMessage.put("msgType", msgType);
+                if (employeeId != null) {
+                    wsMessage.put("employeeId", employeeId);
+                }
+                wsMessage.put("userId", userId);
+                wsMessage.put("timestamp", System.currentTimeMillis());
+                chatWebSocketHandler.sendMessageToSession(sessionId, JSON.toJSONString(wsMessage));
             } catch (Exception e) {
                 log.warn("WebSocket 广播失败，但不影响主要流程", e);
             }
@@ -178,15 +192,18 @@ public class AIChatServiceImpl implements AIChatService {
     }
 
     /**
-     * 获取会话ID，基于用户ID生成
+     * 获取会话ID
      */
     private String getSessionId() {
-        Long userId = UserContext.getCurrentUserId();
-        if (userId != null) {
-            return "user_" + userId;
-        }
-        // 匿名用户不生成会话ID
-        return null;
+        //查询数据库中是否有未结束的会话且userid=当前用户，包括进行中和等待的
+        LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ChatSession::getUserId, UserContext.getCurrentUserId())
+                .ne(ChatSession::getStatus, ChatSession.STATUS_ENDED);
+        //查询
+        ChatSession session = chatSessionService.getOne(wrapper);
+
+        return session != null ? session.getId() : null;
+
     }
 
     /**
@@ -210,8 +227,6 @@ public class AIChatServiceImpl implements AIChatService {
             "真人客服",
             "联系客服",
             "找客服",
-            "人工",
-            "客服",
             "customer service",
             "human",
             "operator"
@@ -285,57 +300,7 @@ public class AIChatServiceImpl implements AIChatService {
         return chatRecordMapper.selectCount(wrapper) > 0;
     }
 
-    /**
-     * 检查会话是否已被客服接管（存在客服工号消息，且未结束）
-     * 优化：首先检查会话表状态，再检查聊天记录
-     */
-    private boolean isSessionHandledByHuman(String sessionId) {
-        if (sessionId == null) {
-            return false;
-        }
-        
-        // 1. 检查会话表状态
-        ChatSession session = chatSessionService.getById(sessionId);
-        if (session != null) {
-            // 如果会话已结束，AI不介入（但isSessionEnded会处理）
-            if (ChatSession.STATUS_ENDED.equals(session.getStatus())) {
-                return false;
-            }
-            // 如果会话状态为active且有客服员工ID，说明客服已接入
-            if (ChatSession.STATUS_ACTIVE.equals(session.getStatus()) && session.getEmployeeId() != null) {
-                return true;
-            }
-            // 如果会话状态为pending，客服尚未接入
-            if (ChatSession.STATUS_PENDING.equals(session.getStatus())) {
-                return false;
-            }
-            // 其他状态（ai_only）继续检查聊天记录
-        }
-        
-        // 2. 回退到聊天记录检查（兼容旧逻辑）
-        // 查找是否存在pending消息（用户请求人工客服但尚未被接入）
-        LambdaQueryWrapper<ChatRecord> pendingWrapper = new LambdaQueryWrapper<>();
-        pendingWrapper.eq(ChatRecord::getSessionId, sessionId)
-                .eq(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_PENDING);
-        boolean hasPending = chatRecordMapper.selectCount(pendingWrapper) > 0;
-        
-        // 如果还有pending消息，说明客服尚未接入
-        if (hasPending) {
-            return false;
-        }
-        
-        // 查找是否存在客服消息（msgType为数字工号）
-        LambdaQueryWrapper<ChatRecord> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ChatRecord::getSessionId, sessionId)
-                .ne(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_USER)
-                .ne(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_ROBOT)
-                .ne(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_PENDING)
-                .ne(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_ENDED);
-        List<ChatRecord> records = chatRecordMapper.selectList(wrapper);
-        
-        // 只要存在客服消息（非user/robot/pending/ended），就认为客服已介入
-        return !records.isEmpty();
-    }
+
 
     @Override
     public void clearMemory() {

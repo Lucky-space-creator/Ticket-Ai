@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -91,7 +92,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 handleChatMessage(json, sessionId);
             } else if ("heartbeat".equals(type)) {
                 // 心跳包，回复 pong
-                session.sendMessage(new TextMessage(JSON.toJSONString(Map.of("type", "pong"))));
+                Map<String, String> pongMsg = new HashMap<>();
+                pongMsg.put("type", "pong");
+                session.sendMessage(new TextMessage(JSON.toJSONString(pongMsg)));
             } else {
                 log.warn("未知的消息类型: {}", type);
             }
@@ -132,25 +135,31 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         log.debug("保存聊天记录成功，会话ID: {}, 消息类型: {}", sessionId, msgType);
 
         // 广播给该会话的所有连接（用户和客服）
-        broadcastMessage(sessionId, JSON.toJSONString(Map.of(
-                "type", "chat",
-                "content", content,
-                "msgType", msgType,
-                "employeeId", employeeId,
-                "userId", userId,
-                "timestamp", System.currentTimeMillis()
-        )));
+        Map<String, Object> wsMessage = new HashMap<>();
+        wsMessage.put("type", "chat");
+        wsMessage.put("content", content);
+        wsMessage.put("msgType", msgType);
+        if (employeeId != null) {
+            wsMessage.put("employeeId", employeeId);
+        }
+        if (userId != null) {
+            wsMessage.put("userId", userId);
+        }
+        wsMessage.put("timestamp", System.currentTimeMillis());
+        broadcastMessage(sessionId, JSON.toJSONString(wsMessage));
 
         // 如果是 pending 消息（用户请求人工客服），发送全局通知给所有客服
         if ("pending".equals(msgType)) {
-            sendMessageToGlobal(JSON.toJSONString(Map.of(
-                    "type", "notification",
-                    "notificationType", "new_pending_session",
-                    "sessionId", sessionId,
-                    "userId", userId,
-                    "content", content,
-                    "timestamp", System.currentTimeMillis()
-            )));
+            Map<String, Object> notificationMsg = new HashMap<>();
+            notificationMsg.put("type", "notification");
+            notificationMsg.put("notificationType", "new_pending_session");
+            notificationMsg.put("sessionId", sessionId);
+            if (userId != null) {
+                notificationMsg.put("userId", userId);
+            }
+            notificationMsg.put("content", content);
+            notificationMsg.put("timestamp", System.currentTimeMillis());
+            sendMessageToGlobal(JSON.toJSONString(notificationMsg));
         }
     }
 

@@ -23,6 +23,8 @@ ADD COLUMN `employee_id` BIGINT NULL COMMENT '客服员工ID（仅当 msg_type �
 ALTER TABLE `chat_record`
 ADD COLUMN `is_read` TINYINT NOT NULL DEFAULT 0 COMMENT '是否已读 0-未读 1-已读' AFTER `employee_id`;
 
+Alter TABLE `chat_record`
+MODIFY COLUMN `session_id` VARCHAR(64) NULL COMMENT '会话ID（引用 chat_session.id）';
 -- 4. 添加外键约束（引用 employee 表）
 ALTER TABLE `chat_record`
 ADD CONSTRAINT `fk_chat_record_employee`

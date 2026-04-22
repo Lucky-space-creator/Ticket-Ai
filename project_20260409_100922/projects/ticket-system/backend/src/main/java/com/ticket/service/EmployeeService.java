@@ -35,4 +35,10 @@ public interface EmployeeService extends IService<Employee> {
      * 更新员工信息
      */
     boolean updateEmployee(Long employeeId, Employee employee);
+
+    /**
+     * 查找可用客服（空闲或会话数最少）
+     * @return 员工ID，如果无可用客服返回null
+     */
+    Long findAvailableEmployee();
 }

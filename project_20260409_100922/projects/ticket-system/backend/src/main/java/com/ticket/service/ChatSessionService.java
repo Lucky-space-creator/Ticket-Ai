@@ -95,4 +95,11 @@ public interface ChatSessionService extends IService<ChatSession> {
      * @return 统计信息映射
      */
     Map<String, Object> getSessionStats();
+
+    /**
+     * 获取或创建用户的最新非结束会话
+     * @param userId 用户ID
+     * @return 会话ID
+     */
+    String getOrCreateSession(Long userId);
 }

@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ticket.entity.ChatSession;
 import com.ticket.mapper.ChatSessionMapper;
 import com.ticket.service.ChatSessionService;
+import com.ticket.util.SnowflakeIdUtil;
+import com.ticket.util.UserContext;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -176,10 +178,30 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         return stats;
     }
 
+    @Override
+    @Transactional
+    public String getOrCreateSession(Long userId) {
+        if (userId == null) {
+            return createAiOnlySession(null);
+        }
+        // 查找用户最近的非结束会话（状态不是ended）
+        LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ChatSession::getUserId, userId)
+                .ne(ChatSession::getStatus, ChatSession.STATUS_ENDED)
+                .orderByDesc(ChatSession::getLastMessageAt)
+                .last("LIMIT 1");
+        ChatSession session = chatSessionMapper.selectOne(wrapper);
+        if (session != null) {
+            return session.getId();
+        }
+        // 没有找到，创建新的AI_ONLY会话
+        return createAiOnlySession(userId);
+    }
+
     /**
      * 生成会话ID
      */
     private String generateSessionId() {
-        return "session_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        return "user_" + SnowflakeIdUtil.getInstance().nextIdStr();
     }
 }

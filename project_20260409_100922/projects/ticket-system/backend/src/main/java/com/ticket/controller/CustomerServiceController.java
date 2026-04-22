@@ -1,5 +1,6 @@
 package com.ticket.controller;
 
+import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.ticket.entity.ChatRecord;
 import com.ticket.entity.ChatSession;
@@ -9,6 +10,7 @@ import com.ticket.mapper.ChatRecordMapper;
 import com.ticket.mapper.ChatSessionMapper;
 import com.ticket.service.ChatSessionService;
 import com.ticket.handler.ChatWebSocketHandler;
+import com.ticket.service.EmployeeService;
 import com.ticket.util.ResponseUtil;
 import com.ticket.util.UserContext;
 import jakarta.annotation.Resource;
@@ -22,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.concurrent.*;
 
 /**
  * 客服系统控制器
@@ -43,6 +46,9 @@ public class CustomerServiceController {
 
     @Resource
     private ChatWebSocketHandler chatWebSocketHandler;
+
+    @Resource
+    private EmployeeService employeeService;
 
     /**
      * 获取待接入的会话列表（用户已请求人工客服但尚未被接待）
@@ -250,14 +256,17 @@ public class CustomerServiceController {
 
         // 5. 通过 WebSocket 广播系统消息
         try {
-            chatWebSocketHandler.sendMessageToSession(sessionId, com.alibaba.fastjson2.JSON.toJSONString(Map.of(
-                    "type", "chat",
-                    "content", "客服已介入，有什么可以帮助您的？",
-                    "msgType", employeeId.toString(),
-                    "employeeId", employeeId,
-                    "userId", pendingRecord != null ? pendingRecord.getUserId() : null,
-                    "timestamp", System.currentTimeMillis()
-            )));
+            Map<String, Object> wsMessage = new HashMap<>();
+            wsMessage.put("type", "chat");
+            wsMessage.put("content", "客服已介入，有什么可以帮助您的？");
+            wsMessage.put("msgType", employeeId.toString());
+            wsMessage.put("employeeId", employeeId);
+            Long userIdValue = pendingRecord != null ? pendingRecord.getUserId() : null;
+            if (userIdValue != null) {
+                wsMessage.put("userId", userIdValue);
+            }
+            wsMessage.put("timestamp", System.currentTimeMillis());
+            chatWebSocketHandler.sendMessageToSession(sessionId, JSON.toJSONString(wsMessage));
         } catch (Exception e) {
             log.warn("WebSocket 广播失败，但不影响主要流程", e);
         }
@@ -321,14 +330,14 @@ public class CustomerServiceController {
 
         // 4. 通过 WebSocket 广播结束消息
         try {
-            chatWebSocketHandler.sendMessageToSession(sessionId, com.alibaba.fastjson2.JSON.toJSONString(Map.of(
-                    "type", "chat",
-                    "content", "客服会话已结束，若还需要客服接入，请点击转客服按钮",
-                    "msgType", BusinessStatus.MSG_TYPE_ENDED,
-                    "employeeId", employeeId,
-                    "userId", null,
-                    "timestamp", System.currentTimeMillis()
-            )));
+            Map<String, Object> wsMessage = new HashMap<>();
+            wsMessage.put("type", "chat");
+            wsMessage.put("content", "客服会话已结束，若还需要客服接入，请点击转客服按钮");
+            wsMessage.put("msgType", BusinessStatus.MSG_TYPE_ENDED);
+            wsMessage.put("employeeId", employeeId);
+            // userId 为 null，不添加到消息中
+            wsMessage.put("timestamp", System.currentTimeMillis());
+            chatWebSocketHandler.sendMessageToSession(sessionId, JSON.toJSONString(wsMessage));
         } catch (Exception e) {
             log.warn("WebSocket 广播失败，但不影响主要流程", e);
         }
@@ -379,14 +388,14 @@ public class CustomerServiceController {
             log.warn("用户未登录，无法转人工");
             return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
         }
-        // 如果未提供 sessionId，则根据用户ID生成
+        // 获取或创建会话ID（如果未提供）
         if (sessionId == null || sessionId.trim().isEmpty()) {
-            sessionId = "user_" + userId;
+            sessionId = chatSessionService.getOrCreateSession(userId);
         }
-
-        // 检查会话是否已存在，如果存在则更新状态为pending，否则创建新的pending会话
+        // 确保会话存在并更新为pending状态
         ChatSession session = chatSessionMapper.selectById(sessionId);
         if (session == null) {
+            // 会话不存在，创建新的pending会话
             session = new ChatSession();
             session.setId(sessionId);
             session.setUserId(userId);
@@ -426,17 +435,104 @@ public class CustomerServiceController {
 
         // 发送全局通知给所有客服
         try {
-            chatWebSocketHandler.sendMessageToGlobal(com.alibaba.fastjson2.JSON.toJSONString(Map.of(
-                    "type", "notification",
-                    "notificationType", "new_pending_session",
-                    "sessionId", sessionId,
-                    "userId", userId,
-                    "content", message,
-                    "timestamp", System.currentTimeMillis()
-            )));
+            Map<String, Object> wsMessage = new HashMap<>();
+            wsMessage.put("type", "notification");
+            wsMessage.put("notificationType", "new_pending_session");
+            wsMessage.put("sessionId", sessionId);
+            if (userId != null) {
+                wsMessage.put("userId", userId);
+            }
+            wsMessage.put("content", message);
+            wsMessage.put("timestamp", System.currentTimeMillis());
+            chatWebSocketHandler.sendMessageToGlobal(JSON.toJSONString(wsMessage));
         } catch (Exception e) {
             log.warn("发送全局通知失败，但不影响主要流程", e);
         }
+
+        // 延迟5秒后尝试自动分配客服，如果会话仍为pending状态
+        final String finalSessionId = sessionId;
+        final Long finalUserId = userId;
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduler.schedule(() -> {
+            try {
+                // 检查会话是否仍为pending（未被客服手动接入）
+                ChatSession currentSession = chatSessionMapper.selectById(finalSessionId);
+                if (currentSession != null && ChatSession.STATUS_PENDING.equals(currentSession.getStatus())) {
+                    // 尝试自动分配客服
+                    Long employeeId = employeeService.findAvailableEmployee();
+                    if (employeeId != null) {
+                        // 分配成功，直接接入会话
+                        boolean accepted = chatSessionService.acceptSession(finalSessionId, employeeId);
+                        if (accepted) {
+                            // 发送系统消息，通知客服已接入
+                            ChatRecord systemMsg = new ChatRecord();
+                            systemMsg.setSessionId(finalSessionId);
+                            systemMsg.setUserId(finalUserId);
+                            systemMsg.setMessage("客服已介入，有什么可以帮助您的？");
+                            systemMsg.setMsgType(employeeId.toString());
+                            systemMsg.setEmployeeId(employeeId);
+                            systemMsg.setIsRead(0);
+                            systemMsg.setConfidence(BigDecimal.ONE);
+                            systemMsg.setCreatedAt(LocalDateTime.now());
+                            chatRecordMapper.insert(systemMsg);
+                            // 增加会话消息计数
+                            chatSessionService.incrementMessageCount(finalSessionId);
+                            chatSessionService.updateLastMessageTime(finalSessionId);
+                            // 通过 WebSocket 广播系统消息
+                            Map<String, Object> wsMessage = new HashMap<>();
+                            wsMessage.put("type", "chat");
+                            wsMessage.put("content", "客服已介入，有什么可以帮助您的？");
+                            wsMessage.put("msgType", employeeId.toString());
+                            wsMessage.put("employeeId", employeeId);
+                            if (finalUserId != null) {
+                                wsMessage.put("userId", finalUserId);
+                            }
+                            wsMessage.put("timestamp", System.currentTimeMillis());
+                            chatWebSocketHandler.sendMessageToSession(finalSessionId, JSON.toJSONString(wsMessage));
+                            log.info("延迟自动分配客服 {} 接入会话 {}", employeeId, finalSessionId);
+                        }
+                    } else {
+                        // 无空闲客服，发送提示消息给用户
+                        ChatRecord busyMsg = new ChatRecord();
+                        busyMsg.setSessionId(finalSessionId);
+                        busyMsg.setUserId(finalUserId);
+                        busyMsg.setMessage("当前客服忙，请稍后再试或继续使用AI助手。");
+                        busyMsg.setMsgType(BusinessStatus.MSG_TYPE_ROBOT);
+                        busyMsg.setIsRead(0);
+                        busyMsg.setConfidence(BigDecimal.ONE);
+                        busyMsg.setCreatedAt(LocalDateTime.now());
+                        chatRecordMapper.insert(busyMsg);
+                        chatSessionService.incrementMessageCount(finalSessionId);
+                        chatSessionService.updateLastMessageTime(finalSessionId);
+                        // 将会话状态改为AI_ONLY（转人工失败）
+                        ChatSession sessionToUpdate = chatSessionMapper.selectById(finalSessionId);
+                        if (sessionToUpdate != null) {
+                            sessionToUpdate.setStatus(ChatSession.STATUS_AI_ONLY);
+                            chatSessionMapper.updateById(sessionToUpdate);
+                        }
+                        // 通过 WebSocket 广播提示消息
+                        Map<String, Object> wsMessage = new HashMap<>();
+                        wsMessage.put("type", "chat");
+                        wsMessage.put("content", "当前客服忙，请稍后再试或继续使用AI助手。");
+                        wsMessage.put("msgType", BusinessStatus.MSG_TYPE_ROBOT);
+                        // employeeId 为 null，不添加到消息中
+                        if (finalUserId != null) {
+                            wsMessage.put("userId", finalUserId);
+                        }
+                        wsMessage.put("timestamp", System.currentTimeMillis());
+                        chatWebSocketHandler.sendMessageToSession(finalSessionId, JSON.toJSONString(wsMessage));
+                        log.info("客服忙，转人工失败，会话 {} 恢复AI对话", finalSessionId);
+                    }
+                } else {
+                    // 会话已被客服手动接入，无需自动分配
+                    log.debug("会话 {} 已被客服手动接入，跳过自动分配", finalSessionId);
+                }
+            } catch (Exception e) {
+                log.warn("延迟自动分配客服失败", e);
+            } finally {
+                scheduler.shutdown();
+            }
+        }, 5, TimeUnit.SECONDS);
 
         log.info("用户 {} 请求转人工客服，会话ID: {}，原因: {}", userId, sessionId, reason);
         return ResponseUtil.success("转人工请求已提交");
@@ -463,7 +559,7 @@ public class CustomerServiceController {
 
         String sessionId = params.get("sessionId");
         if (sessionId == null || sessionId.trim().isEmpty()) {
-            sessionId = "user_" + userId;
+            sessionId = chatSessionService.getOrCreateSession(userId);
         }
 
         // 检查会话是否已结束（通过会话表）
@@ -506,14 +602,16 @@ public class CustomerServiceController {
 
         // 4. 通过 WebSocket 广播结束消息
         try {
-            chatWebSocketHandler.sendMessageToSession(sessionId, com.alibaba.fastjson2.JSON.toJSONString(Map.of(
-                    "type", "chat",
-                    "content", "用户已结束本次会话",
-                    "msgType", BusinessStatus.MSG_TYPE_ENDED,
-                    "employeeId", null,
-                    "userId", userId,
-                    "timestamp", System.currentTimeMillis()
-            )));
+            Map<String, Object> wsMessage = new HashMap<>();
+            wsMessage.put("type", "chat");
+            wsMessage.put("content", "用户已结束本次会话");
+            wsMessage.put("msgType", BusinessStatus.MSG_TYPE_ENDED);
+            // employeeId 为 null，不添加到消息中
+            if (userId != null) {
+                wsMessage.put("userId", userId);
+            }
+            wsMessage.put("timestamp", System.currentTimeMillis());
+            chatWebSocketHandler.sendMessageToSession(sessionId, JSON.toJSONString(wsMessage));
         } catch (Exception e) {
             log.warn("WebSocket 广播失败，但不影响主要流程", e);
         }
@@ -544,8 +642,6 @@ public class CustomerServiceController {
                     userId = Long.parseLong((String) userIdObj);
                 } else if (userIdObj instanceof Number) {
                     userId = ((Number) userIdObj).longValue();
-                } else if (userIdObj instanceof Long) {
-                    userId = (Long) userIdObj;
                 } else {
                     log.warn("无法识别的 userId 类型: {}", userIdObj.getClass().getName());
                 }
@@ -593,20 +689,38 @@ public class CustomerServiceController {
 
         // 通过 WebSocket 广播消息
         try {
-            chatWebSocketHandler.sendMessageToSession(sessionId, com.alibaba.fastjson2.JSON.toJSONString(Map.of(
-                    "type", "chat",
-                    "content", content,
-                    "msgType", employeeId.toString(),
-                    "employeeId", employeeId,
-                    "userId", userId,
-                    "timestamp", System.currentTimeMillis()
-            )));
+            Map<String, Object> wsMessage = new HashMap<>();
+            wsMessage.put("type", "chat");
+            wsMessage.put("content", content);
+            wsMessage.put("msgType", employeeId.toString());
+            wsMessage.put("employeeId", employeeId);
+            if (userId != null) {
+                wsMessage.put("userId", userId);
+            }
+            wsMessage.put("timestamp", System.currentTimeMillis());
+            chatWebSocketHandler.sendMessageToSession(sessionId, JSON.toJSONString(wsMessage));
         } catch (Exception e) {
             log.warn("WebSocket 广播失败，但不影响主要流程", e);
         }
 
         log.info("客服 {} 发送消息到会话 {}: {}", employeeId, sessionId, content);
         return ResponseUtil.success("消息发送成功");
+    }
+
+    /**
+     * 获取或创建当前用户的会话ID
+     * @return 会话ID
+     */
+    @GetMapping("/session-id")
+    public ResponseUtil.Result<?> getOrCreateSessionId() {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
+        }
+        String sessionId = chatSessionService.getOrCreateSession(userId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("sessionId", sessionId);
+        return ResponseUtil.success(result);
     }
 
     /**
@@ -619,7 +733,7 @@ public class CustomerServiceController {
             return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
         }
         
-        String sessionId = "user_" + userId;
+        String sessionId = chatSessionService.getOrCreateSession(userId);
         
         // 获取最近10条消息，按时间升序，排除pending消息
         LambdaQueryWrapper<ChatRecord> wrapper = new LambdaQueryWrapper<>();
@@ -647,13 +761,9 @@ public class CustomerServiceController {
             return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
         }
 
-        String sessionId = (String) params.get("sessionId");
         String content = (String) params.get("content");
-        
-        // 如果未提供sessionId，使用用户ID生成
-        if (sessionId == null || sessionId.trim().isEmpty()) {
-            sessionId = "user_" + userId;
-        }
+        // 获取或创建会话ID
+        String sessionId = chatSessionService.getOrCreateSession(userId);
 
         // 检查消息内容是否为空
         if (content == null || content.trim().isEmpty()) {
@@ -666,17 +776,7 @@ public class CustomerServiceController {
             return ResponseUtil.error("会话已结束，无法发送消息");
         }
 
-        // 如果会话不存在，创建新会话（可能是AI对话或新会话）
-        if (session == null) {
-            session = new ChatSession();
-            session.setId(sessionId);
-            session.setUserId(userId);
-            // 默认状态为ai_only（如果用户直接发送消息，没有客服参与）
-            session.setStatus(ChatSession.STATUS_AI_ONLY);
-            session.setMessageCount(0);
-            session.setLastMessageAt(LocalDateTime.now());
-            chatSessionMapper.insert(session);
-        }
+        // 会话应该已经存在（由getOrCreateSession创建）
 
         // 保存用户消息
         ChatRecord record = new ChatRecord();
@@ -695,14 +795,16 @@ public class CustomerServiceController {
 
         // 通过 WebSocket 广播消息给客服端
         try {
-            chatWebSocketHandler.sendMessageToSession(sessionId, com.alibaba.fastjson2.JSON.toJSONString(Map.of(
-                    "type", "chat",
-                    "content", content,
-                    "msgType", BusinessStatus.MSG_TYPE_USER,
-                    "employeeId", null,
-                    "userId", userId,
-                    "timestamp", System.currentTimeMillis()
-            )));
+            Map<String, Object> wsMessage = new HashMap<>();
+            wsMessage.put("type", "chat");
+            wsMessage.put("content", content);
+            wsMessage.put("msgType", BusinessStatus.MSG_TYPE_USER);
+            // employeeId 为 null，不添加到消息中
+            if (userId != null) {
+                wsMessage.put("userId", userId);
+            }
+            wsMessage.put("timestamp", System.currentTimeMillis());
+            chatWebSocketHandler.sendMessageToSession(sessionId, JSON.toJSONString(wsMessage));
         } catch (Exception e) {
             log.warn("WebSocket 广播失败，但不影响主要流程", e);
         }

@@ -184,8 +184,8 @@ onMounted(() => {
   refreshSessions()
   // 添加定期刷新，30秒一次（作为WebSocket的后备）
   intervalId = setInterval(refreshSessions, 30000)
-  // 添加消息自动刷新，每500ms一次
-  messageRefreshInterval = setInterval(refreshCurrentSessionMessages, 500)
+  // 添加消息自动刷新，每2s一次
+  messageRefreshInterval = setInterval(refreshCurrentSessionMessages, 2000)
 })
 
 onUnmounted(() => {

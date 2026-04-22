@@ -2,12 +2,15 @@ package com.ticket.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.ticket.entity.ChatSession;
 import com.ticket.entity.Employee;
+import com.ticket.mapper.ChatSessionMapper;
 import com.ticket.mapper.EmployeeMapper;
 import com.ticket.service.EmployeeService;
 import com.ticket.util.CryptoUtil;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+import java.util.List;
 
 /**
  * 员工服务实现类
@@ -17,6 +20,9 @@ public class EmployeeServiceImpl extends ServiceImpl<EmployeeMapper, Employee> i
 
     @Resource
     private EmployeeMapper employeeMapper;
+
+    @Resource
+    private ChatSessionMapper chatSessionMapper;
 
     @Override
     public Employee login(String phone, String password) {
@@ -69,5 +75,34 @@ public class EmployeeServiceImpl extends ServiceImpl<EmployeeMapper, Employee> i
     public boolean updateEmployee(Long employeeId, Employee employee) {
         employee.setId(employeeId);
         return employeeMapper.updateById(employee) > 0;
+    }
+
+    @Override
+    public Long findAvailableEmployee() {
+        // 查询所有在职员工
+        LambdaQueryWrapper<Employee> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Employee::getStatus, 1); // 1-在职
+        List<Employee> employees = employeeMapper.selectList(wrapper);
+        if (employees.isEmpty()) {
+            return null;
+        }
+        Long bestEmployeeId = null;
+        int minActiveSessions = Integer.MAX_VALUE;
+        for (Employee employee : employees) {
+            // 查询该员工的活跃会话数
+            LambdaQueryWrapper<ChatSession> sessionWrapper = new LambdaQueryWrapper<>();
+            sessionWrapper.eq(ChatSession::getEmployeeId, employee.getId())
+                    .eq(ChatSession::getStatus, ChatSession.STATUS_ACTIVE);
+            int activeCount = chatSessionMapper.selectCount(sessionWrapper).intValue();
+            if (activeCount == 0) {
+                // 完全空闲，直接返回
+                return employee.getId();
+            }
+            if (activeCount < minActiveSessions) {
+                minActiveSessions = activeCount;
+                bestEmployeeId = employee.getId();
+            }
+        }
+        return bestEmployeeId;
     }
 }
