@@ -268,15 +268,22 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 发送消息给所有全局连接（客服工作台）
      */
     public void sendMessageToGlobal(String message) {
+        log.debug("发送全局消息，当前全局连接数: {}，消息内容: {}", globalSessions.size(), message);
+        int sentCount = 0;
         for (WebSocketSession targetSession : globalSessions) {
             if (targetSession.isOpen()) {
                 try {
                     targetSession.sendMessage(new TextMessage(message));
+                    sentCount++;
+                    log.trace("全局消息发送成功，会话ID: {}", targetSession.getId());
                 } catch (IOException e) {
                     log.error("发送全局消息失败", e);
                 }
+            } else {
+                log.debug("全局连接已关闭，会话ID: {}", targetSession.getId());
             }
         }
+        log.debug("全局消息发送完成，成功发送给 {} 个连接", sentCount);
     }
 
     /**

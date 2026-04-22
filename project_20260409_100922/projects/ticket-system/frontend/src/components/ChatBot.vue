@@ -376,7 +376,7 @@ async function loadHistory() {
         content: msg.message,
         time: new Date(msg.createdAt)
       }))
-      // 清空现有消息，添加历史消息
+      // 清空现有消息，添加历史消息（与客服端一致）
       messages.value = historyMessages
       scrollToBottom()
     }
@@ -404,7 +404,7 @@ async function autoRefresh() {
         content: msg.message,
         time: new Date(msg.createdAt)
       }))
-      // 如果消息数量不同，则更新（简单去重）
+      // 如果消息数量不同，则更新（与客服端一致，简单去重）
       if (historyMessages.length !== messages.value.length) {
         messages.value = historyMessages
         scrollToBottom()
@@ -486,7 +486,7 @@ async function sendMessage() {
   const text = inputText.value.trim()
   inputText.value = ''
 
-  // 添加用户消息
+  // 添加用户消息（本地乐观更新）
   messages.value.push({
     role: 'user',
     content: text,
@@ -510,18 +510,10 @@ async function sendMessage() {
         ElMessage.error(result.message || '发送失败')
       }
     } else {
-      // 使用AI聊天端点
-      const result = await request.post('/chat/ask', { question: text })
-      // result.data 是 ChatResponse 对象
-      // 添加助手消息
-      if (result.data.answer && result.data.answer.trim() !== '') {
-        messages.value.push({
-          role: 'assistant',
-          content: result.data.answer,
-          time: new Date()
-        })
-        scrollToBottom()
-      }
+      // AI 模式：仅触发后端处理，回复由 WebSocket 实时推送（与客服端架构一致）
+      await request.post('/chat/ask', { question: text })
+      // 不在此处添加助手消息，避免与 WebSocket 推送重复
+      // 若 WS 消息丢失，将由 autoRefresh 轮询兜底补充
     }
     
     // 如果窗口最小化，显示未读数

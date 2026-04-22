@@ -198,7 +198,8 @@ public class AIChatServiceImpl implements AIChatService {
         //查询数据库中是否有未结束的会话且userid=当前用户，包括进行中和等待的
         LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ChatSession::getUserId, UserContext.getCurrentUserId())
-                .ne(ChatSession::getStatus, ChatSession.STATUS_ENDED);
+                .ne(ChatSession::getStatus, ChatSession.STATUS_ENDED)
+                .ne(ChatSession::getStatus, ChatSession.STATUS_AI_ONLY);
         //查询
         ChatSession session = chatSessionService.getOne(wrapper);
 

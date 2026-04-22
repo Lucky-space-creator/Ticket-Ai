@@ -201,7 +201,9 @@ onUnmounted(() => {
 // 初始化 WebSocket
 const initWebSocket = () => {
   // 建立连接，但不指定具体会话，等选择会话后再订阅
-  connect('/ws/chat/global', {
+  // 直接连接到后端 WebSocket 端口
+  const wsUrl = `ws://localhost:8080/ws/chat/global`
+  connect(wsUrl, {
     onMessage: handleWebSocketMessage,
     onOpen: () => console.log('WebSocket connected'),
     onClose: () => console.log('WebSocket closed'),

@@ -13,6 +13,7 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -136,14 +137,13 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
     public List<TicketStock> getTicketStocks(Long trainId, String trainDate) {
         LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TicketStock::getTrainId, trainId)
-                .eq(TicketStock::getTrainDate, trainDate)
-                .gt(TicketStock::getAvailableSeats, 0); // 只返回有票的
+                .eq(TicketStock::getTrainDate, trainDate);
 
         return ticketStockMapper.selectList(wrapper);
     }
 
     @Override
-    public java.math.BigDecimal getSeatPrice(Long trainId, String trainDate, String startStation, String endStation, Integer seatType) {
+    public BigDecimal getSeatPrice(Long trainId, String trainDate, String startStation, String endStation, Integer seatType) {
         LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TicketStock::getTrainId, trainId)
                 .eq(TicketStock::getTrainDate, trainDate)

@@ -1,5 +1,6 @@
 package com.ticket.controller;
 
+import com.ticket.entity.TicketStock;
 import com.ticket.enums.BusinessStatus;
 import com.ticket.entity.Train;
 import com.ticket.service.TrainService;
@@ -24,7 +25,11 @@ public class TrainController {
     private TrainService trainService;
 
     /**
-     * 搜索车次
+     * 查询车次
+     * @param startStation 出发站
+     * @param endStation 终点站
+     * @param trainDate 日期
+     * @return 车次列表
      */
     @GetMapping("/search")
     public ResponseUtil.Result<?> searchTrains(
@@ -49,7 +54,7 @@ public class TrainController {
                 trainInfo.put("endTime", train.getEndTime());
 
                 // 获取余票信息
-                List<com.ticket.entity.TicketStock> stocks = trainService.getTicketStocks(train.getId(), trainDate);
+                List<TicketStock> stocks = trainService.getTicketStocks(train.getId(), trainDate);
                 trainInfo.put("stocks", stocks);
 
                 result.add(trainInfo);

@@ -103,8 +103,7 @@ public class CustomerServiceController {
 
         // 使用会话表获取该客服正在服务的活跃会话
         LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ChatSession::getEmployeeId, employeeId)
-                .eq(ChatSession::getStatus, ChatSession.STATUS_ACTIVE)
+        wrapper.eq(ChatSession::getStatus, ChatSession.STATUS_ACTIVE)
                 .orderByDesc(ChatSession::getLastMessageAt);
         List<ChatSession> activeSessions = chatSessionMapper.selectList(wrapper);
 
@@ -444,7 +443,10 @@ public class CustomerServiceController {
             }
             wsMessage.put("content", message);
             wsMessage.put("timestamp", System.currentTimeMillis());
-            chatWebSocketHandler.sendMessageToGlobal(JSON.toJSONString(wsMessage));
+            String notificationJson = JSON.toJSONString(wsMessage);
+            log.info("发送转人工全局通知，会话ID: {}, 用户ID: {}, 消息: {}", sessionId, userId, message);
+            chatWebSocketHandler.sendMessageToGlobal(notificationJson);
+            log.debug("转人工全局通知已发送");
         } catch (Exception e) {
             log.warn("发送全局通知失败，但不影响主要流程", e);
         }

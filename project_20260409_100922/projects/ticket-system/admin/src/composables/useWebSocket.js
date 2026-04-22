@@ -20,7 +20,11 @@ export function useWebSocket() {
     }
 
     try {
-      const wsUrl = `ws://${window.location.host}${url}`
+      // 如果URL已经是完整的WebSocket地址（以ws://或wss://开头），直接使用
+      // 否则，添加当前主机前缀
+      const wsUrl = url.startsWith('ws://') || url.startsWith('wss://') 
+        ? url 
+        : `ws://${window.location.host}${url}`
       socket.value = new WebSocket(wsUrl)
 
       socket.value.onopen = () => {

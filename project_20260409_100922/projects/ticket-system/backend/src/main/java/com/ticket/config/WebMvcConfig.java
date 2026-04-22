@@ -56,7 +56,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         // 方案1：用户端自身数据操作接口加入白名单
                         "/api/user/**",
                         "/api/orders/**",
-                        "/api/passengers/**"
+                        "/api/passengers/**",
+                        "/api/customer-service/user-history"
                 );
     }
 
