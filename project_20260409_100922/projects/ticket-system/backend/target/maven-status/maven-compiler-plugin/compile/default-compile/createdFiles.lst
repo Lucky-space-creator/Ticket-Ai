@@ -1,3 +1,4 @@
+com\ticket\service\ChatSessionService.class
 com\ticket\controller\admin\AdminUserController.class
 com\ticket\config\RedisConfig.class
 com\ticket\dto\UserRegisterRequest.class
@@ -44,6 +45,8 @@ com\ticket\service\impl\StatsServiceImpl.class
 com\ticket\service\TrainService.class
 com\ticket\util\CacheUtil.class
 com\ticket\service\AIChatService.class
+com\ticket\mapper\ChatSessionMapper.class
+com\ticket\entity\ChatSession.class
 com\ticket\entity\Order.class
 com\ticket\service\OperationLogService.class
 com\ticket\controller\admin\AdminRoleController.class
@@ -53,7 +56,9 @@ com\ticket\controller\TrainController.class
 com\ticket\util\RedisUtil.class
 com\ticket\service\UserService.class
 com\ticket\entity\KnowledgeBase.class
+com\ticket\util\UserContext$Context.class
 com\ticket\util\CacheUtil$CacheItem.class
+com\ticket\service\impl\ChatSessionServiceImpl.class
 com\ticket\service\StreamingKnowledgeAssistant.class
 com\ticket\config\MyMetaObjectHandler.class
 com\ticket\util\DateUtils.class

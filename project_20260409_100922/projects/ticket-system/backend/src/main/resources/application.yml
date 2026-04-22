@@ -5,25 +5,88 @@ server:
     encoding:
       charset: UTF-8
       enabled: true
+# Tomcat 线程池（处理 HTTP 请求）
+# 计算公式: max_threads = CPU核心数 × (1 + 等待时间/计算时间)
+#   - IO密集型: 等待时间/计算时间 ≈ 4~10，经验值 200~500
+#   - CPU密集型: 等待时间/计算时间 ≈ 0，经验值 核心数×2
+# 本例为IO密集型应用（数据库、Redis、AI调用），取中间值200
+  tomcat:
+    threads:
+      max: 200          # 最大线程数（计算公式见上）
+      min-spare: 10     # 最小(核心)线程数，默认10，冷启动后保持的最小热线程
+    # 等待队列容量（超出max后的排队数），超出则拒绝请求(503)
+    accept-count: 100
 
 spring:
   application:
     name: ticket-system
-# Spring 异步配置
+# Spring 异步配置（用于@Async等异步任务）
+# 计算公式: max_size = CPU核心数 × (1 + 阻塞时间/计算时间)
+#   - 阻塞时间: AI调用、外部API等IO等待时间（可能长达10-30秒）
+#   - 计算时间: 本地处理时间（通常<100ms）
+#   - 阻塞/计算比 ≈ 100~300，因此需要较大线程池
+# 核心线程数: 根据常驻负载设置，避免频繁创建
+# 队列容量: 必须有界，否则max-size不生效，队列满后创建新线程直至max-size
   task:
     execution:
       pool:
-        core-size: 2
-        max-size: 5
+        core-size: 16              # 核心线程数（常驻）
+        max-size: 120              # 最大线程数（计算公式见上）
+        queue-capacity: 200        # 队列容量（有界！）
+        keep-alive: 60s            # 空闲线程存活时间
+        allow-core-thread-timeout: true  # 允许核心线程超时回收
+      thread-name-prefix: async-task-  # 线程名前缀（便于监控）
       shutdown:
-        await-termination: true
-        await-termination-period: 30s
-  # 数据源配置
+        await-termination: true    # 优雅关闭
+        await-termination-period: 60s # 优雅关闭等待时间
+  # 数据源配置（使用Druid连接池）
+# 连接池计算公式:
+#   max-active = CPU核心数 × IO系数 × 安全系数
+#     - CPU核心数: 假设8核
+#     - IO系数: 1.5 (数据库操作是IO密集型)
+#     - 安全系数: 1.5 (避免频繁创建销毁连接)
+#     计算: 8 × 1.5 × 1.5 = 18
+#   经验值: 生产环境通常设置 50~100，根据并发请求数调整
+#   本例设置为100，满足中等并发需求
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/ticket_system?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: root
+    type: com.alibaba.druid.pool.DruidDataSource  # 指定使用Druid连接池
+    druid:
+      # 连接池核心配置
+      initial-size: 10      # 初始连接数
+      min-idle: 10         # 最小空闲连接数
+      max-active: 150   # 最大连接数（计算公式见上）
+      max-wait: 5000       # 获取连接最大等待时间（毫秒）
+      
+      # 连接有效性检测
+      validation-query: SELECT 1
+      test-on-borrow: false
+      test-on-return: false
+      test-while-idle: true
+      time-between-eviction-runs-millis: 60000  # 检查空闲连接的间隔（毫秒）
+      min-evictable-idle-time-millis: 300000    # 连接最小空闲时间（毫秒）
+      # 监控统计配置
+      filters: stat,wall        # 启用统计、防火墙过滤器（使用默认日志）
+      stat-view-servlet:
+        enabled: true           # 启用StatViewServlet
+        url-pattern: /druid/*   # 监控页面访问路径
+        login-username: admin   # 登录用户名（生产环境需修改）
+        login-password: admin   # 登录密码（生产环境需修改）
+        reset-enable: false     # 禁用重置按钮
+      web-stat-filter:
+        enabled: true           # 启用WebStatFilter
+        url-pattern: /*         # 监控所有URL
+        exclusions: "*.js,*.gif,*.jpg,*.png,*.css,*.ico,/druid/*"  # 排除静态资源
+      
+      # 防火墙配置（防止SQL注入）
+      wall:
+        enabled: true
+        config:
+          delete-allow: false # 禁止删除
+          drop-table-allow: false # 禁止删除表
 
   # Jackson 配置
   jackson:
@@ -33,7 +96,14 @@ spring:
     serialization:
       write-dates-as-timestamps: false
 
-  # Redis 配置
+  # Redis 连接池计算公式
+  # 最大连接数 = CPU核心数 × IO系数 × 安全系数
+  #   - CPU核心数: 假设8核
+  #   - IO系数: 1.5 (IO密集型，Redis为网络IO)
+  #   - 安全系数: 1.5 (避免频繁创建销毁连接)
+  #   计算: 8 × 1.5 × 1.5 = 18
+  # 经验值: 生产环境通常设置 50~100，根据并发客户端数调整
+  # 本例设置为64，留有余量
   data:
     redis:
       host: localhost
@@ -42,10 +112,10 @@ spring:
       timeout: 10s
       lettuce:
         pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 0
-          max-wait: -1ms
+          max-active: 64  # 最大连接数（计算公式见上）
+          max-idle: 32    # 最大空闲连接数（建议为max-active的50%）
+          min-idle: 8     # 最小空闲连接数（保持一定热连接）
+          max-wait: 5000ms  # 最大等待时间（5秒），避免无限等待
 
 # MyBatis Plus 配置
 mybatis-plus:
@@ -98,7 +168,7 @@ ai:
     embedding-model: nomic-embed-text  # 向量化模型
     temperature: 0.7
     timeout: 600    # 超时时间设置为10分钟（600秒），初始加载模型可能需要较长时间
-    
+
   # OpenAI配置（当model-type=openai时使用）
   openai:
     api-key: sk-demo-key
