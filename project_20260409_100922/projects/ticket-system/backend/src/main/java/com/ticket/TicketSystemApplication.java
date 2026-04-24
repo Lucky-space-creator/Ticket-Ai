@@ -3,12 +3,14 @@ package com.ticket;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 12306购票系统启动类
  */
 @SpringBootApplication
 @MapperScan("com.ticket.mapper")
+@EnableScheduling
 public class TicketSystemApplication {
 
     public static void main(String[] args) {

@@ -25,9 +25,15 @@ public class CacheKey {
 
     /**
      * 车次余票缓存（10分钟）
-     * 格式: train:stock:{trainId}:{trainDate}:{seatType}
+     * 格式: train:stock:{trainId}:{trainDate}:{seatType}:{startStation}:{endStation}
      */
-    public static final String TRAIN_STOCK = "train:stock:%d:%s:%d";
+    public static final String TRAIN_STOCK = "train:stock:%d:%s:%d:%s:%s";
+
+    /**
+     * 车次预占库存缓存（30分钟）
+     * 格式: train:locked:{trainId}:{trainDate}:{seatType}:{startStation}:{endStation}
+     */
+    public static final String TRAIN_LOCKED = "train:locked:%d:%s:%d:%s:%s";
 
     /**
      * 车次详情缓存（1小时）

@@ -56,6 +56,12 @@ public class TicketStock {
     private Integer availableSeats;
 
     /**
+     * 版本号（乐观锁）
+     */
+    @Version
+    private Integer version;
+
+    /**
      * 更新时间
      */
     @TableField(fill = FieldFill.INSERT_UPDATE)

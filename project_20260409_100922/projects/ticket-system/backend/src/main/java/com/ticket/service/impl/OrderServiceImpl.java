@@ -14,6 +14,7 @@ import com.ticket.enums.ResponseCode;
 import com.ticket.mapper.OrderItemMapper;
 import com.ticket.mapper.OrderMapper;
 import com.ticket.service.OrderService;
+import com.ticket.service.StockLockService;
 import com.ticket.service.TrainService;
 import com.ticket.service.UserService;
 import com.ticket.util.RedisUtil;
@@ -48,6 +49,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private StockLockService stockLockService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -114,15 +118,34 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             throw new RuntimeException(ResponseCode.ORDER_PAID.getMessage());
         }
 
+        // 查询订单明细数量
+        LambdaQueryWrapper<OrderItem> itemWrapper = new LambdaQueryWrapper<>();
+        itemWrapper.eq(OrderItem::getOrderId, order.getId());
+        int count = Math.toIntExact(orderItemMapper.selectCount(itemWrapper));
+
         // 更新状态
         order.setStatus(BusinessStatus.ORDER_STATUS_PAID);
         order.setPayTime(LocalDateTime.now());
 
         boolean result = updateById(order);
 
-        // 清除缓存
-        redisUtil.delete(String.format(CacheKey.USER_ORDERS, userId));
-        redisUtil.delete(String.format(CacheKey.ORDER_INFO, orderNo));
+        if (result) {
+            try {
+                // 确认扣减Redis库存（将预占转为实际售出）
+                stockLockService.confirm(order.getTrainId(), order.getTrainDate().toString(),
+                        order.getSeatType(), order.getStartStation(), order.getEndStation(), count);
+            } catch (Exception e) {
+                // 确认扣减失败，记录错误日志，但订单状态已更新
+                // 后续通过定时任务对账处理
+                org.slf4j.LoggerFactory.getLogger(OrderServiceImpl.class)
+                        .error("确认扣减库存失败，orderNo={}, trainId={}, count={}", 
+                                orderNo, order.getTrainId(), count, e);
+            }
+
+            // 清除缓存
+            redisUtil.delete(String.format(CacheKey.USER_ORDERS, userId));
+            redisUtil.delete(String.format(CacheKey.ORDER_INFO, orderNo));
+        }
 
         return result;
     }

@@ -7,6 +7,7 @@ import com.ticket.entity.TicketStock;
 import com.ticket.entity.Train;
 import com.ticket.mapper.TicketStockMapper;
 import com.ticket.mapper.TrainMapper;
+import com.ticket.service.StockLockService;
 import com.ticket.service.TrainService;
 import com.ticket.util.RedisUtil;
 import jakarta.annotation.Resource;
@@ -31,6 +32,9 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
 
     @Resource
     private RedisUtil redisUtil;
+
+    @Resource
+    private StockLockService stockLockService;
 
     @Override
     public List<Train> searchTrains(String startStation, String endStation, String trainDate) {
@@ -158,6 +162,13 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean deductStock(Long trainId, String trainDate, String startStation, String endStation, Integer seatType, Integer count) {
+        // 1. 先通过Redis Lua脚本原子预扣库存
+        boolean deducted = stockLockService.tryDeduct(trainId, trainDate, seatType, startStation, endStation, count);
+        if (!deducted) {
+            throw new RuntimeException("余票不足");
+        }
+
+        // 2. 更新数据库库存（保持数据最终一致性）
         LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TicketStock::getTrainId, trainId)
                 .eq(TicketStock::getTrainDate, trainDate)
@@ -165,24 +176,66 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
                 .eq(TicketStock::getEndStation, endStation)
                 .eq(TicketStock::getSeatType, seatType);
 
-        // 使用数据库锁防止超卖
         TicketStock stock = ticketStockMapper.selectOne(wrapper);
 
         if (stock == null) {
+            // Redis预扣成功但数据库记录不存在，回滚Redis
+            stockLockService.rollback(trainId, trainDate, seatType, startStation, endStation, count);
             throw new RuntimeException("余票信息不存在");
         }
 
+        // 再次检查库存（虽然Redis已扣减，但这里做二次校验）
         if (stock.getAvailableSeats() < count) {
+            // 数据库库存不足，回滚Redis
+            stockLockService.rollback(trainId, trainDate, seatType, startStation, endStation, count);
             throw new RuntimeException("余票不足");
         }
 
-        // 扣减库存
+        // 扣减数据库库存
         stock.setAvailableSeats(stock.getAvailableSeats() - count);
+        int result = ticketStockMapper.updateById(stock);
+
+        if (result <= 0) {
+            // 数据库更新失败，回滚Redis
+            stockLockService.rollback(trainId, trainDate, seatType, startStation, endStation, count);
+            throw new RuntimeException("扣减库存失败");
+        }
+
+        // 3. 清除缓存
+        String cacheKey = String.format(CacheKey.TRAIN_STOCK, trainId, trainDate, seatType, startStation, endStation);
+        redisUtil.delete(cacheKey);
+
+        return true;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean rollbackStock(Long trainId, String trainDate, String startStation, String endStation, Integer seatType, Integer count) {
+        // 1. 先回滚Redis库存
+        stockLockService.rollback(trainId, trainDate, seatType, startStation, endStation, count);
+
+        // 2. 更新数据库库存
+        LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(TicketStock::getTrainId, trainId)
+                .eq(TicketStock::getTrainDate, trainDate)
+                .eq(TicketStock::getStartStation, startStation)
+                .eq(TicketStock::getEndStation, endStation)
+                .eq(TicketStock::getSeatType, seatType);
+
+        TicketStock stock = ticketStockMapper.selectOne(wrapper);
+
+        if (stock == null) {
+            // 数据库记录不存在，但Redis已回滚，返回true
+            return true;
+        }
+
+        // 回滚数据库库存
+        stock.setAvailableSeats(stock.getAvailableSeats() + count);
         int result = ticketStockMapper.updateById(stock);
 
         if (result > 0) {
             // 清除缓存
-            String cacheKey = String.format(CacheKey.TRAIN_STOCK, trainId, trainDate, seatType);
+            String cacheKey = String.format(CacheKey.TRAIN_STOCK, trainId, trainDate, seatType, startStation, endStation);
             redisUtil.delete(cacheKey);
         }
 
@@ -190,31 +243,7 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
-    public boolean rollbackStock(Long trainId, String trainDate, String startStation, String endStation, Integer seatType, Integer count) {
-        LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(TicketStock::getTrainId, trainId)
-                .eq(TicketStock::getTrainDate, trainDate)
-                .eq(TicketStock::getStartStation, startStation)
-                .eq(TicketStock::getEndStation, endStation)
-                .eq(TicketStock::getSeatType, seatType);
-
-        TicketStock stock = ticketStockMapper.selectOne(wrapper);
-
-        if (stock == null) {
-            return false;
-        }
-
-        // 回滚库存
-        stock.setAvailableSeats(stock.getAvailableSeats() + count);
-        int result = ticketStockMapper.updateById(stock);
-
-        if (result > 0) {
-            // 清除缓存
-            String cacheKey = String.format(CacheKey.TRAIN_STOCK, trainId, trainDate, seatType);
-            redisUtil.delete(cacheKey);
-        }
-
-        return result > 0;
+    public void initStockToRedis(Long trainId, String trainDate, Integer seatType, String startStation, String endStation, int stock) {
+        stockLockService.initStock(trainId, trainDate, seatType, startStation, endStation, stock);
     }
 }

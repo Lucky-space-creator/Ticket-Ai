@@ -46,4 +46,9 @@ public interface TrainService extends IService<Train> {
      * 回滚库存
      */
     boolean rollbackStock(Long trainId, String trainDate, String startStation, String endStation, Integer seatType, Integer count);
+
+    /**
+     * 初始化库存到Redis（系统启动或数据变更时调用）
+     */
+    void initStockToRedis(Long trainId, String trainDate, Integer seatType, String startStation, String endStation, int stock);
 }

@@ -1,9 +1,13 @@
 package com.ticket.util;
 
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StreamUtils;
 
 import jakarta.annotation.Resource;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -277,6 +281,46 @@ public class RedisUtil {
             return true;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    // ==================== Lua 脚本执行 ====================
+
+    /**
+     * 执行 Lua 脚本
+     * @param script Lua 脚本
+     * @param keys 键列表
+     * @param args 参数列表
+     * @return 脚本执行结果
+     */
+    public Object executeScript(String script, List<String> keys, Object[] args) {
+        if (script == null || script.isEmpty()) {
+            return null;
+        }
+        org.springframework.data.redis.core.script.DefaultRedisScript<Object> redisScript = 
+            new org.springframework.data.redis.core.script.DefaultRedisScript<>();
+        redisScript.setScriptText(script);
+        redisScript.setResultType(Object.class);
+        return redisTemplate.execute(redisScript, keys, args);
+    }
+
+    /**
+     * 执行 Lua 脚本（从资源文件加载）
+     * @param scriptPath 脚本资源路径（classpath相对路径）
+     * @param keys 键列表
+     * @param args 参数列表
+     * @return 脚本执行结果
+     */
+    public Object executeScriptFromResource(String scriptPath, List<String> keys, Object[] args) {
+        try {
+            ClassPathResource resource = new ClassPathResource(scriptPath);
+            if (!resource.exists()) {
+                throw new RuntimeException("Lua脚本文件不存在: " + scriptPath);
+            }
+            String script = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+            return executeScript(script, keys, args);
+        } catch (Exception e) {
+            throw new RuntimeException("加载Lua脚本失败: " + scriptPath, e);
         }
     }
 }

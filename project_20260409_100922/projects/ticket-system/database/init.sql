@@ -71,7 +71,7 @@ CREATE TABLE `train_station` (
     INDEX `idx_train_id` (`train_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='车次停靠站时刻表';
 
--- 余票库存表（简化：移除乐观锁版本号，使用数据库锁）
+-- 余票库存表（添加乐观锁版本号，支持Redis+Lua防超卖）
 DROP TABLE IF EXISTS `ticket_stock`;
 CREATE TABLE `ticket_stock` (
     `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -82,6 +82,7 @@ CREATE TABLE `ticket_stock` (
     `seat_type` TINYINT NOT NULL COMMENT '席别 1-商务 2-一等 3-二等 4-软卧 5-硬卧 6-硬座',
     `price` DECIMAL(10,2) NOT NULL COMMENT '票价',
     `available_seats` INT NOT NULL DEFAULT 0 COMMENT '剩余座位数',
+    `version` INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY `uk_stock` (`train_id`, `train_date`, `start_station`, `end_station`, `seat_type`),
     INDEX `idx_query` (`train_date`, `start_station`, `end_station`)
@@ -176,7 +177,7 @@ INSERT INTO `train` (`train_no`, `train_type`, `start_station`, `end_station`, `
 ('G103', 1, '北京南', '广州南', '09:00:00', '15:30:00', 1);
 
 -- 插入测试余票库存（未来7天）
-INSERT INTO `ticket_stock` (`train_id`, `train_date`, `start_station`, `end_station`, `seat_type`, `price`, `available_seats`)
+INSERT INTO `ticket_stock` (`train_id`, `train_date`, `start_station`, `end_station`, `seat_type`, `price`, `available_seats`, `version`)
 SELECT
     t.id,
     DATE_ADD(CURDATE(), INTERVAL n DAY) AS train_date,
@@ -184,7 +185,8 @@ SELECT
     t.end_station,
     s.seat_type,
     s.price,
-    s.available_seats
+    s.available_seats,
+    0 AS version
 FROM `train` t
 CROSS JOIN (SELECT 2 AS seat_type, 500.00 AS price, 100 AS available_seats UNION ALL
              SELECT 3, 350.00, 200 UNION ALL
