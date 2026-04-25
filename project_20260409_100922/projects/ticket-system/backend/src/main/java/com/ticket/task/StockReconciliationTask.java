@@ -1,12 +1,17 @@
 package com.ticket.task;
 
-import com.ticket.service.ReconciliationResult;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.ticket.entity.ReconciliationResult;
+import com.ticket.entity.TicketStock;
+import com.ticket.mapper.TicketStockMapper;
 import com.ticket.service.StockReconciliationService;
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import java.time.LocalDate;
+import java.util.List;
 
 /**
  * 库存对账定时任务
@@ -19,6 +24,9 @@ public class StockReconciliationTask {
 
     @Resource
     private StockReconciliationService stockReconciliationService;
+
+    @Resource
+    private TicketStockMapper ticketStockMapper;
 
     /**
      * 每小时执行一次全量对账（整点执行）
@@ -41,10 +49,41 @@ public class StockReconciliationTask {
      */
     @Scheduled(cron = "0 */10 * * * ?")
     public void frequentKeyReconciliation() {
-        logger.debug("开始关键车次库存对账...");
-        // 这里可以添加逻辑，查询最近3天内的热门车次进行对账
-        // 目前先留空，后续可根据业务需求扩展
-        // 例如：从数据库查询最近3天内的车次，逐个调用 reconcileStock
+        logger.info("开始关键车次库存对账...");
+        try {
+            // 查询最近3天的车次，按总座位数降序排列（热门车次通常座位数多）
+            LocalDate today = LocalDate.now();
+            LocalDate threeDaysLater = today.plusDays(3);
+            
+            LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
+            wrapper.between(TicketStock::getTrainDate, today, threeDaysLater)
+                   .orderByDesc(TicketStock::getTotalSeats)
+                   .last("LIMIT 30");
+            
+            List<TicketStock> hotStocks = ticketStockMapper.selectList(wrapper);
+            logger.info("关键车次对账，共筛选出 {} 个热门车次", hotStocks.size());
+            
+            int success = 0, error = 0;
+            for (TicketStock stock : hotStocks) {
+                try {
+                    // 调用对账服务，传入车次ID、日期和座位类型
+                    stockReconciliationService.reconcileStock(
+                        stock.getTrainId(), 
+                        stock.getTrainDate().toString(), 
+                        stock.getSeatType()
+                    );
+                    success++;
+                } catch (Exception e) {
+                    logger.error("关键车次对账失败: trainId={}, trainDate={}, seatType={}", 
+                            stock.getTrainId(), stock.getTrainDate(), stock.getSeatType(), e);
+                    error++;
+                }
+            }
+            
+            logger.info("关键车次库存对账完成，成功: {}，失败: {}", success, error);
+        } catch (Exception e) {
+            logger.error("关键车次库存对账异常", e);
+        }
     }
 
     /**

@@ -2,6 +2,7 @@ package com.ticket.util;
 
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StreamUtils;
 
@@ -297,8 +298,7 @@ public class RedisUtil {
         if (script == null || script.isEmpty()) {
             return null;
         }
-        org.springframework.data.redis.core.script.DefaultRedisScript<Object> redisScript = 
-            new org.springframework.data.redis.core.script.DefaultRedisScript<>();
+        DefaultRedisScript<Object> redisScript = new DefaultRedisScript<>();
         redisScript.setScriptText(script);
         redisScript.setResultType(Object.class);
         return redisTemplate.execute(redisScript, keys, args);

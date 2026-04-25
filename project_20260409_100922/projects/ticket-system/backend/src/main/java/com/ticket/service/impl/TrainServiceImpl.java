@@ -162,13 +162,13 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean deductStock(Long trainId, String trainDate, String startStation, String endStation, Integer seatType, Integer count) {
-        // 1. 先通过Redis Lua脚本原子预扣库存
+        // 1. 先通过Redis原子操作预扣库存
         boolean deducted = stockLockService.tryDeduct(trainId, trainDate, seatType, startStation, endStation, count);
         if (!deducted) {
             throw new RuntimeException("余票不足");
         }
 
-        // 2. 更新数据库库存（保持数据最终一致性）
+        // 2. 检查数据库记录是否存在（仅做校验，不扣减数据库库存）
         LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TicketStock::getTrainId, trainId)
                 .eq(TicketStock::getTrainDate, trainDate)
@@ -184,24 +184,8 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
             throw new RuntimeException("余票信息不存在");
         }
 
-        // 再次检查库存（虽然Redis已扣减，但这里做二次校验）
-        if (stock.getAvailableSeats() < count) {
-            // 数据库库存不足，回滚Redis
-            stockLockService.rollback(trainId, trainDate, seatType, startStation, endStation, count);
-            throw new RuntimeException("余票不足");
-        }
-
-        // 扣减数据库库存
-        stock.setAvailableSeats(stock.getAvailableSeats() - count);
-        int result = ticketStockMapper.updateById(stock);
-
-        if (result <= 0) {
-            // 数据库更新失败，回滚Redis
-            stockLockService.rollback(trainId, trainDate, seatType, startStation, endStation, count);
-            throw new RuntimeException("扣减库存失败");
-        }
-
-        // 3. 清除缓存
+        // 3. 不再同步更新数据库库存，由定时对账任务保证最终一致性
+        // 4. 清除缓存（可选，Redis库存已更新）
         String cacheKey = String.format(CacheKey.TRAIN_STOCK, trainId, trainDate, seatType, startStation, endStation);
         redisUtil.delete(cacheKey);
 

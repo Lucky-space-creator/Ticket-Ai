@@ -1,6 +1,7 @@
-package com.ticket.service;
+package com.ticket.entity;
 
 import lombok.Data;
+import lombok.Setter;
 
 /**
  * 对账结果
@@ -40,7 +41,11 @@ public class ReconciliationResult {
 
     /**
      * 错误信息摘要
+     * -- SETTER --
+     *  设置错误摘要
+
      */
+    @Setter
     private String errorSummary;
 
     public ReconciliationResult() {
@@ -84,10 +89,4 @@ public class ReconciliationResult {
         totalCount++;
     }
 
-    /**
-     * 设置错误摘要
-     */
-    public void setErrorSummary(String summary) {
-        this.errorSummary = summary;
-    }
 }

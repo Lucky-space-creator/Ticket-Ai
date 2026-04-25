@@ -20,6 +20,7 @@ import com.ticket.service.UserService;
 import com.ticket.util.RedisUtil;
 import com.ticket.util.SnowflakeIdUtil;
 import jakarta.annotation.Resource;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +38,8 @@ import java.util.concurrent.TimeUnit;
  */
 @Service
 public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements OrderService {
+
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(OrderServiceImpl.class);
 
     @Resource
     private OrderItemMapper orderItemMapper;
@@ -64,40 +67,48 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             throw new RuntimeException(ResponseCode.TRAIN_NOT_FOUND.getMessage());
         }
 
-        // 2. 扣减库存
+        // 2. 扣减库存（仅Redis预扣）
         trainService.deductStock(trainId, trainDate, startStation, endStation, seatType, items.size());
+        
+        try {
+            // 3. 计算总价
+            BigDecimal totalAmount = items.stream()
+                    .map(OrderItem::getPrice)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 3. 计算总价
-        BigDecimal totalAmount = items.stream()
-                .map(OrderItem::getPrice)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            // 4. 创建订单
+            Order order = new Order();
+            order.setOrderNo(SnowflakeIdUtil.getInstance().nextIdStr());
+            order.setUserId(userId);
+            order.setTrainId(trainId);
+            order.setTrainNo(train.getTrainNo());
+            order.setTrainDate(LocalDate.parse(trainDate));
+            order.setStartStation(startStation);
+            order.setEndStation(endStation);
+            order.setDepartTime(LocalDateTime.of(LocalDate.parse(trainDate), train.getStartTime()));
+            order.setSeatType(seatType);
+            order.setTotalAmount(totalAmount);
+            order.setStatus(BusinessStatus.ORDER_STATUS_PENDING);
 
-        // 4. 创建订单
-        Order order = new Order();
-        order.setOrderNo(SnowflakeIdUtil.getInstance().nextIdStr());
-        order.setUserId(userId);
-        order.setTrainId(trainId);
-        order.setTrainNo(train.getTrainNo());
-        order.setTrainDate(LocalDate.parse(trainDate));
-        order.setStartStation(startStation);
-        order.setEndStation(endStation);
-        order.setDepartTime(LocalDateTime.of(LocalDate.parse(trainDate), train.getStartTime()));
-        order.setSeatType(seatType);
-        order.setTotalAmount(totalAmount);
-        order.setStatus(BusinessStatus.ORDER_STATUS_PENDING);
+            save(order);
 
-        save(order);
+            // 5. 保存订单明细
+            for (OrderItem item : items) {
+                item.setOrderId(order.getId());
+                orderItemMapper.insert(item);
+            }
 
-        // 5. 保存订单明细
-        for (OrderItem item : items) {
-            item.setOrderId(order.getId());
-            orderItemMapper.insert(item);
+            // 6. 清除用户订单缓存
+            redisUtil.delete(String.format(CacheKey.USER_ORDERS, userId));
+
+            return order;
+        } catch (Exception e) {
+            // 订单创建失败，回滚Redis预占库存
+            logger.error("创建订单失败，回滚库存: userId={}, trainId={}, trainDate={}, seatType={}, count={}", 
+                    userId, trainId, trainDate, seatType, items.size(), e);
+            stockLockService.rollback(trainId, trainDate, seatType, startStation, endStation, items.size());
+            throw e;
         }
-
-        // 6. 清除用户订单缓存
-        redisUtil.delete(String.format(CacheKey.USER_ORDERS, userId));
-
-        return order;
     }
 
     @Override
@@ -137,7 +148,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             } catch (Exception e) {
                 // 确认扣减失败，记录错误日志，但订单状态已更新
                 // 后续通过定时任务对账处理
-                org.slf4j.LoggerFactory.getLogger(OrderServiceImpl.class)
+                LoggerFactory.getLogger(OrderServiceImpl.class)
                         .error("确认扣减库存失败，orderNo={}, trainId={}, count={}", 
                                 orderNo, order.getTrainId(), count, e);
             }
@@ -164,7 +175,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
 
         // 检查状态
-        if (order.getStatus() != BusinessStatus.ORDER_STATUS_PAID) {
+        if (!order.getStatus().equals(BusinessStatus.ORDER_STATUS_PAID)) {
             throw new RuntimeException(ResponseCode.ORDER_CAN_NOT_REFUND.getMessage());
         }
 

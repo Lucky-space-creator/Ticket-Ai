@@ -81,6 +81,7 @@ CREATE TABLE `ticket_stock` (
     `end_station` VARCHAR(50) NOT NULL COMMENT '到达站',
     `seat_type` TINYINT NOT NULL COMMENT '席别 1-商务 2-一等 3-二等 4-软卧 5-硬卧 6-硬座',
     `price` DECIMAL(10,2) NOT NULL COMMENT '票价',
+    `total_seats` INT NOT NULL DEFAULT 0 COMMENT '总座位数',
     `available_seats` INT NOT NULL DEFAULT 0 COMMENT '剩余座位数',
     `version` INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -177,7 +178,7 @@ INSERT INTO `train` (`train_no`, `train_type`, `start_station`, `end_station`, `
 ('G103', 1, '北京南', '广州南', '09:00:00', '15:30:00', 1);
 
 -- 插入测试余票库存（未来7天）
-INSERT INTO `ticket_stock` (`train_id`, `train_date`, `start_station`, `end_station`, `seat_type`, `price`, `available_seats`, `version`)
+INSERT INTO `ticket_stock` (`train_id`, `train_date`, `start_station`, `end_station`, `seat_type`, `price`, `total_seats`, `available_seats`, `version`)
 SELECT
     t.id,
     DATE_ADD(CURDATE(), INTERVAL n DAY) AS train_date,
@@ -185,6 +186,7 @@ SELECT
     t.end_station,
     s.seat_type,
     s.price,
+    s.available_seats AS total_seats,
     s.available_seats,
     0 AS version
 FROM `train` t
@@ -267,7 +269,8 @@ CREATE TABLE `role_permission` (
 INSERT INTO `role` (`role_name`, `role_display_name`, `description`, `status`) VALUES
 ('super_admin', '超级管理员', '拥有系统所有权限，可以管理用户、角色、权限等', 1),
 ('admin', '管理员', '拥有大部分管理权限，但无法管理系统用户和角色', 1),
-('operator', '操作员', '拥有基础操作权限，如查看订单、处理退票等', 1);
+('operator', '操作员', '拥有基础操作权限，如查看订单、处理退票等', 1),
+('user', '普通用户', '拥有查询车票、订单管理、AI聊天、个人信息管理等基础权限', 1);
 
 -- 插入初始权限数据
 INSERT INTO `permission` (`permission_name`, `permission_display_name`, `permission_type`, `parent_id`, `path`, `component`, `icon`, `sort`, `api_method`, `api_path`, `description`, `status`) VALUES
@@ -316,6 +319,27 @@ INSERT INTO `permission` (`permission_name`, `permission_display_name`, `permiss
 ('ai:chat', '对话记录', 1, 34, '/ai/chat', 'ai/chat/index', 'chat', 501, NULL, NULL, '对话记录菜单', 1),
 ('ai:chat:api', '对话记录API', 3, 35, NULL, NULL, NULL, 0, 'GET', '/api/chat/records', '获取对话记录接口', 1);
 
+-- 用户端模块（普通用户权限）
+INSERT INTO `permission` (`permission_name`, `permission_display_name`, `permission_type`, `parent_id`, `path`, `component`, `icon`, `sort`, `api_method`, `api_path`, `description`, `status`) VALUES
+('user:train:search', '车次查询', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/trains/search', '查询车次接口', 1),
+('user:train:detail', '车次详情', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/trains/{id}', '获取车次详情接口', 1),
+('user:order:list', '订单列表', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/orders', '获取用户订单列表接口', 1),
+('user:order:detail', '订单详情', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/orders/{orderNo}', '获取订单详情接口', 1),
+('user:order:create', '创建订单', 3, 0, NULL, NULL, NULL, 0, 'POST', '/api/orders', '创建订单接口', 1),
+('user:order:pay', '支付订单', 3, 0, NULL, NULL, NULL, 0, 'POST', '/api/orders/{orderNo}/pay', '支付订单接口', 1),
+('user:order:refund', '退票', 3, 0, NULL, NULL, NULL, 0, 'POST', '/api/orders/{orderNo}/refund', '退票接口', 1),
+('user:profile:view', '查看个人信息', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/user/profile', '查看个人信息接口', 1),
+('user:profile:update', '更新个人信息', 3, 0, NULL, NULL, NULL, 0, 'PUT', '/api/user/profile', '更新个人信息接口', 1),
+('user:passenger:list', '常用联系人列表', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/passengers', '获取常用联系人列表接口', 1),
+('user:passenger:add', '添加常用联系人', 3, 0, NULL, NULL, NULL, 0, 'POST', '/api/passengers', '添加常用联系人接口', 1),
+('user:passenger:edit', '编辑常用联系人', 3, 0, NULL, NULL, NULL, 0, 'PUT', '/api/passengers/{id}', '编辑常用联系人接口', 1),
+('user:passenger:delete', '删除常用联系人', 3, 0, NULL, NULL, NULL, 0, 'DELETE', '/api/passengers/{id}', '删除常用联系人接口', 1),
+('user:chat:send', '发送聊天消息', 3, 0, NULL, NULL, NULL, 0, 'POST', '/api/chat', '发送聊天消息接口', 1),
+('user:chat:records', '聊天记录', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/chat/records', '获取聊天记录接口', 1),
+('user:customer_service:request', '请求人工客服', 3, 0, NULL, NULL, NULL, 0, 'POST', '/api/customer-service/request-human', '请求人工客服接口', 1),
+('user:customer_service:history', '客服对话历史', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/customer-service/history', '获取客服对话历史接口', 1),
+('user:knowledge:enabled', '获取知识库', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/knowledge/enabled', '获取已启用知识库接口', 1);
+
 -- 统计管理模块
 INSERT INTO `permission` (`permission_name`, `permission_display_name`, `permission_type`, `parent_id`, `path`, `component`, `icon`, `sort`, `api_method`, `api_path`, `description`, `status`) VALUES
 ('stats:overview:api', '数据概览API', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/admin/stats/overview', '获取数据概览接口', 1),
@@ -341,6 +365,31 @@ WHERE r.role_name = 'operator'
     'order:list:api', 
     'knowledge:list:api',
     'ai:chat:api'
+  );
+
+-- 为普通用户分配基础权限
+INSERT INTO `role_permission` (`role_id`, `permission_id`)
+SELECT r.id, p.id FROM `role` r, `permission` p 
+WHERE r.role_name = 'user' 
+  AND p.permission_name IN (
+    'user:train:search',
+    'user:train:detail',
+    'user:order:list',
+    'user:order:detail',
+    'user:order:create',
+    'user:order:pay',
+    'user:order:refund',
+    'user:profile:view',
+    'user:profile:update',
+    'user:passenger:list',
+    'user:passenger:add',
+    'user:passenger:edit',
+    'user:passenger:delete',
+    'user:chat:send',
+    'user:chat:records',
+    'user:customer_service:request',
+    'user:customer_service:history',
+    'user:knowledge:enabled'
   );
 
 -- 更新测试用户的角色

@@ -51,6 +51,11 @@ public class TicketStock {
     private BigDecimal price;
 
     /**
+     * 总座位数
+     */
+    private Integer totalSeats;
+
+    /**
      * 剩余座位数
      */
     private Integer availableSeats;

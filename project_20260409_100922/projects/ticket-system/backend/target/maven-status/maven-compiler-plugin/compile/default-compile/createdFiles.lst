@@ -37,6 +37,7 @@ com\ticket\config\PermissionInterceptor.class
 com\ticket\controller\admin\AdminAuthController.class
 com\ticket\controller\admin\AdminPermissionController.class
 com\ticket\service\impl\PermissionServiceImpl.class
+com\ticket\config\RedissonConfig.class
 com\ticket\mapper\ChatRecordMapper.class
 com\ticket\config\KnowledgeBaseInitializer.class
 com\ticket\mapper\DepartmentMapper.class
@@ -60,7 +61,6 @@ com\ticket\util\UserContext$Context.class
 com\ticket\util\CacheUtil$CacheItem.class
 com\ticket\service\impl\ChatSessionServiceImpl.class
 com\ticket\service\StreamingKnowledgeAssistant.class
-com\ticket\config\MyMetaObjectHandler.class
 com\ticket\util\DateUtils.class
 com\ticket\controller\admin\AdminRoleController$UpdateRoleRequest.class
 com\ticket\mapper\RolePermissionMapper.class

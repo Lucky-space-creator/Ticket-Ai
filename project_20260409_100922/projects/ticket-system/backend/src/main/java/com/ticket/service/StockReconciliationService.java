@@ -1,5 +1,7 @@
 package com.ticket.service;
 
+import com.ticket.entity.ReconciliationResult;
+
 /**
  * 库存对账服务
  * 用于定期对比Redis与MySQL的库存数据，修复不一致
