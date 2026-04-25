@@ -43,8 +43,8 @@ public class StockLockServiceImpl implements StockLockService {
 
     @Override
     public boolean tryDeduct(Long trainId, String trainDate, Integer seatType, String startStation, String endStation, int count) {
-        String stockKey = String.format(CacheKey.TRAIN_STOCK, trainId, trainDate, seatType, startStation, endStation);
-        String lockedKey = String.format(CacheKey.TRAIN_LOCKED, trainId, trainDate, seatType, startStation, endStation);
+        String stockKey = CacheKey.formatTrainStockKey(trainId, trainDate, seatType, startStation, endStation);
+        String lockedKey = CacheKey.formatTrainLockedKey(trainId, trainDate, seatType, startStation, endStation);
         
         try {
             // 准备Lua脚本参数
@@ -52,35 +52,38 @@ public class StockLockServiceImpl implements StockLockService {
             Object[] args = new Object[]{count, LOCKED_EXPIRE_SECONDS, STOCK_EXPIRE_SECONDS};
             
             // 执行Lua脚本（原子操作，一次网络往返）
-            Object result = redisUtil.executeScriptFromResource(LUA_DEDUCT_SCRIPT, Arrays.asList(keys), args);
+            List<Long> result = redisUtil.executeScriptFromResource(LUA_DEDUCT_SCRIPT, Arrays.asList(keys), args);
             
-            if (result instanceof List) {
-                List<?> resultList = (List<?>) result;
-                if (resultList.size() >= 2) {
-                    long status = ((Number) resultList.get(0)).longValue();
-                    long remainingStock = ((Number) resultList.get(1)).longValue();
-                    
-                    if (status == 1) {
-                        // 扣减成功
-                        logger.info("预扣库存成功（Lua脚本），trainId={}, trainDate={}, seatType={}, startStation={}, endStation={}, count={}, 剩余库存={}",
-                                trainId, trainDate, seatType, startStation, endStation, count, remainingStock);
-                        return true;
-                    } else if (status == 0) {
-                        // 库存不足
-                        logger.warn("库存不足（Lua脚本），trainId={}, trainDate={}, seatType={}, startStation={}, endStation={}, count={}, 剩余库存={}",
-                                trainId, trainDate, seatType, startStation, endStation, count, remainingStock);
-                        return false;
-                    } else {
-                        // 参数错误或其他错误
-                        logger.error("Lua脚本执行参数错误，trainId={}, trainDate={}, seatType={}, startStation={}, endStation={}, count={}, status={}",
-                                trainId, trainDate, seatType, startStation, endStation, count, status);
-                        return false;
-                    }
+            if (result == null) {
+                logger.error("Lua脚本返回null，trainId={}, trainDate={}, seatType={}, startStation={}, endStation={}, count={}",
+                        trainId, trainDate, seatType, startStation, endStation, count);
+                return false;
+            }
+            
+            if (result.size() >= 2) {
+                long status = result.get(0);
+                long remainingStock = result.get(1);
+                
+                if (status == 1) {
+                    // 扣减成功
+                    logger.info("预扣库存成功（Lua脚本），trainId={}, trainDate={}, seatType={}, startStation={}, endStation={}, count={}, 剩余库存={}",
+                            trainId, trainDate, seatType, startStation, endStation, count, remainingStock);
+                    return true;
+                } else if (status == 0) {
+                    // 库存不足
+                    logger.warn("库存不足（Lua脚本），trainId={}, trainDate={}, seatType={}, startStation={}, endStation={}, count={}, 剩余库存={}",
+                            trainId, trainDate, seatType, startStation, endStation, count, remainingStock);
+                    return false;
+                } else {
+                    // 参数错误或其他错误
+                    logger.error("Lua脚本执行参数错误，trainId={}, trainDate={}, seatType={}, startStation={}, endStation={}, count={}, status={}",
+                            trainId, trainDate, seatType, startStation, endStation, count, status);
+                    return false;
                 }
             }
             
-            logger.error("Lua脚本返回格式异常，trainId={}, trainDate={}, seatType={}, startStation={}, endStation={}, count={}",
-                    trainId, trainDate, seatType, startStation, endStation, count);
+            logger.error("Lua脚本返回格式异常（元素不足），trainId={}, trainDate={}, seatType={}, startStation={}, endStation={}, count={}, result={}",
+                    trainId, trainDate, seatType, startStation, endStation, count, result);
             return false;
         } catch (Exception e) {
             logger.error("预扣库存异常（Lua脚本），trainId={}, trainDate={}, seatType={}, startStation={}, endStation={}, count={}",
@@ -91,8 +94,8 @@ public class StockLockServiceImpl implements StockLockService {
 
     @Override
     public void rollback(Long trainId, String trainDate, Integer seatType, String startStation, String endStation, int count) {
-        String stockKey = String.format(CacheKey.TRAIN_STOCK, trainId, trainDate, seatType, startStation, endStation);
-        String lockedKey = String.format(CacheKey.TRAIN_LOCKED, trainId, trainDate, seatType, startStation, endStation);
+        String stockKey = CacheKey.formatTrainStockKey(trainId, trainDate, seatType, startStation, endStation);
+        String lockedKey = CacheKey.formatTrainLockedKey(trainId, trainDate, seatType, startStation, endStation);
         String lockKey = "lock:" + stockKey;
 
         RLock lock = redissonClient.getLock(lockKey);
@@ -143,7 +146,7 @@ public class StockLockServiceImpl implements StockLockService {
 
     @Override
     public void confirm(Long trainId, String trainDate, Integer seatType, String startStation, String endStation, int count) {
-        String lockedKey = String.format(CacheKey.TRAIN_LOCKED, trainId, trainDate, seatType, startStation, endStation);
+        String lockedKey = CacheKey.formatTrainLockedKey(trainId, trainDate, seatType, startStation, endStation);
         String lockKey = "lock:" + lockedKey;
 
         RLock lock = redissonClient.getLock(lockKey);
@@ -188,8 +191,8 @@ public class StockLockServiceImpl implements StockLockService {
 
     @Override
     public void initStock(Long trainId, String trainDate, Integer seatType, String startStation, String endStation, int stock, boolean force) {
-        String stockKey = String.format(CacheKey.TRAIN_STOCK, trainId, trainDate, seatType, startStation, endStation);
-        String lockedKey = String.format(CacheKey.TRAIN_LOCKED, trainId, trainDate, seatType, startStation, endStation);
+        String stockKey = CacheKey.formatTrainStockKey(trainId, trainDate, seatType, startStation, endStation);
+        String lockedKey = CacheKey.formatTrainLockedKey(trainId, trainDate, seatType, startStation, endStation);
         String lockKey = "lock:" + stockKey;
 
         RLock lock = redissonClient.getLock(lockKey);

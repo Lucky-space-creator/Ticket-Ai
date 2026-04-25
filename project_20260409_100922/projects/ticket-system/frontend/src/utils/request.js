@@ -14,6 +14,13 @@ request.interceptors.request.use(
       if (userStore.token) {
         config.headers.Authorization = `Bearer ${userStore.token}`
       }
+      // 注入请求追踪ID（全链路追踪）
+      config.headers['X-Request-ID'] =
+          crypto.randomUUID ? crypto.randomUUID() :
+          'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+              const r = Math.random() * 16 | 0
+              return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+          })
       // 确保 POST/PUT 请求有正确的 Content-Type
       if (config.method === 'post' || config.method === 'put' || config.method === 'patch') {
         config.headers['Content-Type'] = 'application/json'

@@ -52,19 +52,7 @@ public class AIModelConfig {
 
     @Value("${ai.ollama.timeout}")
     private int ollamaTimeoutSeconds;
-    
-//    // OpenAI配置
-//    @Value("${ai.openai.api-key}")
-//    private String openaiApiKey;
-//
-//    @Value("${ai.openai.model}")
-//    private String openaiModel;
-//
-//    @Value("${ai.openai.temperature}")
-//    private Double openaiTemperature;
-//
-//    @Value("${ai.openai.timeout}")
-//    private int openaiTimeoutSeconds;
+
     
     // HTTP API配置
     @Value("${ai.http-api.base-url}")
@@ -151,11 +139,11 @@ public class AIModelConfig {
                             .timeout(Duration.ofSeconds(ollamaTimeoutSeconds))
                             .build();
                             
-                case "openai":
                 case "http-api":
-                    // OpenAI和HTTP API使用相同的嵌入模型
-                    log.info("使用OpenAI兼容的嵌入模型");
+                    // HTTP API使用相同的嵌入模型
+                    log.info("使用http-api兼容的嵌入模型");
                     return OpenAiEmbeddingModel.builder()
+                            .baseUrl(httpApiBaseUrl)
                             .apiKey(getEffectiveApiKey())
                             .modelName("text-embedding-ada-002")
                             .timeout(Duration.ofSeconds(httpApiTimeoutSeconds))
@@ -177,6 +165,7 @@ public class AIModelConfig {
                 try {
                     log.info("尝试使用备用向量化模型");
                     return OpenAiEmbeddingModel.builder()
+                            .baseUrl(httpApiBaseUrl)
                             .apiKey(getEffectiveApiKey())
                             .modelName("text-embedding-ada-002")
                             .timeout(Duration.ofSeconds(httpApiTimeoutSeconds))

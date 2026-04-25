@@ -184,8 +184,8 @@ public class StockReconciliationServiceImpl implements StockReconciliationServic
         int correctAvailableSeats = dbTotalSeats - validOrderItemCount;
         
         // 获取Redis中的库存（使用Redisson原子长整型）
-        String stockKey = String.format(CacheKey.TRAIN_STOCK, trainId, trainDate, seatType, startStation, endStation);
-        String lockedKey = String.format(CacheKey.TRAIN_LOCKED, trainId, trainDate, seatType, startStation, endStation);
+        String stockKey = CacheKey.formatTrainStockKey(trainId, trainDate, seatType, startStation, endStation);
+        String lockedKey = CacheKey.formatTrainLockedKey(trainId, trainDate, seatType, startStation, endStation);
         RAtomicLong redisStockAtomic = redissonClient.getAtomicLong(stockKey);
         RAtomicLong redisLockedAtomic = redissonClient.getAtomicLong(lockedKey);
         long redisStock = redisStockAtomic.isExists() ? redisStockAtomic.get() : 0;

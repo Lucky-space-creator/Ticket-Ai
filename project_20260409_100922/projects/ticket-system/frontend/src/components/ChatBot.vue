@@ -510,10 +510,16 @@ async function sendMessage() {
         ElMessage.error(result.message || '发送失败')
       }
     } else {
-      // AI 模式：仅触发后端处理，回复由 WebSocket 实时推送（与客服端架构一致）
-      await request.post('/chat/ask', { question: text })
-      // 不在此处添加助手消息，避免与 WebSocket 推送重复
-      // 若 WS 消息丢失，将由 autoRefresh 轮询兜底补充
+      // AI 模式：通过 HTTP API 获取回复并展示
+      const result = await request.post('/chat/ask', { question: text })
+      if (result.code === 200 && result.data?.answer) {
+        messages.value.push({
+          role: 'assistant',
+          content: result.data.answer,
+          time: new Date()
+        })
+        scrollToBottom()
+      }
     }
     
     // 如果窗口最小化，显示未读数

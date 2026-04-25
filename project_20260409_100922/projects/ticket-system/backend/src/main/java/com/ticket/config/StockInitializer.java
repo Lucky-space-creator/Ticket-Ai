@@ -2,6 +2,7 @@ package com.ticket.config;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.ticket.entity.TicketStock;
+import com.ticket.mapper.TicketStockMapper;
 import com.ticket.service.TrainService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +21,7 @@ import java.util.List;
 public class StockInitializer implements ApplicationRunner {
 
     @Resource
-    private com.ticket.mapper.TicketStockMapper ticketStockMapper;
+    private TicketStockMapper ticketStockMapper;
 
     @Resource
     private TrainService trainService;
@@ -33,7 +34,8 @@ public class StockInitializer implements ApplicationRunner {
             // 查询所有库存记录
             LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
             wrapper.select(TicketStock::getTrainId, TicketStock::getTrainDate, 
-                          TicketStock::getSeatType, TicketStock::getAvailableSeats);
+                          TicketStock::getSeatType, TicketStock::getAvailableSeats,
+                          TicketStock::getStartStation, TicketStock::getEndStation);
             List<TicketStock> stocks = ticketStockMapper.selectList(wrapper);
 
             int successCount = 0;

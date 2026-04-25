@@ -13,6 +13,9 @@ import com.ticket.service.ChatSessionService;
 import dev.langchain4j.memory.ChatMemory;
 import com.ticket.util.SnowflakeIdUtil;
 import com.ticket.util.UserContext;
+import com.ticket.util.TraceContext;
+import com.ticket.util.TraceMdcHelper;
+import com.ticket.util.AiChatStopWatch;
 import com.ticket.handler.ChatWebSocketHandler;
 import com.ticket.enums.BusinessStatus;
 import reactor.core.publisher.Flux;
@@ -58,68 +61,71 @@ public class AIChatServiceImpl implements AIChatService {
     @Override
     @Transactional
     public String chat(String question) {
-        log.info("开始处理问题：{}", question);
+        AiChatStopWatch stopWatch = new AiChatStopWatch("ai-chat-service").start();
+        log.info("[{}] 开始处理问题：{}", TraceContext.getTraceId(), question);
+        
         // 保存用户消息
         String sessionId = getSessionId();
 
-
         // 检查是否包含转人工关键字
         if (containsHumanServiceKeyword(question)) {
-            //xian创建会话
+            stopWatch.checkpoint("route_judge");
             sessionId = chatSessionService.createSession(UserContext.getCurrentUserId(), "");
-            //保存会话
             String answer = triggerHumanService(sessionId);
-            // 保存AI回复（实际上是人工资讯）
+            stopWatch.checkpoint("human_transfer");
             saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
+            stopWatch.stopAndLog();
             return answer;
         } else {
-            //确定是不是转人工在选择性保存session_id
             saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0);
+            stopWatch.checkpoint("db_save_user");
         }
 
-        // 检查会话状态，如果是人工客服会话，不调用AI
+        // 检查会话状态
         if (sessionId != null) {
             ChatSession session = chatSessionService.getById(sessionId);
             if (session != null && ChatSession.STATUS_ACTIVE.equals(session.getStatus())) {
-//                String answer = "当前正在与客服对话，请直接在聊天框中发送消息。";
-//                saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
+                stopWatch.checkpoint("session_check");
+                stopWatch.stopAndLog();
                 return "";
             }
         }
         
         // 调用AI
         String answer = knowledgeAssistant.chat(question);
-        // 保存AI回复
+        stopWatch.checkpoint("llm_call");
         saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
+        stopWatch.checkpoint("db_save_ai");
+        stopWatch.stopAndLog();
         return answer;
     }
 
     @Override
     @Transactional
     public Flux<String> streamingChat(String question) {
-        log.info("开始流式处理问题：{}", question);
-        String sessionId = getSessionId();
-        // 保存用户消息
-        saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0);
+        AiChatStopWatch stopWatch = new AiChatStopWatch("ai-stream-service").start();
+        log.info("[{}] 开始流式处理问题：{}", TraceContext.getTraceId(), question);
         
-        // 检查会话是否已结束
+        String traceId = TraceContext.getTraceId();
+        String sessionId = getSessionId();
+        saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0);
+        stopWatch.checkpoint("db_save_user");
+        
         if (isSessionEnded(sessionId)) {
             String answer = "会话已结束，若需要客服介入，请点击转客服按钮";
             saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
             return Flux.just(answer);
         }
-        
 
         // 检查是否包含转人工关键字
         if (containsHumanServiceKeyword(question)) {
+            stopWatch.checkpoint("route_judge");
             String answer = triggerHumanService(sessionId);
-            // 保存AI回复（实际上是人工资讯）
             saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
-            // 返回包含转人工消息的Flux
             return Flux.just(answer);
         }
         
-        // 检查会话状态，如果是人工客服会话，不调用AI
+        // 检查会话状态
         if (sessionId != null) {
             ChatSession session = chatSessionService.getById(sessionId);
             if (session != null && ChatSession.STATUS_ACTIVE.equals(session.getStatus())) {
@@ -130,21 +136,31 @@ public class AIChatServiceImpl implements AIChatService {
         }
         
         Flux<String> flux = streamingKnowledgeAssistant.chat(question);
-        // 用于累积完整响应
+        stopWatch.checkpoint("llm_stream_start");
+
         AtomicReference<StringBuilder> responseBuilder = new AtomicReference<>(new StringBuilder());
         
         return flux
                 .doOnNext(token -> {
-                    log.trace("流式token：{}", token);
+                    TraceMdcHelper.runWithTraceId(traceId, () -> {
+                        log.trace("流式token：{}", token);
+                    });
                     responseBuilder.get().append(token);
                 })
                 .doOnComplete(() -> {
-                    log.info("流式处理完成");
+                    stopWatch.checkpoint("llm_stream_complete");
+                    log.info("[{}] 流式处理完成", TraceContext.getTraceId());
                     String answer = responseBuilder.get().toString();
                     saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
+                    stopWatch.checkpoint("db_save_ai");
+                    stopWatch.stopAndLog();
                 })
                 .doOnError(error -> log.error("流式处理出错", error))
-                .doOnSubscribe(subscription -> log.debug("流式订阅开始"));
+                .doOnSubscribe(subscription ->
+                        TraceMdcHelper.runWithTraceId(traceId, () ->
+                                log.debug("流式订阅开始")
+                        )
+                );
     }
 
     /**
@@ -171,18 +187,23 @@ public class AIChatServiceImpl implements AIChatService {
             chatRecordMapper.insert(record);
             log.debug("保存聊天记录成功，用户ID：{}，类型：{}，会话ID：{}", userId, msgType, sessionId);
             
-            // 通过 WebSocket 广播消息
+            // 通过 WebSocket 广播消息（恢复MDC上下文到Netty线程）
+            String wsTraceId = TraceContext.getTraceId();
             try {
                 Map<String, Object> wsMessage = new HashMap<>();
                 wsMessage.put("type", "chat");
                 wsMessage.put("content", message);
                 wsMessage.put("msgType", msgType);
+                wsMessage.put("traceId", wsTraceId); // 携带traceId供前端关联
                 if (employeeId != null) {
                     wsMessage.put("employeeId", employeeId);
                 }
                 wsMessage.put("userId", userId);
                 wsMessage.put("timestamp", System.currentTimeMillis());
-                chatWebSocketHandler.sendMessageToSession(sessionId, JSON.toJSONString(wsMessage));
+                TraceMdcHelper.runWithTraceId(wsTraceId, () -> {
+                    chatWebSocketHandler.sendMessageToSession(sessionId,
+                            JSON.toJSONString(wsMessage));
+                });
             } catch (Exception e) {
                 log.warn("WebSocket 广播失败，但不影响主要流程", e);
             }

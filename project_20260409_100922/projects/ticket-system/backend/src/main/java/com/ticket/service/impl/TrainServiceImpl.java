@@ -15,9 +15,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -66,16 +68,13 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
 
         List<Train> trains = list(wrapper);
 
-        trains.forEach(train -> {
-            if (train != null) {
-                //车次最终战到达时间和当前时间差，设置过期时间，防止车已经停运还出现买票的情况
-                long expireTime = getExpireTrainTime(train);
-
-                if (expireTime > 0) {
-                    redisUtil.set(cacheKey, train, expireTime, TimeUnit.MINUTES);
-                }
+        // 缓存整个查询结果列表（在循环外设置一次）
+        if (!trains.isEmpty()) {
+            long expireTime = getExpireTrainTime(trains.get(0));
+            if (expireTime > 0) {
+                redisUtil.set(cacheKey, trains, expireTime, TimeUnit.MINUTES);
             }
-        });
+        }
 
         return trains;
     }
@@ -139,11 +138,36 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
 
     @Override
     public List<TicketStock> getTicketStocks(Long trainId, String trainDate) {
+        Train train = getTrainDetailById(trainId);
+        if (train == null) {
+            return new ArrayList<>();
+        }
+
         LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TicketStock::getTrainId, trainId)
-                .eq(TicketStock::getTrainDate, trainDate);
+                .eq(TicketStock::getTrainDate, trainDate)
+                .eq(TicketStock::getStartStation, train.getStartStation())
+                .eq(TicketStock::getEndStation, train.getEndStation());
+        List<TicketStock> result = ticketStockMapper.selectList(wrapper);
 
-        return ticketStockMapper.selectList(wrapper);
+        result.forEach(stock -> {
+            int i = stock.getSeatType();
+            String cacheKey = CacheKey.formatTrainStockKey(
+                    train.getId(), trainDate, i,
+                    train.getStartStation(), train.getEndStation());
+
+            Integer stockCount = redisUtil.get(cacheKey);
+
+            //缓存查到剩余票数，则设置到库存对象中
+            if (stockCount != null) {
+                stock.setAvailableSeats(stockCount);
+            } else {
+                //缓存未查到剩余票数，则设置到缓存中
+                redisUtil.set(cacheKey, stock.getAvailableSeats(), 30, TimeUnit.MINUTES);
+            }
+        });
+
+        return result;
     }
 
     @Override
@@ -185,9 +209,8 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
         }
 
         // 3. 不再同步更新数据库库存，由定时对账任务保证最终一致性
-        // 4. 清除缓存（可选，Redis库存已更新）
-        String cacheKey = String.format(CacheKey.TRAIN_STOCK, trainId, trainDate, seatType, startStation, endStation);
-        redisUtil.delete(cacheKey);
+        // 注意：不能删除Redis库存Key，因为它是实际的库存数据而非查询缓存
+        // Redis库存由Lua脚本原子扣减后持久化在Redis中，由对账任务保证与MySQL一致
 
         return true;
     }
@@ -217,11 +240,7 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
         stock.setAvailableSeats(stock.getAvailableSeats() + count);
         int result = ticketStockMapper.updateById(stock);
 
-        if (result > 0) {
-            // 清除缓存
-            String cacheKey = String.format(CacheKey.TRAIN_STOCK, trainId, trainDate, seatType, startStation, endStation);
-            redisUtil.delete(cacheKey);
-        }
+        // Redis库存已由stockLockService.rollback()更新，无需删除
 
         return result > 0;
     }

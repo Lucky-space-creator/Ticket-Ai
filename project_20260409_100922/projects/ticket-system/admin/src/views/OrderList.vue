@@ -19,6 +19,7 @@
     <el-card>
       <el-table :data="orderList" v-loading="loading">
         <el-table-column prop="orderNo" label="订单号" width="200" />
+        <el-table-column prop="userPhone" label="用户手机号" width="130" />
         <el-table-column prop="trainNo" label="车次" />
         <el-table-column prop="trainDate" label="乘车日期" />
         <el-table-column prop="startStation" label="出发站" />
@@ -62,7 +63,7 @@
       <div v-if="currentOrder">
         <el-descriptions :column="2" border>
           <el-descriptions-item label="订单号">{{ currentOrder.orderNo }}</el-descriptions-item>
-          <el-descriptions-item label="用户ID">{{ currentOrder.userId }}</el-descriptions-item>
+          <el-descriptions-item label="用户手机号">{{ currentOrder.userPhone || '-' }}</el-descriptions-item>
           <el-descriptions-item label="车次">{{ currentOrder.trainNo }}</el-descriptions-item>
           <el-descriptions-item label="乘车日期">{{ currentOrder.trainDate }}</el-descriptions-item>
           <el-descriptions-item label="出发站">{{ currentOrder.startStation }}</el-descriptions-item>

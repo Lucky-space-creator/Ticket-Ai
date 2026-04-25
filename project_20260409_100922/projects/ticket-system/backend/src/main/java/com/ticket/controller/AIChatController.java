@@ -5,8 +5,7 @@ import com.ticket.dto.ChatResponse;
 import com.ticket.service.AIChatService;
 import com.ticket.service.KnowledgeBaseService;
 import com.ticket.service.impl.KnowledgeBaseServiceImpl;
-import com.ticket.util.ResponseUtil;
-import com.ticket.util.UserContext;
+import com.ticket.util.*;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -35,26 +34,32 @@ public class AIChatController {
 
     @PostMapping("/ask")
     public ResponseUtil.Result<ChatResponse> ask(@Valid @RequestBody ChatRequest request) {
+        AiChatStopWatch stopWatch = new AiChatStopWatch("ai-chat-sync").start();
         String question = request.getQuestion();
-        log.info("用户提问：{}", question);
+        log.info("[{}] 用户提问：{}", TraceContext.getTraceId(), question);
         String answer = aiChatService.chat(question);
+        stopWatch.checkpoint("controller_total");
         ChatResponse chatResponse = new ChatResponse(answer, true, System.currentTimeMillis());
+        stopWatch.stopAndLog();
         return ResponseUtil.success(chatResponse);
     }
 
     @PostMapping(value = "/ask/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter askStream(@Valid @RequestBody ChatRequest request) {
+        AiChatStopWatch stopWatch = new AiChatStopWatch("ai-chat-stream").start();
         String question = request.getQuestion();
-        log.info("收到流式聊天请求，问题：{}", question);
-        
+        log.info("[{}] 收到流式聊天请求，问题：{}", TraceContext.getTraceId(), question);
+
         SseEmitter emitter = new SseEmitter(60000L); // 60秒超时
         Flux<String> flux = aiChatService.streamingChat(question);
-        
-        log.info("开始流式传输");
+
+        log.info("[{}] 开始流式传输", TraceContext.getTraceId());
+        String traceIdForReactor = TraceContext.getTraceId();
         flux.subscribe(
             token -> {
                 try {
-                    log.trace("发送token：{}", token);
+                    // Reactor子线程中恢复MDC
+                    TraceMdcHelper.runWithTraceId(traceIdForReactor, () -> log.trace("发送token：{}", token));
                     emitter.send(SseEmitter.event().data(token));
                 } catch (IOException e) {
                     log.error("发送token时发生IO异常", e);
@@ -66,7 +71,9 @@ public class AIChatController {
                 emitter.completeWithError(error);
             },
             () -> {
-                log.info("流式传输完成");
+                stopWatch.checkpoint("stream_complete");
+                log.info("[{}] 流式传输完成", TraceContext.getTraceId());
+                stopWatch.stopAndLog();
                 emitter.complete();
             }
         );

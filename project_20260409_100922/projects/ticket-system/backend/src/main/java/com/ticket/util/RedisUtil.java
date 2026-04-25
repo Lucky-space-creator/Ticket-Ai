@@ -295,30 +295,44 @@ public class RedisUtil {
      * @return 脚本执行结果
      */
     public Object executeScript(String script, List<String> keys, Object[] args) {
+        return executeScript(script, keys, args, Object.class);
+    }
+
+    /**
+     * 执行 Lua 脚本（泛型版本，可指定返回类型）
+     * @param script Lua 脚本
+     * @param keys 键列表
+     * @param args 参数列表
+     * @param resultType 期望的返回类型（如 Long.class, List.class, Boolean.class）
+     * @return 脚本执行结果，类型为 T
+     */
+    public <T> T executeScript(String script, List<String> keys, Object[] args, Class<T> resultType) {
         if (script == null || script.isEmpty()) {
             return null;
         }
-        DefaultRedisScript<Object> redisScript = new DefaultRedisScript<>();
+        DefaultRedisScript<T> redisScript = new DefaultRedisScript<>();
         redisScript.setScriptText(script);
-        redisScript.setResultType(Object.class);
+        redisScript.setResultType(resultType);
         return redisTemplate.execute(redisScript, keys, args);
     }
+
 
     /**
      * 执行 Lua 脚本（从资源文件加载）
      * @param scriptPath 脚本资源路径（classpath相对路径）
      * @param keys 键列表
      * @param args 参数列表
-     * @return 脚本执行结果
+     * @return 脚本执行结果，通常为 List<Long> 类型
      */
-    public Object executeScriptFromResource(String scriptPath, List<String> keys, Object[] args) {
+    @SuppressWarnings("unchecked")
+    public List<Long> executeScriptFromResource(String scriptPath, List<String> keys, Object[] args) {
         try {
             ClassPathResource resource = new ClassPathResource(scriptPath);
             if (!resource.exists()) {
                 throw new RuntimeException("Lua脚本文件不存在: " + scriptPath);
             }
             String script = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
-            return executeScript(script, keys, args);
+            return (List<Long>) executeScript(script, keys, args, List.class);
         } catch (Exception e) {
             throw new RuntimeException("加载Lua脚本失败: " + scriptPath, e);
         }

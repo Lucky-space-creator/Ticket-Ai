@@ -92,4 +92,10 @@ public class Order {
      */
     @TableField(exist = false)
     private List<OrderItem> items;
+
+    /**
+     * 用户手机号（非数据库字段，关联查询用）
+     */
+    @TableField(exist = false)
+    private String userPhone;
 }

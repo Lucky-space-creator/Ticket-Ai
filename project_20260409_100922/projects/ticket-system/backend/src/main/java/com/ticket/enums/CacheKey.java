@@ -1,5 +1,7 @@
 package com.ticket.enums;
 
+import java.util.Objects;
+
 /**
  * 缓存键常量
  */
@@ -25,9 +27,15 @@ public class CacheKey {
 
     /**
      * 车次余票缓存（10分钟）
-     * 格式: train:stock:{trainId}:{trainDate}:{seatType}:{startStation}:{endStation}
+     * 格式: train:stock:{trainNo}:{trainDate}:{seatType}:{startStation}-{endStation}
      */
-    public static final String TRAIN_STOCK = "train:stock:%d:%s:%d:%s:%s";
+    public static final String TRAIN_STOCK = "train:stock:%d:%s:%d:%s-%s";
+
+    /**
+     * 车次余票列表查询缓存（5分钟）
+     * 格式: train:stocks:list:{trainId}:{trainDate}
+     */
+    public static final String TRAIN_STOCKS_LIST = "train:stocks:list:%d:%s";
 
     /**
      * 车次预占库存缓存（30分钟）
@@ -112,4 +120,32 @@ public class CacheKey {
      * 格式: user:permissions:{userId}
      */
     public static final String USER_PERMISSIONS = "user:permissions:%d";
+
+    /**
+     * 格式化车次余票缓存键，处理null值
+     */
+    public static String formatTrainStockKey(Long trainId, String trainDate, Integer seatType, String startStation, String endStation) {
+        Objects.requireNonNull(trainId, "trainId不能为null");
+        Objects.requireNonNull(seatType, "seatType不能为null");
+        return String.format(TRAIN_STOCK,
+                trainId,
+                trainDate != null ? trainDate : "",
+                seatType,
+                startStation != null ? startStation : "",
+                endStation != null ? endStation : "");
+    }
+
+    /**
+     * 格式化车次预占库存缓存键，处理null值
+     */
+    public static String formatTrainLockedKey(Long trainId, String trainDate, Integer seatType, String startStation, String endStation) {
+        Objects.requireNonNull(trainId, "trainId不能为null");
+        Objects.requireNonNull(seatType, "seatType不能为null");
+        return String.format(TRAIN_LOCKED,
+                trainId,
+                trainDate != null ? trainDate : "",
+                seatType,
+                startStation != null ? startStation : "",
+                endStation != null ? endStation : "");
+    }
 }
