@@ -27,7 +27,7 @@ public class CacheKey {
 
     /**
      * 车次余票缓存（10分钟）
-     * 格式: train:stock:{trainNo}:{trainDate}:{seatType}:{startStation}-{endStation}
+     * 格式: train:stock:{trainId}:{trainDate}:{seatType}:{startStation}-{endStation}
      */
     public static final String TRAIN_STOCK = "train:stock:%d:%s:%d:%s-%s";
 

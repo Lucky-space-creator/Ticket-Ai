@@ -17,33 +17,34 @@
     </appender>
 
     <!-- ==================== JSON日志输出（ELK采集用） ==================== -->
-    <appender name="FILE_JSON" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <appender name="FILE_JSON"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- 当前活跃日志文件 -->
         <file>${LOG_PATH}/ticket-system.json.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <!-- 按天滚动 -->
-            <fileNamePattern>${LOG_PATH}/ticket-system.%d{yyyy-MM-dd}.%i.json.log</fileNamePattern>
+            <!-- 滚动后按日期分子目录存储 -->
+            <fileNamePattern>${LOG_PATH}/%d{yyyy-MM-dd}/ticket-system.%i.json.log</fileNamePattern>
             <maxHistory>${LOG_FILE_MAX_HISTORY}</maxHistory>
-            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+            <timeBasedFileNamingAndTriggeringPolicy
+                    class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
                 <maxFileSize>${LOG_FILE_MAX_SIZE}</maxFileSize>
             </timeBasedFileNamingAndTriggeringPolicy>
         </rollingPolicy>
-
-        <!-- 使用logstash-logback-encoder输出ELK友好的JSON格式 -->
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-            <!-- 包含自定义字段 -->
             <customFields>{"app":"ticket-system","env":"${SPRING_PROFILES_ACTIVE:-dev}"}</customFields>
-            <!-- 包含MDC字段（如traceId） -->
             <includeMdcKeyName>traceId</includeMdcKeyName>
         </encoder>
     </appender>
 
     <!-- ==================== AI聊天专用日志（独立文件） ==================== -->
-    <appender name="AI_CHAT_LOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <appender name="AI_CHAT_LOG"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_PATH}/ai-chat-trace.json.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_PATH}/ai-chat-trace.%d{yyyy-MM-dd}.json.log</fileNamePattern>
+            <fileNamePattern>${LOG_PATH}/%d{yyyy-MM-dd}/ai-chat-trace.%i.json.log</fileNamePattern>
             <maxHistory>7</maxHistory>
-            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+            <timeBasedFileNamingAndTriggeringPolicy
+                    class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
                 <maxFileSize>50MB</maxFileSize>
             </timeBasedFileNamingAndTriggeringPolicy>
         </rollingPolicy>
@@ -54,14 +55,16 @@
     </appender>
 
     <!-- ==================== 异步Appender（提升性能） ==================== -->
-    <appender name="ASYNC_FILE_JSON" class="ch.qos.logback.classic.AsyncAppender">
+    <appender name="ASYNC_FILE_JSON"
+              class="ch.qos.logback.classic.AsyncAppender">
         <queueSize>1024</queueSize>
         <discardingThreshold>0</discardingThreshold>
         <neverBlock>true</neverBlock>
         <appender-ref ref="FILE_JSON"/>
     </appender>
 
-    <appender name="ASYNC_AI_CHAT" class="ch.qos.logback.classic.AsyncAppender">
+    <appender name="ASYNC_AI_CHAT"
+              class="ch.qos.logback.classic.AsyncAppender">
         <queueSize>512</queueSize>
         <discardingThreshold>0</discardingThreshold>
         <neverBlock>true</neverBlock>
@@ -71,7 +74,8 @@
     <!-- ==================== Logger级别配置 ==================== -->
 
     <!-- AI聊天相关Logger：单独输出到AI聊天日志文件 -->
-    <logger name="com.ticket.util.AiChatStopWatch" level="INFO" additivity="false">
+    <logger name="com.ticket.util.AiChatStopWatch" level="INFO"
+            additivity="false">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="ASYNC_AI_CHAT"/>
     </logger>

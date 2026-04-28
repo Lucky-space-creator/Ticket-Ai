@@ -158,7 +158,16 @@ trace:
 # ELK日志采集配置
 elk:
   enabled: true
-  log-path: logs
+  log-path: C:/Users/LENOVO/OneDrive/桌面/购票智能客服系统/project_20260409_100922/projects/ticket-system/logs
+  # Elasticsearch 连接配置（供参考，应用端不直连ES，由Logstash采集）
+  elasticsearch:
+    host: localhost
+    port: 9200
+    index-prefix: ticket-system
+    ai-index-prefix: ai-chat-trace
+  # Logstash 配置信息（部署时需同步修改）
+  logstash:
+    pipeline-path: D:/ELK/Logstash/logstash-9.3.3/config/pipeline.conf
 
 
 

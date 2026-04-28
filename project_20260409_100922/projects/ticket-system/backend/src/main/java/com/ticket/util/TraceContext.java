@@ -12,8 +12,26 @@ public class TraceContext {
     /** MDC中的TraceID键名 */
     public static final String TRACE_ID_KEY = "traceId";
 
-    /** 请求头中的TraceID键名（前端传入） */
-    public static final String TRACE_HEADER = "X-Request-ID";
+    /** 请求头中的TraceID键名（默认值，可被TraceConfig覆盖） */
+    private static String traceHeader = "X-Request-ID";
+
+    /**
+     * 设置请求头中的TraceID键名（由TraceConfig初始化时调用）
+     * @param headerName 请求头字段名
+     */
+    public static void setTraceHeader(String headerName) {
+        if (headerName != null && !headerName.isEmpty()) {
+            traceHeader = headerName;
+        }
+    }
+
+    /**
+     * 获取请求头中的TraceID键名
+     * @return 当前配置的header名称
+     */
+    public static String getTraceHeader() {
+        return traceHeader;
+    }
 
     private static final ThreadLocal<String> CONTEXT_HOLDER = new ThreadLocal<>();
 

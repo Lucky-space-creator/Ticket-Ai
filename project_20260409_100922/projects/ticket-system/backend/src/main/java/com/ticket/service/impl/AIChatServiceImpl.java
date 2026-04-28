@@ -11,11 +11,13 @@ import com.ticket.service.KnowledgeBaseService;
 import com.ticket.service.StreamingKnowledgeAssistant;
 import com.ticket.service.ChatSessionService;
 import dev.langchain4j.memory.ChatMemory;
+import dev.langchain4j.service.Result;
 import com.ticket.util.SnowflakeIdUtil;
 import com.ticket.util.UserContext;
 import com.ticket.util.TraceContext;
 import com.ticket.util.TraceMdcHelper;
 import com.ticket.util.AiChatStopWatch;
+import com.ticket.util.TokenCountUtil;
 import com.ticket.handler.ChatWebSocketHandler;
 import com.ticket.enums.BusinessStatus;
 import reactor.core.publisher.Flux;
@@ -73,11 +75,11 @@ public class AIChatServiceImpl implements AIChatService {
             sessionId = chatSessionService.createSession(UserContext.getCurrentUserId(), "");
             String answer = triggerHumanService(sessionId);
             stopWatch.checkpoint("human_transfer");
-            saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
+            saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, 0, 0);
             stopWatch.stopAndLog();
             return answer;
         } else {
-            saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0);
+            saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0, 0, 0);
             stopWatch.checkpoint("db_save_user");
         }
 
@@ -91,10 +93,33 @@ public class AIChatServiceImpl implements AIChatService {
             }
         }
         
-        // 调用AI
-        String answer = knowledgeAssistant.chat(question);
+        // 调用AI（Result<String>获取TokenUsage）
+        String answer;
+        int inputTokens = 0;
+        int outputTokens = 0;
+        try {
+            Result<String> result = knowledgeAssistant.chat(question);
+            answer = result.content();
+            if (result.tokenUsage() != null) {
+                inputTokens = result.tokenUsage().inputTokenCount();
+                outputTokens = result.tokenUsage().outputTokenCount();
+                log.info("[{}] Token消耗 - input:{}, output:{}",
+                        TraceContext.getTraceId(), inputTokens, outputTokens);
+            } else {
+                // 回退：使用估算
+                outputTokens = TokenCountUtil.estimate(answer);
+                log.warn("[{}] 无法获取精确TokenUsage，使用估算值 output:{}",
+                        TraceContext.getTraceId(), outputTokens);
+            }
+        } catch (IllegalStateException e) {
+            log.error("[{}] RAG服务不可用，返回降级消息: {}",
+                    TraceContext.getTraceId(), e.getMessage());
+            answer = "抱歉，智能客服系统当前正在维护中，预计10分钟内恢复。"
+                    + "您可以：1.查看【常见问题】页面 2.拨打客服热线12306";
+            outputTokens = TokenCountUtil.estimate(answer);
+        }
         stopWatch.checkpoint("llm_call");
-        saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
+        saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, inputTokens, outputTokens);
         stopWatch.checkpoint("db_save_ai");
         stopWatch.stopAndLog();
         return answer;
@@ -108,12 +133,12 @@ public class AIChatServiceImpl implements AIChatService {
         
         String traceId = TraceContext.getTraceId();
         String sessionId = getSessionId();
-        saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0);
+        saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0, 0, 0);
         stopWatch.checkpoint("db_save_user");
         
         if (isSessionEnded(sessionId)) {
             String answer = "会话已结束，若需要客服介入，请点击转客服按钮";
-            saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
+            saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, 0, 0);
             return Flux.just(answer);
         }
 
@@ -121,7 +146,7 @@ public class AIChatServiceImpl implements AIChatService {
         if (containsHumanServiceKeyword(question)) {
             stopWatch.checkpoint("route_judge");
             String answer = triggerHumanService(sessionId);
-            saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
+            saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, 0, 0);
             return Flux.just(answer);
         }
         
@@ -130,7 +155,7 @@ public class AIChatServiceImpl implements AIChatService {
             ChatSession session = chatSessionService.getById(sessionId);
             if (session != null && ChatSession.STATUS_ACTIVE.equals(session.getStatus())) {
                 String answer = "当前正在与客服对话，请直接在聊天框中发送消息。";
-                saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
+                saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, 0, 0);
                 return Flux.just(answer);
             }
         }
@@ -151,7 +176,12 @@ public class AIChatServiceImpl implements AIChatService {
                     stopWatch.checkpoint("llm_stream_complete");
                     log.info("[{}] 流式处理完成", TraceContext.getTraceId());
                     String answer = responseBuilder.get().toString();
-                    saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0);
+                    // 流式场景：使用 TokenCountUtil 估算 token 数量
+                    int inputTokens = TokenCountUtil.estimate(question);
+                    int outputTokens = TokenCountUtil.estimate(answer);
+                    log.info("[{}] Token消耗(估算) - input:{}, output:{}", 
+                            TraceContext.getTraceId(), inputTokens, outputTokens);
+                    saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, inputTokens, outputTokens);
                     stopWatch.checkpoint("db_save_ai");
                     stopWatch.stopAndLog();
                 })
@@ -171,8 +201,12 @@ public class AIChatServiceImpl implements AIChatService {
      * @param sessionId 会话ID (可填可不填)
      * @param employeeId 客服员工ID（可选）
      * @param isRead 是否已读（可选，默认0）
+     * @param inputTokens AI输入Token数（用户消息为0）
+     * @param outputTokens AI输出Token数（用户消息为0）
      */
-    private void saveChatRecord(String message, String msgType, BigDecimal confidence, String sessionId, Long employeeId, Integer isRead) {
+    private void saveChatRecord(String message, String msgType, BigDecimal confidence,
+                                String sessionId, Long employeeId, Integer isRead,
+                                int inputTokens, int outputTokens) {
         try {
             Long userId = UserContext.getCurrentUserId();
             ChatRecord record = new ChatRecord();
@@ -183,6 +217,8 @@ public class AIChatServiceImpl implements AIChatService {
             record.setEmployeeId(employeeId);
             record.setIsRead(isRead != null ? isRead : 0);
             record.setConfidence(confidence);
+            record.setInputTokens(inputTokens);
+            record.setOutputTokens(outputTokens);
             record.setCreatedAt(LocalDateTime.now());
             chatRecordMapper.insert(record);
             log.debug("保存聊天记录成功，用户ID：{}，类型：{}，会话ID：{}", userId, msgType, sessionId);
@@ -290,6 +326,8 @@ public class AIChatServiceImpl implements AIChatService {
             pendingMsg.setMsgType(BusinessStatus.MSG_TYPE_PENDING);
             pendingMsg.setIsRead(0);
             pendingMsg.setConfidence(BigDecimal.ONE);
+            pendingMsg.setInputTokens(0);
+            pendingMsg.setOutputTokens(0);
             pendingMsg.setCreatedAt(LocalDateTime.now());
             chatRecordMapper.insert(pendingMsg);
             

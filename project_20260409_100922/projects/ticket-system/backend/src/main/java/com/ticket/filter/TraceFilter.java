@@ -1,12 +1,17 @@
 package com.ticket.filter;
 
 import cn.hutool.core.lang.UUID;
+import com.ticket.config.TraceConfig;
 import com.ticket.util.TraceContext;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.Resource;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -24,16 +29,37 @@ import java.io.IOException;
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class TraceFilter extends OncePerRequestFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(TraceFilter.class);
+
+    @Resource
+    private TraceConfig traceConfig;
+
+    /**
+     * 初始化时将配置的header名写入TraceContext
+     */
+    @PostConstruct
+    public void init() {
+        TraceContext.setTraceHeader(traceConfig.getHeaderName());
+        log.info("TraceFilter初始化完成, headerName={}, enabled={}",
+                traceConfig.getHeaderName(), traceConfig.isEnabled());
+    }
+
     /**
      * 拦截所有请求，生成TraceID，并设置到ThreadLocal和MDC中
      */
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
+    protected void doFilterInternal(@NotNull HttpServletRequest request,
                                     @NotNull HttpServletResponse response,
                                     @NotNull FilterChain filterChain)
                                     throws ServletException, IOException {
 
-        String traceId = request.getHeader(TraceContext.TRACE_HEADER);
+        // 未启用追踪时直接放行
+        if (!traceConfig.isEnabled()) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        String traceId = request.getHeader(TraceContext.getTraceHeader());
 
         // 如果请求头没有TraceID，则生成一个新的
         if (traceId == null || traceId.trim().isEmpty()) {
@@ -45,7 +71,7 @@ public class TraceFilter extends OncePerRequestFilter {
         MDC.put(TraceContext.TRACE_ID_KEY, traceId);
 
         // 将TraceID写入响应头，供前端获取关联
-        response.setHeader(TraceContext.TRACE_HEADER, traceId);
+        response.setHeader(TraceContext.getTraceHeader(), traceId);
 
         try {
             filterChain.doFilter(request, response);

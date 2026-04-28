@@ -34,14 +34,14 @@ public class RedisMasterSlaveConfig {
     private String masterHost;
 
     /**
-     * 主节点端口，默认 6380
+     * 主节点端口，默认 6379
      */
     @Value("${spring.data.redis.master.port}")
     private int masterPort;
 
     /**
      * 从节点配置字符串，格式：host:port,host:port
-     * 例如：localhost:6381,localhost:6382
+     * 例如：localhost:6380,localhost:6381
      */
     @Value("${spring.data.redis.slaves}")
     private String slaves;

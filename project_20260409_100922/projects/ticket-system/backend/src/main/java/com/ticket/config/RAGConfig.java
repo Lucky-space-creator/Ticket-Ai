@@ -149,18 +149,8 @@ public class RAGConfig {
         } catch (Exception e) {
             log.error("初始化 RAG 服务失败: {}", e.getMessage(), e);
 
-            // 返回一个降级的服务，当RAG失败时提供有用的信息
-            return question -> {
-                log.info("使用降级服务处理问题: {}", question);
-                return """
-                        抱歉，智能客服系统当前正在维护中，预计10分钟内恢复。
-                        您的问题已被记录，请稍后再试。
-
-                        在此期间，您可以：
-                        1. 查看【常见问题】页面
-                        2. 拨打客服热线：12306
-                        3. 使用网站上的其他自助服务""";
-            };
+            // RAG初始化失败时抛出异常，由Service层统一返回降级消息
+            throw new IllegalStateException("RAG服务初始化失败，AI聊天不可用: " + e.getMessage(), e);
         }
     }
 

@@ -1,11 +1,16 @@
 package com.ticket.service;
 
+import dev.langchain4j.service.Result;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
+import dev.langchain4j.service.Result;
 
 /**
  * 智能客服 AI 服务接口
  * LangChain4j 会自动生成实现类
+ *
+ * 使用 Result<String></String>; 返回值以获取 TokenUsage 信息，
+ * 用于监控 AI 模型的 token 消耗量。
  */
 public interface KnowledgeAssistant {
 
@@ -80,5 +85,5 @@ public interface KnowledgeAssistant {
                           - 客服热线：12306
                           当用户首次打招呼时（如”你好“、”hi“、“您好”、”你是谁“），请主动进行自我介绍。""")
     @UserMessage("{{question}}")
-    String chat(String question);
+    Result<String> chat(String question);
 }

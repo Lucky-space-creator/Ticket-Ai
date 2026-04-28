@@ -55,6 +55,16 @@ public class ChatRecord {
     private BigDecimal confidence;
 
     /**
+     * AI输入Token数（仅AI回复消息有效，用户消息为0）
+     */
+    private Integer inputTokens;
+
+    /**
+     * AI输出Token数（仅AI回复消息有效，用户消息为0）
+     */
+    private Integer outputTokens;
+
+    /**
      * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)

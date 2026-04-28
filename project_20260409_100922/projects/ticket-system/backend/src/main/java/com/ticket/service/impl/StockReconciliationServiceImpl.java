@@ -64,8 +64,8 @@ public class StockReconciliationServiceImpl implements StockReconciliationServic
 
             // 查询所有库存记录
             LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
-            wrapper.select(TicketStock::getTrainId, TicketStock::getTrainDate,
-                    TicketStock::getSeatType, TicketStock::getAvailableSeats);
+//            wrapper.select(TicketStock::getTrainId, TicketStock::getTrainDate,
+//                    TicketStock::getSeatType, TicketStock::getAvailableSeats);
             List<TicketStock> stocks = ticketStockMapper.selectList(wrapper);
 
             logger.info("开始全量库存对账，共 {} 条记录", stocks.size());
@@ -113,8 +113,7 @@ public class StockReconciliationServiceImpl implements StockReconciliationServic
             LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
             wrapper.eq(TicketStock::getTrainId, trainId)
                     .eq(TicketStock::getTrainDate, trainDate)
-                    .eq(TicketStock::getSeatType, seatType)
-                    .select(TicketStock::getAvailableSeats);
+                    .eq(TicketStock::getSeatType, seatType);
 
             TicketStock stock = ticketStockMapper.selectOne(wrapper);
             if (stock == null) {
@@ -143,7 +142,7 @@ public class StockReconciliationServiceImpl implements StockReconciliationServic
      */
     private void reconcileStock(TicketStock stock, ReconciliationResult result) {
         Long trainId = stock.getTrainId();
-        String trainDate = stock.getTrainDate().toString();
+        String trainDate = stock.getTrainDate() == null ? null : stock.getTrainDate().toString();
         Integer seatType = stock.getSeatType();
         String startStation = stock.getStartStation();
         String endStation = stock.getEndStation();
