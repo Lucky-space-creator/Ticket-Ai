@@ -209,7 +209,7 @@
               :loading="paying"
               :disabled="selectedPassengerIds.length === 0"
           >
-            {{ paying ? '支付中...' : '确认购票' }}
+            {{ paying ? '提交中...' : '确认购票' }}
           </el-button>
         </div>
       </template>
@@ -244,6 +244,9 @@ const selectedStock = ref(null)
 const passengers = ref([])
 const selectedPassengerIds = ref([])
 const paying = ref(false)
+
+// 防重复提交锁（防止快速多次点击）
+let isSubmitting = false
 
 // 当前用户信息（从API获取的最新数据）
 const currentUser = ref(null)
@@ -355,26 +358,47 @@ const loadPassengers = async () => {
 // 格式化身份证号（隐藏中间部分）
 const formatIdCard = (idCard) => {
   if (!idCard) return ''
-  // 去掉空格
-  idCard = idCard.trim()
-  // 检查是否是有效的身份证格式
+  // 去掉所有空格和不可见字符
+  idCard = idCard.trim().replace(/[\s\u00A0]/g, '')
+  // 标准的18位身份证：前3位 + 11个* + 后4位
   if (/^\d{17}[\dXx]$/.test(idCard)) {
-    // 有效身份证：前3位 + 11个* + 后4位
     return idCard.replace(/(\d{3})\d{11}(\d{4})/, '$1***********$2')
   }
-  // 如果是 Base64 编码，尝试解码
-  if (/^[A-Za-z0-9+/=]+$/.test(idCard) && idCard.length > 20) {
+  // 15位老式身份证
+  if (/^\d{15}$/.test(idCard)) {
+    return idCard.replace(/(\d{3})\d{8}(\d{4})/, '$1********$2')
+  }
+  // 如果是 Base64 编码（加密数据意外未解码），尝试解码
+  if (/^[A-Za-z0-9+/=]{20,}$/.test(idCard)) {
     try {
       const decoded = atob(idCard)
       if (/^\d{17}[\dXx]$/.test(decoded)) {
         return decoded.replace(/(\d{3})\d{11}(\d{4})/, '$1***********$2')
       }
+      if (/^\d{15}$/.test(decoded)) {
+        return decoded.replace(/(\d{3})\d{8}(\d{4})/, '$1********$2')
+      }
     } catch (e) {
-      // 解码失败
+      // Base64 解码失败，忽略
     }
   }
-  // 其他情况返回原始值
-  return idCard
+  // 如果包含数字但格式不标准，尝试提取连续数字序列
+  const numberMatch = idCard.match(/\d{15,18}/)
+  if (numberMatch) {
+    const extracted = numberMatch[0]
+    if (/^\d{17}[\dXx]$/.test(extracted)) {
+      return extracted.replace(/(\d{3})\d{11}(\d{4})/, '$1***********$2')
+    }
+    if (/^\d{15}$/.test(extracted)) {
+      return extracted.replace(/(\d{3})\d{8}(\d{4})/, '$1********$2')
+    }
+    // 超长数字串：显示前3位和后4位
+    if (extracted.length >= 7) {
+      return extracted.substring(0, 3) + '****' + extracted.substring(extracted.length - 4)
+    }
+  }
+  // 最终兜底：完全无法识别的值，返回"证件号已加密"
+  return '******'
 }
 
 // 点击购票
@@ -389,34 +413,41 @@ const handleBuy = async (train, stock) => {
   orderDialogVisible.value = true
 }
 
-// 提交订单
+// 提交订单（MQ异步削峰模式）
+// 改造前：同步等待DB写入完成 → 拿到orderNo → 支付
+// 改造后：提交入队(立即返回) → 轮询查询结果 → 成功后支付
 const handleSubmitOrder = async () => {
   if (selectedPassengerIds.value.length === 0) {
     ElMessage.warning('请选择至少一位乘客')
     return
   }
 
+  // 防重复提交
+  if (isSubmitting) {
+    ElMessage.warning('正在处理中，请勿重复点击')
+    return
+  }
+  isSubmitting = true
+
   // 检查本人是否已选但未完善身份信息
   if (selectedPassengerIds.value.includes('self') && !currentUser.value?.idCard) {
     ElMessage.warning('请先完善个人身份信息')
+    isSubmitting = false
     return
   }
 
   paying.value = true
 
   try {
-    // 构建订单明细
+    // 构建乘客列表
     const items = []
-
     for (const id of selectedPassengerIds.value) {
       if (id === 'self') {
-        // 本人 - 使用 currentUser 中的数据
         items.push({
           passengerName: currentUser.value.realName,
           idCard: currentUser.value.idCard
         })
       } else {
-        // 联系人
         const passenger = passengers.value.find(p => p.id === id)
         if (passenger) {
           items.push({
@@ -427,8 +458,8 @@ const handleSubmitOrder = async () => {
       }
     }
 
-    // 创建订单
-    const res = await request.post('/orders', {
+    // Step 1: 提交下单请求（快速入队，<10ms返回）
+    const submitRes = await request.post('/orders', {
       trainId: selectedTrain.value.id,
       trainDate: selectedTrain.value.trainDate,
       startStation: selectedTrain.value.startStation,
@@ -437,13 +468,53 @@ const handleSubmitOrder = async () => {
       items: items
     })
 
-    const orderNo = res.data.orderNo
+    const requestId = submitRes.data.requestId
+    const initialStatus = submitRes.data.status
+    let orderNo = null
 
-    // 模拟支付
+    // 检查初始状态
+    if (initialStatus === 'SUCCESS') {
+      // 同步降级模式：直接成功，无需轮询
+      orderNo = submitRes.data.orderNo
+      ElMessage.success('下单成功！')
+    } else if (initialStatus === 'PROCESSING') {
+      // 异步模式：需要轮询排队结果
+      ElMessage.info('订单已提交，正在处理中...')
+
+      // Step 2: 轮询排队结果（1秒间隔，最多等待30次=30秒）
+      const MAX_POLL_COUNT = 30
+      const POLL_INTERVAL_MS = 1000
+
+      for (let i = 0; i < MAX_POLL_COUNT; i++) {
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
+
+        const pollRes = await request.get(`/orders/queue/${requestId}`)
+        const status = pollRes.data.status
+
+        if (status === 'SUCCESS') {
+          orderNo = pollRes.data.orderNo
+          ElMessage.success('下单成功！')
+          break
+        } else if (status === 'FAILED') {
+          throw new Error(pollRes.data.errorMessage || '下单失败')
+        } else if (status === 'EXPIRED') {
+          throw new Error('查询结果已过期，请重新下单')
+        }
+        // PROCESSING 状态继续轮询
+      }
+
+      // 超时未完成
+      if (!orderNo) {
+        throw new Error('订单处理超时，请在"我的订单"页面查看结果')
+      }
+    } else {
+      // 未知状态
+      throw new Error(`未知订单状态: ${initialStatus}`)
+    }
+
+    // Step 3: 发起支付
     ElMessage.info('正在发起支付...')
     await new Promise(resolve => setTimeout(resolve, 1500))
-
-    // 调用支付接口
     await request.post(`/orders/${orderNo}/pay`)
 
     ElMessage.success({
@@ -451,10 +522,7 @@ const handleSubmitOrder = async () => {
       duration: 2000
     })
 
-    // 关闭对话框
     orderDialogVisible.value = false
-
-    // 跳转到订单页面
     setTimeout(() => {
       router.push('/orders')
     }, 1000)
@@ -464,6 +532,7 @@ const handleSubmitOrder = async () => {
     ElMessage.error(error.message || '购票失败，请稍后重试')
   } finally {
     paying.value = false
+    isSubmitting = false
   }
 }
 

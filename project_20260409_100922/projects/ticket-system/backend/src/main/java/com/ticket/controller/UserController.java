@@ -8,6 +8,8 @@ import com.ticket.util.CryptoUtil;
 import com.ticket.util.ResponseUtil;
 import com.ticket.util.UserContext;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -16,6 +18,7 @@ import java.util.Map;
 /**
  * 用户控制器
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/user")
 @CrossOrigin(origins = "*")
@@ -50,7 +53,18 @@ public class UserController {
             userInfo.put("phone", user.getPhone());
             userInfo.put("realName", user.getRealName());
             // 返回解密后的身份证（用于购票）
-            userInfo.put("idCard", user.getIdCard() != null ? CryptoUtil.decrypt(user.getIdCard()) : null);
+            String rawIdCard = user.getIdCard();
+            String decryptedIdCard = null;
+            if (rawIdCard != null && !rawIdCard.isEmpty()) {
+                decryptedIdCard = CryptoUtil.decrypt(rawIdCard);
+                // 解密失败时记录警告
+                if (decryptedIdCard == null) {
+                    LoggerFactory.getLogger(UserController.class)
+                            .warn("身份证解密返回null: userId={}, idCard(前10位)={}",
+                                    userId, rawIdCard.length() > 10 ? rawIdCard.substring(0, 10) : rawIdCard);
+                }
+            }
+            userInfo.put("idCard", decryptedIdCard);
             userInfo.put("status", user.getStatus());
             userInfo.put("roleId", user.getRoleId());
             // 获取角色显示名称

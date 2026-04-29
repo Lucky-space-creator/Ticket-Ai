@@ -180,7 +180,7 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
                 .eq(TicketStock::getSeatType, seatType);
 
         TicketStock stock = ticketStockMapper.selectOne(wrapper);
-        return stock != null ? stock.getPrice() : java.math.BigDecimal.ZERO;
+        return stock != null ? stock.getPrice() : BigDecimal.ZERO;
     }
 
     @Override

@@ -19,11 +19,11 @@
     <!-- ==================== JSON日志输出（ELK采集用） ==================== -->
     <appender name="FILE_JSON"
               class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <!-- 当前活跃日志文件 -->
-        <file>${LOG_PATH}/ticket-system.json.log</file>
+        <!-- 不设置<file>标签, 让logback根据fileNamePattern自动生成当前活跃文件名 -->
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <!-- 滚动后按日期分子目录存储 -->
-            <fileNamePattern>${LOG_PATH}/%d{yyyy-MM-dd}/ticket-system.%i.json.log</fileNamePattern>
+            <!-- 活跃文件: logs/2026-04-28/ticket-system-2026-04-28.json.log -->
+            <!-- 超过maxFileSize时自动归档: ...1.json.log, ...2.json.log -->
+            <fileNamePattern>${LOG_PATH}/%d{yyyy-MM-dd}/ticket-system-%d{yyyy-MM-dd}.%i.json.log</fileNamePattern>
             <maxHistory>${LOG_FILE_MAX_HISTORY}</maxHistory>
             <timeBasedFileNamingAndTriggeringPolicy
                     class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
@@ -39,9 +39,11 @@
     <!-- ==================== AI聊天专用日志（独立文件） ==================== -->
     <appender name="AI_CHAT_LOG"
               class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${LOG_PATH}/ai-chat-trace.json.log</file>
+        <!-- 不设置<file>标签, 让logback根据fileNamePattern自动生成当前活跃文件名 -->
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_PATH}/%d{yyyy-MM-dd}/ai-chat-trace.%i.json.log</fileNamePattern>
+            <!-- 活跃文件: logs/2026-04-28/ai-chat-trace-2026-04-28.json.log -->
+            <!-- 超过maxFileSize时自动归档: ...1.json.log, ...2.json.log -->
+            <fileNamePattern>${LOG_PATH}/%d{yyyy-MM-dd}/ai-chat-trace-%d{yyyy-MM-dd}.%i.json.log</fileNamePattern>
             <maxHistory>7</maxHistory>
             <timeBasedFileNamingAndTriggeringPolicy
                     class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">

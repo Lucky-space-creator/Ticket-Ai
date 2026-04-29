@@ -31,6 +31,11 @@ public enum ResponseCode {
     SERVICE_UNAVAILABLE(503, "服务暂不可用"),
 
     /**
+     * 频率限制 429
+     */
+    TOO_MANY_REQUESTS(429, "请求过于频繁，请稍后重试"),
+
+    /**
      * 业务错误码 1000-1999
      */
     PARAM_ERROR(1001, "参数错误"),

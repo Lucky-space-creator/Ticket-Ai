@@ -28,6 +28,7 @@
         <langchain4j.version>0.36.2</langchain4j.version>
         <druid.version>1.2.20</druid.version>
         <redisson.version>3.29.0</redisson.version>
+        <rocketMq.version>2.3.1</rocketMq.version>
     </properties>
 
     <dependencies>
@@ -206,6 +207,13 @@
             <groupId>net.logstash.logback</groupId>
             <artifactId>logstash-logback-encoder</artifactId>
             <version>7.4</version>
+        </dependency>
+
+        <!-- RocketMQ Spring Boot Starter（消息队列异步化） -->
+        <dependency>
+            <groupId>org.apache.rocketmq</groupId>
+            <artifactId>rocketmq-spring-boot-starter</artifactId>
+            <version>${rocketMq.version}</version>
         </dependency>
     </dependencies>
 

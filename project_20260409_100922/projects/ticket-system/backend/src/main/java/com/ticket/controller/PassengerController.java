@@ -39,14 +39,25 @@ public class PassengerController {
 
             List<Passenger> passengers = passengerService.getByUserId(userId);
 
-            // 解密身份证后返回
+            // 解密身份证后返回（增加解密失败保护）
             List<Passenger> decryptedPassengers = passengers.stream()
                     .map(p -> {
                         Passenger copy = new Passenger();
                         copy.setId(p.getId());
                         copy.setUserId(p.getUserId());
                         copy.setName(p.getName());
-                        copy.setIdCard(p.getIdCard() != null ? CryptoUtil.decrypt(p.getIdCard()) : null);
+                        if (p.getIdCard() != null && !p.getIdCard().isEmpty()) {
+                            String decrypted = CryptoUtil.decrypt(p.getIdCard());
+                            if (decrypted == null) {
+                                org.slf4j.LoggerFactory.getLogger(PassengerController.class)
+                                        .warn("联系人身份证解密失败: passengerId={}, idCard(前10位)={}",
+                                                p.getId(), p.getIdCard().length() > 10
+                                                        ? p.getIdCard().substring(0, 10) : p.getIdCard());
+                            }
+                            copy.setIdCard(decrypted);
+                        } else {
+                            copy.setIdCard(null);
+                        }
                         copy.setPhone(p.getPhone());
                         copy.setCreatedAt(p.getCreatedAt());
                         return copy;

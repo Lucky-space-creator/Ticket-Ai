@@ -1,14 +1,14 @@
 package com.ticket.service;
 
-import com.baomidou.mybatisplus.extension.service.IService;
 import com.ticket.entity.OperationLog;
 
 import java.util.List;
 
 /**
  * 操作日志服务接口
+ * 日志写入通过RocketMq异步处理
  */
-public interface OperationLogService extends IService<OperationLog> {
+public interface OperationLogService {
 
     /**
      * 记录操作日志

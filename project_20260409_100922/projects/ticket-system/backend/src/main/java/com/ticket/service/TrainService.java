@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.ticket.entity.TicketStock;
 import com.ticket.entity.Train;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -35,7 +36,7 @@ public interface TrainService extends IService<Train> {
     /**
      * 获取指定席别的票价
      */
-    java.math.BigDecimal getSeatPrice(Long trainId, String trainDate, String startStation, String endStation, Integer seatType);
+    BigDecimal getSeatPrice(Long trainId, String trainDate, String startStation, String endStation, Integer seatType);
 
     /**
      * 检查并扣减库存

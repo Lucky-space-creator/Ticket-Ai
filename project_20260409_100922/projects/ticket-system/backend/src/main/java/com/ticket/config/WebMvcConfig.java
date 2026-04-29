@@ -1,6 +1,7 @@
 package com.ticket.config;
 
 import jakarta.annotation.Resource;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.http.converter.HttpMessageConverter;
@@ -13,6 +14,7 @@ import java.util.List;
 
 /**
  * Web MVC 配置
+ * 拦截器执行顺序：SecurityFilter → RateLimitInterceptor → AuthenticationInterceptor → PermissionInterceptor
  */
 @Configuration
 @EnableAspectJAutoProxy
@@ -23,6 +25,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Resource
     private PermissionInterceptor permissionInterceptor;
+
+    @Resource
+    private RateLimitInterceptor rateLimitInterceptor;
+
+    @Resource
+    private SecurityFilter securityFilter;
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
@@ -35,7 +43,16 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // 认证拦截器（先执行）
+        // 0. 限流拦截器（最先执行）
+        registry.addInterceptor(rateLimitInterceptor)
+                .addPathPatterns("/api/**")
+                .excludePathPatterns(
+                        "/api/auth/**",
+                        "/api/trains/**",
+                        "/api/stations/**"
+                );
+
+        // 1. 认证拦截器
         registry.addInterceptor(authenticationInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
@@ -43,8 +60,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/trains/**",
                         "/api/stations/**"
                 );
-        
-        // 权限拦截器（后执行）
+
+        // 2. 权限拦截器
         registry.addInterceptor(permissionInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
@@ -53,7 +70,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/stations/**",
                         "/api/knowledge/list",
                         "/api/chat/**",
-                        // 方案1：用户端自身数据操作接口加入白名单
                         "/api/user/**",
                         "/api/orders/**",
                         "/api/passengers/**",
@@ -61,9 +77,20 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 );
     }
 
+    /**
+     * 注册安全过滤器（优先级最高，在所有拦截器之前执行）
+     */
+    @org.springframework.context.annotation.Bean
+    public FilterRegistrationBean<SecurityFilter> securityFilterRegistration() {
+        FilterRegistrationBean<SecurityFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(securityFilter);
+        registration.addUrlPatterns("/api/*");
+        registration.setOrder(1); // 最高优先级
+        return registration;
+    }
+
     @Override
     public void extendMessageConverters(List<HttpMessageConverter<?>> converters) {
-        // 确保 Jackson 转换器存在，用于处理 application/json 请求
         boolean hasJackson = converters.stream()
                 .anyMatch(converter -> converter instanceof MappingJackson2HttpMessageConverter);
         if (!hasJackson) {

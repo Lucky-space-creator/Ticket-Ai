@@ -4,6 +4,8 @@ import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.ticket.dto.mq.OrderCreatedEvent;
+import com.ticket.dto.mq.PaymentConfirmedEvent;
 import com.ticket.entity.Order;
 import com.ticket.entity.OrderItem;
 import com.ticket.entity.Train;
@@ -13,13 +15,16 @@ import com.ticket.enums.CacheKey;
 import com.ticket.enums.ResponseCode;
 import com.ticket.mapper.OrderItemMapper;
 import com.ticket.mapper.OrderMapper;
+import com.ticket.service.RocketMQProducerService;
 import com.ticket.service.OrderService;
 import com.ticket.service.StockLockService;
 import com.ticket.service.TrainService;
 import com.ticket.service.UserService;
+import com.ticket.util.MQIdempotentUtil;
 import com.ticket.util.RedisUtil;
 import com.ticket.util.SnowflakeIdUtil;
 import jakarta.annotation.Resource;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,11 +40,12 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 订单服务实现
+ * 核心路径（Redis预扣+DB写订单）保持同步事务，非关键操作异步化到RocketMQ
  */
 @Service
 public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements OrderService {
 
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(OrderServiceImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(OrderServiceImpl.class);
 
     @Resource
     private OrderItemMapper orderItemMapper;
@@ -56,6 +62,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Resource
     private StockLockService stockLockService;
 
+    @Resource
+    private RocketMQProducerService rocketMQProducerService;
+
+    @Resource
+    private MQIdempotentUtil idempotentUtil;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Order createOrder(Long userId, Long trainId, String trainDate,
@@ -67,9 +79,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             throw new RuntimeException(ResponseCode.TRAIN_NOT_FOUND.getMessage());
         }
 
-        // 2. 扣减库存（仅Redis预扣）
+        // 2. 扣减库存（仅Redis预扣）- 核心同步路径
         trainService.deductStock(trainId, trainDate, startStation, endStation, seatType, items.size());
-        
+
         try {
             // 3. 计算总价
             BigDecimal totalAmount = items.stream()
@@ -98,13 +110,27 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 orderItemMapper.insert(item);
             }
 
-            // 6. 清除用户订单缓存
-            redisUtil.delete(String.format(CacheKey.USER_ORDERS, userId));
+            // 6. 异步：发送订单创建事件（缓存清理等由消费者处理）
+            OrderCreatedEvent event = new OrderCreatedEvent();
+            event.setMessageId(idempotentUtil.generateMessageId());
+            event.setOrderId(order.getId());
+            event.setOrderNo(order.getOrderNo());
+            event.setUserId(userId);
+            event.setTrainId(trainId);
+            event.setTrainNo(train.getTrainNo());
+            event.setTrainDate(LocalDate.parse(trainDate));
+            event.setStartStation(startStation);
+            event.setEndStation(endStation);
+            event.setSeatType(seatType);
+            event.setTotalAmount(totalAmount);
+            event.setItemCount(items.size());
+            event.setCreatedAt(LocalDateTime.now());
+            rocketMQProducerService.sendOrderCreatedEvent(event);
 
             return order;
         } catch (Exception e) {
             // 订单创建失败，回滚Redis预占库存
-            logger.error("创建订单失败，回滚库存: userId={}, trainId={}, trainDate={}, seatType={}, count={}", 
+            logger.error("创建订单失败，回滚库存: userId={}, trainId={}, trainDate={}, seatType={}, count={}",
                     userId, trainId, trainDate, seatType, items.size(), e);
             stockLockService.rollback(trainId, trainDate, seatType, startStation, endStation, items.size());
             throw e;
@@ -134,28 +160,32 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         itemWrapper.eq(OrderItem::getOrderId, order.getId());
         int count = Math.toIntExact(orderItemMapper.selectCount(itemWrapper));
 
-        // 更新状态
+        // 更新状态为已支付
         order.setStatus(BusinessStatus.ORDER_STATUS_PAID);
         order.setPayTime(LocalDateTime.now());
-
         boolean result = updateById(order);
 
         if (result) {
-            try {
-                // 确认扣减Redis库存（将预占转为实际售出）
-                stockLockService.confirm(order.getTrainId(), order.getTrainDate().toString(),
-                        order.getSeatType(), order.getStartStation(), order.getEndStation(), count);
-            } catch (Exception e) {
-                // 确认扣减失败，记录错误日志，但订单状态已更新
-                // 后续通过定时任务对账处理
-                LoggerFactory.getLogger(OrderServiceImpl.class)
-                        .error("确认扣减库存失败，orderNo={}, trainId={}, count={}", 
-                                orderNo, order.getTrainId(), count, e);
-            }
-
-            // 清除缓存
+            // 同步清除缓存（快速操作）
             redisUtil.delete(String.format(CacheKey.USER_ORDERS, userId));
             redisUtil.delete(String.format(CacheKey.ORDER_INFO, orderNo));
+
+            // 异步：发送支付确认事件（库存确认由消费者异步执行，支持重试）
+            PaymentConfirmedEvent paymentEvent = new PaymentConfirmedEvent();
+            paymentEvent.setMessageId(idempotentUtil.generateMessageId());
+            paymentEvent.setOrderId(order.getId());
+            paymentEvent.setOrderNo(orderNo);
+            paymentEvent.setUserId(userId);
+            paymentEvent.setTrainId(order.getTrainId());
+            paymentEvent.setTrainDate(order.getTrainDate());
+            paymentEvent.setStartStation(order.getStartStation());
+            paymentEvent.setEndStation(order.getEndStation());
+            paymentEvent.setSeatType(order.getSeatType());
+            paymentEvent.setCount(count);
+            paymentEvent.setPayTimestamp(System.currentTimeMillis());
+            rocketMQProducerService.sendPaymentConfirmedEvent(paymentEvent);
+
+            logger.info("支付成功，已发送异步确认事件: orderNo={}, itemCount={}", orderNo, count);
         }
 
         return result;
@@ -184,13 +214,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         itemWrapper.eq(OrderItem::getOrderId, order.getId());
         int count = Math.toIntExact(orderItemMapper.selectCount(itemWrapper));
 
-        // 回滚库存
+        // 回滚库存（退票必须同步执行，保证数据一致性）
         trainService.rollbackStock(order.getTrainId(), order.getTrainDate().toString(),
                 order.getStartStation(), order.getEndStation(), order.getSeatType(), count);
 
         // 更新订单状态
         order.setStatus(BusinessStatus.ORDER_STATUS_REFUNDED);
-
         boolean result = updateById(order);
 
         // 清除缓存
@@ -247,17 +276,17 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     public Page<Order> adminPage(String orderNo, String phone, Integer status, int page, int size) {
         Page<Order> pageObj = new Page<>(page, size);
         LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
-        
+
         // 订单号模糊查询
         if (orderNo != null && !orderNo.trim().isEmpty()) {
             wrapper.like(Order::getOrderNo, "%" + orderNo.trim() + "%");
         }
-        
+
         // 状态精确查询
         if (status != null) {
             wrapper.eq(Order::getStatus, status);
         }
-        
+
         // 用户手机号模糊查询
         if (phone != null && !phone.trim().isEmpty()) {
             // 通过手机号模糊查询用户ID列表
@@ -274,10 +303,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 wrapper.eq(Order::getId, -1L);
             }
         }
-        
+
         // 按创建时间倒序
         wrapper.orderByDesc(Order::getCreatedAt);
-        
+
         return page(pageObj, wrapper);
     }
 }

@@ -2,27 +2,29 @@ package com.ticket.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.ticket.dto.mq.KnowledgeSyncEvent;
 import com.ticket.entity.KnowledgeBase;
 import com.ticket.mapper.KnowledgeBaseMapper;
 import com.ticket.service.AIChatService;
+import com.ticket.service.RocketMQProducerService;
 import com.ticket.service.KnowledgeBaseService;
+import com.ticket.util.MQIdempotentUtil;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import jakarta.annotation.Resource;
-import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.io.FileNotFoundException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
  * 知识库服务实现
+ * 向量同步通过RocketMQ异步执行，不阻塞管理操作
  */
 @Slf4j
 @Service
@@ -37,6 +39,12 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
 
     @Resource
     private AIChatService aiChatService;
+
+    @Resource
+    private RocketMQProducerService rocketMQProducerService;
+
+    @Resource
+    private MQIdempotentUtil idempotentUtil;
 
 
     @Override
@@ -100,6 +108,7 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         KnowledgeBase existing = getOne(wrapper);
 
         KnowledgeBase kb;
+        String triggerSource;
         if (existing != null) {
             // 更新
             existing.setCategory(category);
@@ -108,6 +117,7 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
             existing.setStatus(1);
             updateById(existing);
             kb = existing;
+            triggerSource = "update";
         } else {
             // 新增
             kb = new KnowledgeBase();
@@ -118,10 +128,11 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
             kb.setStatus(1);
             kb.setHitCount(0);
             save(kb);
+            triggerSource = "add";
         }
 
-        // 同步到向量库
-        syncToVectorStore();
+        // 异步同步到向量库（不阻塞管理操作）
+        sendKnowledgeSyncEvent("increment", triggerSource);
 
         return kb;
     }
@@ -130,9 +141,26 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
     public boolean deleteKnowledge(Long id) {
         boolean result = removeById(id);
         if (result) {
-            // 重新同步（简化处理，实际生产可用增量更新）
-            syncToVectorStore();
+            // 异步重新同步向量库
+            sendKnowledgeSyncEvent("increment", "delete");
         }
         return result;
+    }
+
+    /**
+     * 发送知识库同步事件到RocketMQ
+     */
+    private void sendKnowledgeSyncEvent(String syncType, String triggerSource) {
+        try {
+            KnowledgeSyncEvent event = new KnowledgeSyncEvent();
+            event.setMessageId(idempotentUtil.generateMessageId());
+            event.setSyncType(syncType);
+            event.setTriggerSource(triggerSource);
+            event.setTimestamp(System.currentTimeMillis());
+            rocketMQProducerService.sendKnowledgeSyncEvent(event);
+            log.info("已发送知识库同步事件: type={}, source={}", syncType, triggerSource);
+        } catch (Exception e) {
+            log.error("发送知识库同步事件失败，将在下次操作时重试", e);
+        }
     }
 }

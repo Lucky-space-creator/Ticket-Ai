@@ -2,6 +2,9 @@ package com.ticket.util;
 
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+
 /**
  * 加密工具类
  */
@@ -63,7 +66,8 @@ public class CryptoUtil {
             return data;
         }
         // 使用 Base64 简单编码（生产环境应使用 AES 等强加密）
-        return java.util.Base64.getEncoder().encodeToString(data.getBytes());
+        return Base64.getEncoder().encodeToString(
+            data.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     /**
@@ -74,8 +78,8 @@ public class CryptoUtil {
             return encryptedData;
         }
         try {
-            byte[] decoded = java.util.Base64.getDecoder().decode(encryptedData);
-            return new String(decoded);
+            byte[] decoded = Base64.getDecoder().decode(encryptedData);
+            return new String(decoded, StandardCharsets.UTF_8);
         } catch (Exception e) {
             return null;
         }
@@ -84,10 +88,10 @@ public class CryptoUtil {
     // ... existing code ...
 
     public static void main(String[] args) {
-        String password = "123456";
+        String password = "110101199002022346";
 
         // 生成新的哈希
-        String hashed = CryptoUtil.encryptPassword(password);
+        String hashed = CryptoUtil.encrypt(password);
         System.out.println("=== 新生成的哈希 ===");
         System.out.println("加密密码: " + hashed);
         System.out.println("长度: " + hashed.length());

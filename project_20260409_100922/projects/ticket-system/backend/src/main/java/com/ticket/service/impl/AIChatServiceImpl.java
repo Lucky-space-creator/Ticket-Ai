@@ -1,24 +1,23 @@
 package com.ticket.service.impl;
 
-import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.ticket.dto.mq.ChatRecordEvent;
 import com.ticket.entity.ChatRecord;
 import com.ticket.entity.ChatSession;
 import com.ticket.mapper.ChatRecordMapper;
 import com.ticket.service.AIChatService;
+import com.ticket.service.RocketMQProducerService;
 import com.ticket.service.KnowledgeAssistant;
-import com.ticket.service.KnowledgeBaseService;
 import com.ticket.service.StreamingKnowledgeAssistant;
 import com.ticket.service.ChatSessionService;
+import com.ticket.util.MQIdempotentUtil;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.service.Result;
-import com.ticket.util.SnowflakeIdUtil;
 import com.ticket.util.UserContext;
 import com.ticket.util.TraceContext;
 import com.ticket.util.TraceMdcHelper;
 import com.ticket.util.AiChatStopWatch;
 import com.ticket.util.TokenCountUtil;
-import com.ticket.handler.ChatWebSocketHandler;
 import com.ticket.enums.BusinessStatus;
 import reactor.core.publisher.Flux;
 import jakarta.annotation.Resource;
@@ -28,12 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 智能客服服务实现
@@ -56,10 +52,13 @@ public class AIChatServiceImpl implements AIChatService {
     private ChatMemory chatMemory;
 
     @Resource
-    private ChatWebSocketHandler chatWebSocketHandler;
+    private ChatSessionService chatSessionService;
 
     @Resource
-    private ChatSessionService chatSessionService;
+    private RocketMQProducerService rocketMQProducerService;
+
+    @Resource
+    private MQIdempotentUtil idempotentUtil;
     @Override
     @Transactional
     public String chat(String question) {
@@ -194,7 +193,7 @@ public class AIChatServiceImpl implements AIChatService {
     }
 
     /**
-     * 保存聊天记录
+     * 保存聊天记录（异步：通过RocketMQ发送，由消费者负责DB写入和WS广播）
      * @param message 消息内容
      * @param msgType 消息类型 'user'-用户 'robot'-机器人 员工号-客服
      * @param confidence 置信度（AI回复时可为1.0）
@@ -208,43 +207,23 @@ public class AIChatServiceImpl implements AIChatService {
                                 String sessionId, Long employeeId, Integer isRead,
                                 int inputTokens, int outputTokens) {
         try {
-            Long userId = UserContext.getCurrentUserId();
-            ChatRecord record = new ChatRecord();
-            record.setUserId(userId);
-            record.setSessionId(sessionId);
-            record.setMessage(message);
-            record.setMsgType(msgType);
-            record.setEmployeeId(employeeId);
-            record.setIsRead(isRead != null ? isRead : 0);
-            record.setConfidence(confidence);
-            record.setInputTokens(inputTokens);
-            record.setOutputTokens(outputTokens);
-            record.setCreatedAt(LocalDateTime.now());
-            chatRecordMapper.insert(record);
-            log.debug("保存聊天记录成功，用户ID：{}，类型：{}，会话ID：{}", userId, msgType, sessionId);
-            
-            // 通过 WebSocket 广播消息（恢复MDC上下文到Netty线程）
-            String wsTraceId = TraceContext.getTraceId();
-            try {
-                Map<String, Object> wsMessage = new HashMap<>();
-                wsMessage.put("type", "chat");
-                wsMessage.put("content", message);
-                wsMessage.put("msgType", msgType);
-                wsMessage.put("traceId", wsTraceId); // 携带traceId供前端关联
-                if (employeeId != null) {
-                    wsMessage.put("employeeId", employeeId);
-                }
-                wsMessage.put("userId", userId);
-                wsMessage.put("timestamp", System.currentTimeMillis());
-                TraceMdcHelper.runWithTraceId(wsTraceId, () -> {
-                    chatWebSocketHandler.sendMessageToSession(sessionId,
-                            JSON.toJSONString(wsMessage));
-                });
-            } catch (Exception e) {
-                log.warn("WebSocket 广播失败，但不影响主要流程", e);
-            }
+            ChatRecordEvent event = new ChatRecordEvent();
+            event.setMessageId(idempotentUtil.generateMessageId());
+            event.setUserId(UserContext.getCurrentUserId());
+            event.setSessionId(sessionId);
+            event.setMessage(message);
+            event.setMsgType(msgType);
+            event.setEmployeeId(employeeId);
+            event.setConfidence(confidence);
+            event.setInputTokens(inputTokens);
+            event.setOutputTokens(outputTokens);
+            event.setCreatedAt(LocalDateTime.now());
+            event.setTraceId(TraceContext.getTraceId());
+            rocketMQProducerService.sendChatRecordEvent(event);
+            log.debug("已发送聊天记录到RocketMQ异步处理: userId={}, msgType={}", 
+                    UserContext.getCurrentUserId(), msgType);
         } catch (Exception e) {
-            log.error("保存聊天记录失败", e);
+            log.error("发送聊天记录事件失败", e);
         }
     }
 
@@ -313,24 +292,25 @@ public class AIChatServiceImpl implements AIChatService {
                 log.warn("用户未登录，无法转人工");
                 return "请先登录后再请求人工客服";
             }
-            
+
             if (sessionId == null) {
                 sessionId = getSessionId();
             }
-            
-            // 保存一条 pending 消息，表示用户请求人工客服
-            ChatRecord pendingMsg = new ChatRecord();
-            pendingMsg.setSessionId(sessionId);
-            pendingMsg.setUserId(userId);
-            pendingMsg.setMessage("用户请求转人工客服");
-            pendingMsg.setMsgType(BusinessStatus.MSG_TYPE_PENDING);
-            pendingMsg.setIsRead(0);
-            pendingMsg.setConfidence(BigDecimal.ONE);
-            pendingMsg.setInputTokens(0);
-            pendingMsg.setOutputTokens(0);
-            pendingMsg.setCreatedAt(LocalDateTime.now());
-            chatRecordMapper.insert(pendingMsg);
-            
+
+            // 异步保存 pending 消息（通过RocketMQ）
+            ChatRecordEvent event = new ChatRecordEvent();
+            event.setMessageId(idempotentUtil.generateMessageId());
+            event.setUserId(userId);
+            event.setSessionId(sessionId);
+            event.setMessage("用户请求转人工客服");
+            event.setMsgType(BusinessStatus.MSG_TYPE_PENDING);
+            event.setConfidence(java.math.BigDecimal.ONE);
+            event.setInputTokens(0);
+            event.setOutputTokens(0);
+            event.setCreatedAt(LocalDateTime.now());
+            event.setTraceId(TraceContext.getTraceId());
+            rocketMQProducerService.sendChatRecordEvent(event);
+
             log.info("用户 {} 触发转人工服务，会话ID: {}", userId, sessionId);
             return "已为您转接人工客服，请稍候，客服人员将很快为您服务。";
         } catch (Exception e) {

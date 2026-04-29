@@ -1,10 +1,14 @@
 package com.ticket.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.ticket.dto.mq.OperationLogEvent;
 import com.ticket.entity.OperationLog;
 import com.ticket.mapper.OperationLogMapper;
+import com.ticket.service.RocketMQProducerService;
 import com.ticket.service.OperationLogService;
+import com.ticket.util.MQIdempotentUtil;
+import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -13,13 +17,45 @@ import java.util.List;
 
 /**
  * 操作日志服务实现
+ * 日志写入通过RocketMQ异步处理，不阻塞业务线程
  */
+@Slf4j
 @Service
-public class OperationLogServiceImpl extends ServiceImpl<OperationLogMapper, OperationLog> implements OperationLogService {
+public class OperationLogServiceImpl implements OperationLogService {
+
+    @Resource
+    private OperationLogMapper operationLogMapper;
+
+    @Resource
+    private RocketMQProducerService rocketMQProducerService;
+
+    @Resource
+    private MQIdempotentUtil idempotentUtil;
 
     @Override
-    public void log(OperationLog log) {
-        this.save(log);
+    public void log(OperationLog operationLog) {
+        try {
+            OperationLogEvent event = new OperationLogEvent();
+            event.setMessageId(idempotentUtil.generateMessageId());
+            event.setUserId(operationLog.getUserId());
+            event.setUsername(operationLog.getUsername());
+            event.setOperation(operationLog.getOperation());
+            event.setModule(operationLog.getModule());
+            event.setDescription(operationLog.getDescription());
+            event.setRequestMethod(operationLog.getRequestMethod());
+            event.setRequestUrl(operationLog.getRequestUrl());
+            event.setRequestParams(operationLog.getRequestParams());
+            event.setIpAddress(operationLog.getIpAddress());
+            event.setUserAgent(operationLog.getUserAgent());
+            event.setStatus(operationLog.getStatus() != null ? operationLog.getStatus() : 1);
+            event.setErrorMessage(operationLog.getErrorMessage());
+            event.setExecutionTime(operationLog.getExecutionTime() != null ? operationLog.getExecutionTime() : 0);
+            event.setCreatedAt(LocalDateTime.now());
+
+            rocketMQProducerService.sendOperationLogEvent(event);
+        } catch (Exception e) {
+            log.error("发送操作日志事件失败", e);
+        }
     }
 
     @Override
@@ -43,6 +79,6 @@ public class OperationLogServiceImpl extends ServiceImpl<OperationLogMapper, Ope
             wrapper.le(OperationLog::getCreatedAt, end);
         }
         wrapper.orderByDesc(OperationLog::getCreatedAt);
-        return this.list(wrapper);
+        return operationLogMapper.selectList(wrapper);
     }
 }

@@ -1,3 +1,7 @@
+# ==================== Tomcat 线程池调优（MQ削峰改造后） ====================
+# 改造前: Controller同步等待DB写入(50~200ms)，需200线程支撑并发
+# 改造后: Controller仅做Redis预扣+MQ入队(<10ms)，线程利用率大幅提升
+# 策略: 降低max-threads(单线程吞吐量↑) + 提高accept-count(缓冲突发流量)
 server:
   port: 8080
   servlet:
@@ -5,49 +9,71 @@ server:
     encoding:
       charset: UTF-8
       enabled: true
-# Tomcat 线程池（处理 HTTP 请求）
-# 计算公式: max_threads = CPU核心数 × (1 + 等待时间/计算时间)
-#   - IO密集型: 等待时间/计算时间 ≈ 4~10，经验值 200~500
-#   - CPU密集型: 等待时间/计算时间 ≈ 0，经验值 核心数×2
-# 本例为IO密集型应用（数据库、Redis、AI调用），取中间值200
   tomcat:
+    max-http-form-post-size: 10MB
+    max-swallow-size: 10MB
     threads:
-      max: 200          # 最大线程数（计算公式见上）
-      min-spare: 10     # 最小(核心)线程数，默认10，冷启动后保持的最小热线程
-    # 等待队列容量（超出max后的排队数），超出则拒绝请求(503)
-    accept-count: 100
+      max: 150              # 从200降至150（单请求耗时↓80%，同等并发所需线程↓）
+      min-spare: 20         # 从10提升至20（保持更多热线程应对突发）
+      accept-count: 500      # 从100大幅提升至500（作为流量蓄水池）
+    # 连接超时配置
+    connection-timeout: 10000   # 10秒连接超时
+    keep-alive-timeout: 30s     # 长连接保持30秒（前端轮询需要）
+gateway:
+  rate-limit-enabled: true
+  security-enabled: true
+
+  # 全局限流（保护整个服务不被打垮）
+  global-rps: 100          # 全局每秒最大请求数
+  global-window-seconds: 1 # 滑动窗口1秒
+
+  # IP限流（防止单IP攻击）
+  ip-rps: 20               # 单IP每秒最大请求
+  ip-window-seconds: 1
+
+  # 用户限流（防止刷接口）
+  user-rps: 10             # 单用户每秒最大请求
+  user-window-seconds: 1
+
+  # 下单接口专用严格限流（核心业务保护）
+  order-per-user-per-minute: 5   # 单IP每分钟最多下单次数
+  order-window-seconds: 60       # 窗口60秒
+
+  # IP黑名单
+  blacklist-ips: []
+
+  # 特定路径独立限流
+  path-limits:
+    /api/orders: 5         # 下单接口每用户每秒最多5次
+    /api/auth/login: 3     # 登录接口每用户每秒最多3次
+
+  # 严格限制路径（使用默认值的一半）
+  strict-paths:
+    - /api/orders/**
 
 spring:
   application:
     name: ticket-system
-# Spring 异步配置（用于@Async等异步任务）
-# 计算公式: max_size = CPU核心数 × (1 + 阻塞时间/计算时间)
-#   - 阻塞时间: AI调用、外部API等IO等待时间（可能长达10-30秒）
-#   - 计算时间: 本地处理时间（通常<100ms）
-#   - 阻塞/计算比 ≈ 100~300，因此需要较大线程池
-# 核心线程数: 根据常驻负载设置，避免频繁创建
-# 队列容量: 必须有界，否则max-size不生效，队列满后创建新线程直至max-size
+# ==================== Spring Async 线程池调优 ====================
+# 改造前: Controller层有重量级DB操作，需大线程池
+# 改造后: Controller极轻量，异步任务主要用于AI调用等非关键路径
+# 策略: 适当降低线程数，将资源留给MQ Consumer
   task:
     execution:
       pool:
-        core-size: 16              # 核心线程数（常驻）
-        max-size: 120              # 最大线程数（计算公式见上）
-        queue-capacity: 200        # 队列容量（有界！）
-        keep-alive: 60s            # 空闲线程存活时间
-        allow-core-thread-timeout: true  # 允许核心线程超时回收
-      thread-name-prefix: async-task-  # 线程名前缀（便于监控）
+        core-size: 8               # 从16降至8（Controller不再需要大量异步线程）
+        max-size: 50               # 从120降至50
+        queue-capacity: 500        # 从200提升至500（更深的缓冲）
+        keep-alive: 60s
+        allow-core-thread-timeout: true
+      thread-name-prefix: async-task-
       shutdown:
-        await-termination: true    # 优雅关闭
-        await-termination-period: 60s # 优雅关闭等待时间
-  # 数据源配置（使用Druid连接池）
-# 连接池计算公式:
-#   max-active = CPU核心数 × IO系数 × 安全系数
-#     - CPU核心数: 假设8核
-#     - IO系数: 1.5 (数据库操作是IO密集型)
-#     - 安全系数: 1.5 (避免频繁创建销毁连接)
-#     计算: 8 × 1.5 × 1.5 = 18
-#   经验值: 生产环境通常设置 50~100，根据并发请求数调整
-#   本例设置为100，满足中等并发需求
+        await-termination: true
+        await-termination-period: 60s
+  # ==================== Druid 连接池调优 ====================
+# 改造前: Controller同步DB写入占用连接
+# 改造后: MQ Consumer异步DB写入成为主要DB客户端
+# 策略: 保持max-active不变(总并发未变)，提升min-idle保证热连接
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/ticket_system?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
@@ -56,10 +82,10 @@ spring:
     type: com.alibaba.druid.pool.DruidDataSource  # 指定使用Druid连接池
     druid:
       # 连接池核心配置
-      initial-size: 10      # 初始连接数
-      min-idle: 10         # 最小空闲连接数
-      max-active: 150   # 最大连接数（计算公式见上）
-      max-wait: 5000       # 获取连接最大等待时间（毫秒）
+      initial-size: 15       # 从10提升至15（Consumer启动时需要更多连接）
+      min-idle: 15           # 从10提升至15（保持更多热连接）
+      max-active: 150        # 保持不变（总DB并发未变）
+      max-wait: 3000         # 从5000降至3000（快速失败，避免阻塞）
       
       # 连接有效性检测
       validation-query: SELECT 1
@@ -96,14 +122,9 @@ spring:
     serialization:
       write-dates-as-timestamps: false
 
-  # Redis 连接池计算公式
-  # 最大连接数 = CPU核心数 × IO系数 × 安全系数
-  #   - CPU核心数: 假设8核
-  #   - IO系数: 1.5 (IO密集型，Redis为网络IO)
-  #   - 安全系数: 1.5 (避免频繁创建销毁连接)
-  #   计算: 8 × 1.5 × 1.5 = 18
-  # 经验值: 生产环境通常设置 50~100，根据并发客户端数调整
-  # 本例设置为64，留有余量
+  # ==================== Redis 连接池调优（改造后最关键资源） ====================
+# 改造后Redis负载大幅增加: 滑动窗口限流 + 库存预扣 + 排队结果缓存
+# 策略: 大幅提升连接数和空闲连接，减少连接获取延迟
   data:
     redis:
       # 主从模式配置（一主二从）
@@ -117,10 +138,10 @@ spring:
       timeout: 10000
       lettuce:
         pool:
-          max-active: 64  # 最大连接数（计算公式见上）
-          max-idle: 32    # 最大空闲连接数（建议为max-active的50%）
-          min-idle: 8     # 最小空闲连接数（保持一定热连接）
-          max-wait: 5000ms  # 最大等待时间（5秒），避免无限等待
+          max-active: 128         # 从64提升至128（限流+库存+排队结果都需要Redis）
+          max-idle: 64            # 从32提升至64
+          min-idle: 20            # 从8提升至20（保持更多热连接）
+          max-wait: 3000ms        # 从5秒降至3秒（快速失败）
 
 # MyBatis Plus 配置
 mybatis-plus:
@@ -242,3 +263,25 @@ knowledge:
 rag:
   max-results: 3                   # 检索结果数量
   min-score: 0.35                  # 最低相似度阈值
+
+# ==================== RocketMQ MQ调优（削峰核心组件） ====================
+rocketmq:
+  name-server: 127.0.0.1:9876
+  producer:
+    test-topic: Test_msg
+    group: ticket-system-producer-group
+    send-message-timeout: 3000
+    retry-times-when-send-failed: 3
+    retry-times-when-send-async-failed: 2
+    max-message-size: 4194304  # 4MB
+    compress-message-body-over: 4096
+    access-channel: LOCAL
+    vip-channel-enabled: false   # 关闭VIP通道，兼容本地/非VIP环境
+  # Consumer配置（通过@RocketMQMessageListener注解配置优先级更高）
+  # order-queue-consumer-group 在OrderQueueConsumer中已配置:
+  #   consumeMode=CONCURRENTLY, maxReconsumeTimes=3
+  # 如需调整Consumer并发线程数，可在注解中修改 consumeThreadMax
+  consumer:
+    group: ticket-system-consumer-group
+  check:
+    enabled: true
