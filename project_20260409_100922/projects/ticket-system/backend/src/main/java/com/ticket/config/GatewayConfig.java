@@ -95,8 +95,8 @@ public class GatewayConfig {
      * 需要严格限流的接口路径（Ant匹配）
      * 这些接口使用更严格的限流策略
      */
-//    private List<String> strictPaths = Arrays.asList(
-//            "/api/orders/**",
-//            "/api/auth/login"
-//    );
+    private List<String> strictPaths = Arrays.asList(
+            "/api/orders/**",
+            "/api/auth/login"
+    );
 }

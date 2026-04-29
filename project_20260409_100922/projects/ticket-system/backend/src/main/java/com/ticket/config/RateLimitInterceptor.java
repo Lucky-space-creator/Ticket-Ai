@@ -155,7 +155,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
      */
     private boolean isOrderCreateRequest(String uri, String method) {
         return "POST".equalsIgnoreCase(method)
-                && (uri.equals("/api/orders") || uri.startsWith("/api/orders"));
+                && (uri.startsWith("/api/orders"));
     }
 
     /**

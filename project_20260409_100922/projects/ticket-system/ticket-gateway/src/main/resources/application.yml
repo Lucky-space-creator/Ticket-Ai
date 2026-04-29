@@ -1,0 +1,120 @@
+# 本地默认配置（当Nacos配置缺失时使用）
+server:
+  port: 8080
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        # 用户服务路由
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/auth/**,/api/user/**,/api/passengers/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                key-resolver: "#{@userKeyResolver}"
+            - StripPrefix=1
+
+        # 车次服务路由
+        - id: train-service
+          uri: lb://train-service
+          predicates:
+            - Path=/api/trains/**,/api/ticket-stocks/**
+          filters:
+            - StripPrefix=1
+
+        # 订单服务路由
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/orders/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                key-resolver: "#{@userKeyResolver}"
+            - StripPrefix=1
+
+        # AI聊天服务路由
+        - id: aichat-service
+          uri: lb://aichat-service
+          predicates:
+            - Path=/api/chat/**,/api/knowledge/**
+          filters:
+            - StripPrefix=1
+
+        # 客服服务路由
+        - id: customer-service
+          uri: lb://customer-service
+          predicates:
+            - Path=/api/customer-service/**
+          filters:
+            - StripPrefix=1
+
+        # 管理服务路由
+        - id: admin-service
+          uri: lb://admin-service
+          predicates:
+            - Path=/api/admin/**
+          filters:
+            - StripPrefix=1
+
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+        - AddResponseHeader=X-Gateway-Version, ticket-gateway-1.0
+
+      discovery:
+        locator:
+          enabled: true  # 启用服务发现自动路由（备用）
+          lower-case-service-id: true
+
+  # Redis配置（用于限流）
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: 0
+      timeout: 10000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  # 安全配置（允许跨域）
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:}
+
+# 网关自定义配置
+gateway:
+  rate-limit-enabled: true
+  global-rps: 10000
+  ip-rps: 20
+  user-rps: 1000
+  order-per-user-per-minute: 5
+
+# 日志配置
+logging:
+  level:
+    com.ticket.gateway: debug
+    org.springframework.cloud.gateway: debug
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# 管理端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway
+  endpoint:
+    health:
+      show-details: always
