@@ -10,7 +10,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  */
 @SpringBootApplication
 @EnableDiscoveryClient
-@EnableFeignClients(basePackages = "com.ticket.admin.client")
+@EnableFeignClients(basePackages = {"com.ticket"})
 public class AdminServiceApplication {
     public static void main(String[] args) {
         SpringApplication.run(AdminServiceApplication.class, args);

@@ -141,7 +141,7 @@ spring:
           max-active: 128         # 从64提升至128（限流+库存+排队结果都需要Redis）
           max-idle: 64            # 从32提升至64
           min-idle: 20            # 从8提升至20（保持更多热连接）
-          max-wait: 3000ms        # 从5秒降至3秒（快速失败）
+          max-wait: 3000        # 从5秒降至3秒（快速失败）
 
 # MyBatis Plus 配置
 mybatis-plus:

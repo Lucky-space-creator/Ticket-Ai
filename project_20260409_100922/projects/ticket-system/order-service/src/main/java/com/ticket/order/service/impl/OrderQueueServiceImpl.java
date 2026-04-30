@@ -7,7 +7,7 @@ import com.ticket.dto.mq.OrderQueueRequest;
 import com.ticket.enums.MQTopics;
 import com.ticket.order.service.OrderQueueService;
 import com.ticket.service.RocketMQProducerService;
-import com.ticket.train.service.TrainService;
+import com.ticket.service.TrainService;
 import com.ticket.util.RedisUtil;
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;

@@ -3,6 +3,8 @@ server:
   port: 8084
 
 spring:
+  config:
+    import: optional:nacos:${spring.cloud.nacos.config.server-addr:}
   # 数据源配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -28,7 +30,7 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       database: 0
-      timeout: 10000ms
+      timeout: 10000
       lettuce:
         pool:
           max-active: 8

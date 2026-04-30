@@ -2,5 +2,6 @@ C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\admin-service\src\main\java\com\ticket\admin\service\EmployeeService.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\admin-service\src\main\java\com\ticket\admin\controller\EmployeeController.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\admin-service\src\main\java\com\ticket\admin\mapper\EmployeeMapper.java
+C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\admin-service\src\main\java\com\ticket\admin\config\RedisMasterSlaveConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\admin-service\src\main\java\com\ticket\admin\mapper\ChatSessionMapper.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\admin-service\src\main\java\com\ticket\admin\service\impl\EmployeeServiceImpl.java

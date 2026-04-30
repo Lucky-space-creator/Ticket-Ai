@@ -1,1 +1,3 @@
+com\ticket\gateway\config\RedisMasterSlaveConfig.class
+com\ticket\gateway\config\RateLimitConfig.class
 com\ticket\gateway\GatewayApplication.class

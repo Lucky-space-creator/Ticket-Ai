@@ -1,11 +1,10 @@
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\controller\AIChatController.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\service\impl\ChatSessionServiceImpl.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\client\OrderClient.java
+C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\tool\AIBusinessTool.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\service\StreamingKnowledgeAssistant.java
-C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\config\RAGConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\mapper\ChatRecordMapper.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\service\KnowledgeAssistant.java
-C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\config\ChromaDBConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\mapper\ChatSessionMapper.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\service\AIChatService.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\service\ChatSessionService.java
@@ -15,5 +14,4 @@ C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\service\DocumentIngestionService.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\AichatServiceApplication.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\service\impl\KnowledgeBaseServiceImpl.java
-C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\config\AIModelConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\service\KnowledgeBaseService.java

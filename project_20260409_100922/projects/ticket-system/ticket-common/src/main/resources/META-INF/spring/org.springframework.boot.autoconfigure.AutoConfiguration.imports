@@ -1,0 +1,11 @@
+com.ticket.config.AIModelConfig
+com.ticket.config.ChromaDBConfig
+com.ticket.config.RAGConfig
+com.ticket.config.FeignConfig
+com.ticket.config.GatewayConfig
+com.ticket.config.JacksonConfig
+com.ticket.config.MyBatisPlusConfig
+com.ticket.config.RedisConfig
+com.ticket.config.RedisMasterSlaveConfig
+com.ticket.config.WebMvcConfig
+com.ticket.config.AuthenticationInterceptor

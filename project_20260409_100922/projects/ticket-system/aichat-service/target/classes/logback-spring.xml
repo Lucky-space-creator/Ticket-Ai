@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- 引入Spring Boot默认的logback配置 -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- 自定义属性 -->
+    <property name="LOG_PATH" value="${LOG_PATH:-logs}"/>
+    <property name="LOG_FILE_MAX_HISTORY" value="${LOG_FILE_MAX_HISTORY:-30}"/>
+    <property name="LOG_FILE_MAX_SIZE" value="${LOG_FILE_MAX_SIZE:-100MB}"/>
+
+    <!-- ==================== 控制台输出（开发调试用） ==================== -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-}] %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ==================== JSON日志输出（ELK采集用） ==================== -->
+    <appender name="FILE_JSON"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- 不设置<file>标签, 让logback根据fileNamePattern自动生成当前活跃文件名 -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- 活跃文件: logs/2026-04-28/aichat-service-2026-04-28.json.log -->
+            <!-- 超过maxFileSize时自动归档: ...1.json.log, ...2.json.log -->
+            <fileNamePattern>${LOG_PATH}/%d{yyyy-MM-dd}/aichat-service-%d{yyyy-MM-dd}.%i.json.log</fileNamePattern>
+            <maxHistory>${LOG_FILE_MAX_HISTORY}</maxHistory>
+            <timeBasedFileNamingAndTriggeringPolicy
+                    class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>${LOG_FILE_MAX_SIZE}</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"app":"aichat-service","env":"${SPRING_PROFILES_ACTIVE:-dev}"}</customFields>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+        </encoder>
+    </appender>
+
+    <!-- ==================== AI聊天专用日志（独立文件） ==================== -->
+    <appender name="AI_CHAT_LOG"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- 不设置<file>标签, 让logback根据fileNamePattern自动生成当前活跃文件名 -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- 活跃文件: logs/2026-04-28/ai-chat-trace-2026-04-28.json.log -->
+            <!-- 超过maxFileSize时自动归档: ...1.json.log, ...2.json.log -->
+            <fileNamePattern>${LOG_PATH}/%d{yyyy-MM-dd}/ai-chat-trace-%d{yyyy-MM-dd}.%i.json.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+            <timeBasedFileNamingAndTriggeringPolicy
+                    class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>50MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"app":"aichat-service","logType":"ai-chat-trace","env":"${SPRING_PROFILES_ACTIVE:-dev}"}</customFields>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+        </encoder>
+    </appender>
+
+    <!-- ==================== 异步Appender（提升性能） ==================== -->
+    <appender name="ASYNC_FILE_JSON"
+              class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="FILE_JSON"/>
+    </appender>
+
+    <appender name="ASYNC_AI_CHAT"
+              class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="AI_CHAT_LOG"/>
+    </appender>
+
+    <!-- ==================== Logger级别配置 ==================== -->
+
+    <!-- AI聊天相关Logger：单独输出到AI聊天日志文件 -->
+    <logger name="com.ticket.aichat.service.impl.AIChatServiceImpl" level="INFO"
+            additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_AI_CHAT"/>
+    </logger>
+
+    <!-- LangChain4j组件：DEBUG级别 -->
+    <logger name="dev.langchain4j" level="INFO"/>
+
+    <!-- AI服务层：DEBUG级别 -->
+    <logger name="com.ticket.aichat.service.impl" level="DEBUG"/>
+
+    <!-- AI控制器 -->
+    <logger name="com.ticket.aichat.controller.AIChatController" level="DEBUG"/>
+
+    <!-- AI工具类 -->
+    <logger name="com.ticket.aichat.tool.AIBusinessTool" level="DEBUG"/>
+
+    <!-- Mapper层SQL日志 -->
+    <logger name="com.ticket.aichat.mapper" level="DEBUG"/>
+
+    <!-- Root Logger -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE_JSON"/>
+    </root>
+</configuration>

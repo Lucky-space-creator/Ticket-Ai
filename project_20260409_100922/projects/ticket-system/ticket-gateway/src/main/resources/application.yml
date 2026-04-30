@@ -3,6 +3,8 @@ server:
   port: 8080
 
 spring:
+  config:
+    import: optional:nacos:ticket-gateway.yaml
   cloud:
     gateway:
       routes:
@@ -79,7 +81,7 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       database: 0
-      timeout: 10000ms
+      timeout: 10000
       lettuce:
         pool:
           max-active: 8

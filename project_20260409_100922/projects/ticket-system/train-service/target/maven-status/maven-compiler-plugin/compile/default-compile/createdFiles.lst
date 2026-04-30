@@ -2,9 +2,7 @@ com\ticket\train\service\impl\StockGenerationServiceImpl$SeatConfig.class
 com\ticket\train\service\impl\StockLockServiceImpl.class
 com\ticket\train\service\StockGenerationService$StockGenerationResult.class
 com\ticket\train\controller\TrainController.class
-com\ticket\train\service\StockLockService.class
 com\ticket\train\mapper\TrainMapper.class
-com\ticket\train\service\TrainService.class
 com\ticket\train\mapper\TicketStockMapper.class
 com\ticket\train\service\StockReconciliationService.class
 com\ticket\train\TrainServiceApplication.class

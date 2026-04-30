@@ -7,8 +7,8 @@ import com.ticket.entity.ChatSession;
 import com.ticket.aichat.mapper.ChatRecordMapper;
 import com.ticket.aichat.service.AIChatService;
 import com.ticket.service.RocketMQProducerService;
-import com.ticket.aichat.service.KnowledgeAssistant;
-import com.ticket.aichat.service.StreamingKnowledgeAssistant;
+import com.ticket.service.KnowledgeAssistant;
+import com.ticket.service.StreamingKnowledgeAssistant;
 import com.ticket.aichat.service.ChatSessionService;
 import com.ticket.util.MQIdempotentUtil;
 import dev.langchain4j.memory.ChatMemory;
@@ -21,7 +21,8 @@ import com.ticket.util.TokenCountUtil;
 import com.ticket.enums.BusinessStatus;
 import reactor.core.publisher.Flux;
 import jakarta.annotation.Resource;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,9 +36,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * 智能客服服务实现
  * 负责处理AI聊天业务逻辑，调用底层AI服务
  */
-@Slf4j
 @Service
 public class AIChatServiceImpl implements AIChatService {
+
+    private static final Logger log = LoggerFactory.getLogger(AIChatServiceImpl.class);
 
     @Resource
     private KnowledgeAssistant knowledgeAssistant;

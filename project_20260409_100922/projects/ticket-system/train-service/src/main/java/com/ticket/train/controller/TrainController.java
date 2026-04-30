@@ -3,7 +3,7 @@ package com.ticket.train.controller;
 import com.ticket.entity.TicketStock;
 import com.ticket.enums.BusinessStatus;
 import com.ticket.entity.Train;
-import com.ticket.train.service.TrainService;
+import com.ticket.service.TrainService;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;

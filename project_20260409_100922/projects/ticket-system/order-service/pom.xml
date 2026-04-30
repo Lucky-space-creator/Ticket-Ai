@@ -24,13 +24,6 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- 订单模块 -->
-        <dependency>
-            <groupId>com.ticket</groupId>
-            <artifactId>train-service</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
         <!-- Nacos Service Discovery -->
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
@@ -61,13 +54,12 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>com.ticket</groupId>
-            <artifactId>user-service</artifactId>
-            <version>2.0.0</version>
-            <scope>compile</scope>
-        </dependency>
 
+        <!-- Logstash Logback Encoder（JSON日志输出） -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

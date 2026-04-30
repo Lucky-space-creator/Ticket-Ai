@@ -7,7 +7,7 @@ import com.ticket.entity.OrderItem;
 import com.ticket.enums.ResponseCode;
 import com.ticket.order.service.OrderQueueService;
 import com.ticket.order.service.OrderService;
-import com.ticket.train.service.TrainService;
+import com.ticket.service.TrainService;
 import com.ticket.order.service.impl.OrderQueueServiceImpl;
 import com.ticket.util.CryptoUtil;
 import com.ticket.util.ResponseUtil;

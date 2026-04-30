@@ -10,7 +10,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  */
 @SpringBootApplication
 @EnableDiscoveryClient
-@EnableFeignClients(basePackages = "com.ticket.train.client")
+@EnableFeignClients(basePackages = {"com.ticket"})
 public class TrainServiceApplication {
     public static void main(String[] args) {
         SpringApplication.run(TrainServiceApplication.class, args);

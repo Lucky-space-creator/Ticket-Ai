@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- 引入Spring Boot默认的logback配置 -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- 自定义属性 -->
+    <property name="LOG_PATH" value="${LOG_PATH:-logs}"/>
+    <property name="LOG_FILE_MAX_HISTORY" value="${LOG_FILE_MAX_HISTORY:-30}"/>
+    <property name="LOG_FILE_MAX_SIZE" value="${LOG_FILE_MAX_SIZE:-100MB}"/>
+
+    <!-- ==================== 控制台输出（开发调试用） ==================== -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-}] %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ==================== JSON日志输出（ELK采集用） ==================== -->
+    <appender name="FILE_JSON"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- 不设置<file>标签, 让logback根据fileNamePattern自动生成当前活跃文件名 -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- 活跃文件: logs/2026-04-28/gateway-2026-04-28.json.log -->
+            <!-- 超过maxFileSize时自动归档: ...1.json.log, ...2.json.log -->
+            <fileNamePattern>${LOG_PATH}/%d{yyyy-MM-dd}/gateway-%d{yyyy-MM-dd}.%i.json.log</fileNamePattern>
+            <maxHistory>${LOG_FILE_MAX_HISTORY}</maxHistory>
+            <timeBasedFileNamingAndTriggeringPolicy
+                    class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>${LOG_FILE_MAX_SIZE}</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"app":"ticket-gateway","env":"${SPRING_PROFILES_ACTIVE:-dev}"}</customFields>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+        </encoder>
+    </appender>
+
+    <!-- ==================== 限流专用日志（独立文件） ==================== -->
+    <appender name="RATE_LIMIT_LOG"
+              class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- 不设置<file>标签, 让logback根据fileNamePattern自动生成当前活跃文件名 -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- 活跃文件: logs/2026-04-28/rate-limit-trace-2026-04-28.json.log -->
+            <!-- 超过maxFileSize时自动归档: ...1.json.log, ...2.json.log -->
+            <fileNamePattern>${LOG_PATH}/%d{yyyy-MM-dd}/rate-limit-trace-%d{yyyy-MM-dd}.%i.json.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+            <timeBasedFileNamingAndTriggeringPolicy
+                    class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>50MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"app":"ticket-gateway","logType":"rate-limit-trace","env":"${SPRING_PROFILES_ACTIVE:-dev}"}</customFields>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+        </encoder>
+    </appender>
+
+    <!-- ==================== 异步Appender（提升性能） ==================== -->
+    <appender name="ASYNC_FILE_JSON"
+              class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="FILE_JSON"/>
+    </appender>
+
+    <appender name="ASYNC_RATE_LIMIT"
+              class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="RATE_LIMIT_LOG"/>
+    </appender>
+
+    <!-- ==================== Logger级别配置 ==================== -->
+
+    <!-- 限流相关Logger：单独输出到限流日志文件 -->
+    <logger name="org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter" level="INFO"
+            additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_RATE_LIMIT"/>
+    </logger>
+
+    <!-- 网关配置：DEBUG级别 -->
+    <logger name="com.ticket.gateway.config" level="DEBUG"/>
+
+    <!-- Spring Cloud Gateway组件 -->
+    <logger name="org.springframework.cloud.gateway" level="INFO"/>
+
+    <!-- 限流过滤器 -->
+    <logger name="org.springframework.cloud.gateway.filter.ratelimit" level="DEBUG"/>
+
+    <!-- Redis连接相关 -->
+    <logger name="io.lettuce.core" level="INFO"/>
+
+    <!-- Root Logger -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE_JSON"/>
+    </root>
+</configuration>

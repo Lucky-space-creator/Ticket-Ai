@@ -1,7 +1,7 @@
 package com.ticket.train.service.impl;
 
 import com.ticket.enums.CacheKey;
-import com.ticket.train.service.StockLockService;
+import com.ticket.service.StockLockService;
 import com.ticket.util.RedisUtil;
 import jakarta.annotation.Resource;
 import org.redisson.api.RAtomicLong;
