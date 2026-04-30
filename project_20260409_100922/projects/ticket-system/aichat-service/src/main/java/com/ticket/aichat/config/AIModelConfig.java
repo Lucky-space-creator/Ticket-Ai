@@ -10,7 +10,6 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,10 +19,11 @@ import org.springframework.context.annotation.Configuration;
 import java.time.Duration;
 import java.util.List;
 
-@Slf4j
 @Getter
 @Configuration
 public class AIModelConfig {
+    
+    private static final Logger log = LoggerFactory.getLogger(AIModelConfig.class);
 
     @Value("${ai.model-type}")
     private String modelType;

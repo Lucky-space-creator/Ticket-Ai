@@ -1,7 +1,7 @@
 package com.ticket.user.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.ticket.common.entity.RolePermission;
+import com.ticket.entity.RolePermission;
 import org.apache.ibatis.annotations.Mapper;
 
 /**

@@ -1,14 +1,17 @@
 package com.ticket.user.controller;
 
-import com.ticket.common.dto.UserLoginRequest;
-import com.ticket.common.dto.UserRegisterRequest;
-import com.ticket.common.entity.Role;
-import com.ticket.common.entity.User;
-import com.ticket.common.enums.CacheKey;
-import com.ticket.common.enums.ResponseCode;
-import com.ticket.common.util.*;
+import com.ticket.dto.UserLoginRequest;
+import com.ticket.dto.UserRegisterRequest;
+import com.ticket.entity.Role;
+import com.ticket.entity.User;
+import com.ticket.enums.CacheKey;
+import com.ticket.enums.ResponseCode;
 import com.ticket.user.service.RoleService;
 import com.ticket.user.service.UserService;
+import com.ticket.util.CryptoUtil;
+import com.ticket.util.JwtUtil;
+import com.ticket.util.RedisUtil;
+import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;

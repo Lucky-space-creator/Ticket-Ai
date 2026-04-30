@@ -79,8 +79,7 @@ public class OrderQueueConsumer implements RocketMQListener<OrderQueueRequest> {
 
         try {
             // 1. 幂等性校验（防止重复消费）
-            String idempotentKey = MQTopics.ORDER_QUEUE + ":" + requestId;
-            if (idempotentUtil.isConsumed(MQTopics.ORDER_QUEUE, idempotentKey)) {
+            if (idempotentUtil.isConsumed(MQTopics.ORDER_QUEUE, requestId)) {
                 log.info("排队请求已处理过，跳过: requestId={}", requestId);
                 return;
             }

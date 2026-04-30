@@ -1,12 +1,13 @@
 package com.ticket.user.controller;
 
-import com.ticket.common.entity.Passenger;
-import com.ticket.common.entity.User;
+import com.ticket.entity.Passenger;
+import com.ticket.entity.User;
+import com.ticket.enums.ResponseCode;
 import com.ticket.user.service.PassengerService;
 import com.ticket.user.service.UserService;
-import com.ticket.common.util.CryptoUtil;
-import com.ticket.common.util.ResponseUtil;
-import com.ticket.common.util.UserContext;
+import com.ticket.util.CryptoUtil;
+import com.ticket.util.ResponseUtil;
+import com.ticket.util.UserContext;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,7 +35,7 @@ public class PassengerController {
         try {
             Long userId = UserContext.getCurrentUserId();
             if (userId == null) {
-                return ResponseUtil.error(com.ticket.common.enums.ResponseCode.UNAUTHORIZED);
+                return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
             }
 
             List<Passenger> passengers = passengerService.getByUserId(userId);
@@ -78,7 +79,7 @@ public class PassengerController {
         try {
             Long userId = UserContext.getCurrentUserId();
             if (userId == null) {
-                return ResponseUtil.error(com.ticket.common.enums.ResponseCode.UNAUTHORIZED);
+                return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
             }
 
             Passenger passenger = passengerService.addPassenger(
@@ -102,7 +103,7 @@ public class PassengerController {
         try {
             Long userId = UserContext.getCurrentUserId();
             if (userId == null) {
-                return ResponseUtil.error(com.ticket.common.enums.ResponseCode.UNAUTHORIZED);
+                return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
             }
 
             boolean result = passengerService.deletePassenger(id, userId);
@@ -120,10 +121,33 @@ public class PassengerController {
     /**
      * 添加联系人请求DTO
      */
-    @lombok.Data
     public static class AddPassengerRequest {
         private String name;
         private String idCard;
         private String phone;
+        
+        public String getName() {
+            return name;
+        }
+        
+        public void setName(String name) {
+            this.name = name;
+        }
+        
+        public String getIdCard() {
+            return idCard;
+        }
+        
+        public void setIdCard(String idCard) {
+            this.idCard = idCard;
+        }
+        
+        public String getPhone() {
+            return phone;
+        }
+        
+        public void setPhone(String phone) {
+            this.phone = phone;
+        }
     }
 }

@@ -6,16 +6,15 @@ import com.ticket.dto.mq.KnowledgeSyncEvent;
 import com.ticket.entity.KnowledgeBase;
 import com.ticket.aichat.mapper.KnowledgeBaseMapper;
 import com.ticket.aichat.service.AIChatService;
-import com.ticket.common.service.RocketMQProducerService;
 import com.ticket.aichat.service.KnowledgeBaseService;
-import com.ticket.common.util.MQIdempotentUtil;
+import com.ticket.service.RocketMQProducerService;
+import com.ticket.util.MQIdempotentUtil;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import jakarta.annotation.Resource;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -26,10 +25,10 @@ import java.util.stream.Collectors;
  * 知识库服务实现
  * 向量同步通过RocketMQ异步执行，不阻塞管理操作
  */
-@Slf4j
 @Service
-public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, KnowledgeBase>
-        implements KnowledgeBaseService {
+public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, KnowledgeBase> implements KnowledgeBaseService {
+    
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(KnowledgeBaseServiceImpl.class);
 
     @Resource
     private EmbeddingStore<TextSegment> embeddingStore;

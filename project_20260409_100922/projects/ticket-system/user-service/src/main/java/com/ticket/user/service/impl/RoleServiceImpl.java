@@ -2,9 +2,9 @@ package com.ticket.user.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.ticket.common.entity.Role;
-import com.ticket.common.entity.RolePermission;
-import com.ticket.common.entity.User;
+import com.ticket.entity.Role;
+import com.ticket.entity.RolePermission;
+import com.ticket.entity.User;
 import com.ticket.user.mapper.RoleMapper;
 import com.ticket.user.mapper.RolePermissionMapper;
 import com.ticket.user.mapper.UserMapper;

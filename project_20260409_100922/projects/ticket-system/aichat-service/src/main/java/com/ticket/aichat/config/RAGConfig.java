@@ -1,7 +1,7 @@
 package com.ticket.aichat.config;
 
 import com.ticket.aichat.tool.AIBusinessTool;
-import com.ticket.common.util.UserContext;
+import com.ticket.util.UserContext;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;

@@ -2,13 +2,13 @@ package com.ticket.user.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.ticket.common.enums.CacheKey;
-import com.ticket.common.entity.User;
+import com.ticket.enums.CacheKey;
+import com.ticket.entity.User;
 import com.ticket.user.mapper.UserMapper;
 import com.ticket.user.service.PermissionService;
 import com.ticket.user.service.UserService;
-import com.ticket.common.util.RedisUtil;
-import com.ticket.common.util.CryptoUtil;
+import com.ticket.util.RedisUtil;
+import com.ticket.util.CryptoUtil;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 

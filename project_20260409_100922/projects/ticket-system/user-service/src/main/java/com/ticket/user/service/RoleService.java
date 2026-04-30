@@ -1,7 +1,7 @@
 package com.ticket.user.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.ticket.common.entity.Role;
+import com.ticket.entity.Role;
 
 /**
  * 角色服务接口

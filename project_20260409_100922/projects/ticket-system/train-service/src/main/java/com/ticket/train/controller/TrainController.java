@@ -1,10 +1,10 @@
 package com.ticket.train.controller;
 
-import com.ticket.common.entity.TicketStock;
-import com.ticket.common.enums.BusinessStatus;
-import com.ticket.common.entity.Train;
+import com.ticket.entity.TicketStock;
+import com.ticket.enums.BusinessStatus;
+import com.ticket.entity.Train;
 import com.ticket.train.service.TrainService;
-import com.ticket.common.util.ResponseUtil;
+import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
 

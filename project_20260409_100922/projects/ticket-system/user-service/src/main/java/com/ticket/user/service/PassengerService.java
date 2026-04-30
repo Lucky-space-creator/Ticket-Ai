@@ -1,8 +1,8 @@
 package com.ticket.user.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.ticket.common.entity.Passenger;
-import com.ticket.common.entity.User;
+import com.ticket.entity.Passenger;
+import com.ticket.entity.User;
 
 import java.util.List;
 

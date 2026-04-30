@@ -1,7 +1,7 @@
 package com.ticket.user.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.ticket.common.entity.Permission;
+import com.ticket.entity.Permission;
 
 import java.util.List;
 

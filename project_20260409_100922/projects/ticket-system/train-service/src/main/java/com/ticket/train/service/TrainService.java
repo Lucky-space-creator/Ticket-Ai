@@ -1,8 +1,8 @@
 package com.ticket.train.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.ticket.common.entity.TicketStock;
-import com.ticket.common.entity.Train;
+import com.ticket.entity.TicketStock;
+import com.ticket.entity.Train;
 
 import java.math.BigDecimal;
 import java.util.List;

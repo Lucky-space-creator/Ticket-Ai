@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.ticket.entity.TicketStock;
 import com.ticket.entity.Train;
 import com.ticket.enums.BusinessStatus;
-import com.ticket.mapper.TicketStockMapper;
+import com.ticket.train.mapper.TicketStockMapper;
 import com.ticket.train.service.StockGenerationService;
 import com.ticket.train.service.StockLockService;
 import com.ticket.train.service.TrainService;

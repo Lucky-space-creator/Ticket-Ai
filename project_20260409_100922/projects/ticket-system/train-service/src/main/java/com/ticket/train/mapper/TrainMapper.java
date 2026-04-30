@@ -1,7 +1,7 @@
 package com.ticket.train.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.ticket.common.entity.Train;
+import com.ticket.entity.Train;
 import org.apache.ibatis.annotations.Mapper;
 
 /**

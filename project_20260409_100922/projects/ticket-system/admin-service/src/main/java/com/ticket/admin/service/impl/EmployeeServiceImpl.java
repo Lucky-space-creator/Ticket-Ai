@@ -7,7 +7,7 @@ import com.ticket.entity.Employee;
 import com.ticket.admin.mapper.ChatSessionMapper;
 import com.ticket.admin.mapper.EmployeeMapper;
 import com.ticket.admin.service.EmployeeService;
-import com.ticket.common.util.CryptoUtil;
+import com.ticket.util.CryptoUtil;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import java.util.List;

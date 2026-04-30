@@ -41,6 +41,66 @@ public class JwtUtil {
     public static final String USER_TYPE_EMPLOYEE = "employee";
 
     /**
+     * 管理员角色
+     */
+    public static final String ROLE_ADMIN = "admin";
+
+    /**
+     * 客服角色
+     */
+    public static final String ROLE_CUSTOMER_SERVICE = "customer_service";
+
+    /**
+     * 普通用户角色
+     */
+    public static final String ROLE_USER = "user";
+
+    /**
+     * 默认JWT过期时间（7天，毫秒）
+     */
+    public static final long DEFAULT_EXPIRATION = 7 * 24 * 60 * 60 * 1000L;
+
+    /**
+     * JWT token前缀
+     */
+    public static final String TOKEN_PREFIX = "Bearer ";
+
+    /**
+     * JWT header名称
+     */
+    public static final String HEADER_NAME = "Authorization";
+
+    /**
+     * 用户ID字段名
+     */
+    public static final String CLAIM_USER_ID = "userId";
+
+    /**
+     * 员工ID字段名
+     */
+    public static final String CLAIM_EMPLOYEE_ID = "employeeId";
+
+    /**
+     * 用户类型字段名
+     */
+    public static final String CLAIM_USER_TYPE = "userType";
+
+    /**
+     * 手机号字段名
+     */
+    public static final String CLAIM_PHONE = "phone";
+
+    /**
+     * 角色字段名
+     */
+    public static final String CLAIM_ROLES = "roles";
+
+    /**
+     * 权限字段名
+     */
+    public static final String CLAIM_PERMISSIONS = "permissions";
+
+    /**
      * 生成 Token
      */
     public String generateToken(Long userId, String phone) {

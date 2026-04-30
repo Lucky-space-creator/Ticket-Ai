@@ -13,9 +13,9 @@ server:
     max-http-form-post-size: 10MB
     max-swallow-size: 10MB
     threads:
-      max: 150              # 从200降至150（单请求耗时↓80%，同等并发所需线程↓）
+      max: 200              # 从200降至150（单请求耗时↓80%，同等并发所需线程↓）
       min-spare: 20         # 从10提升至20（保持更多热线程应对突发）
-      accept-count: 500      # 从100大幅提升至500（作为流量蓄水池）
+      accept-count: 800      # 从100大幅提升至500（作为流量蓄水池）
     # 连接超时配置
     connection-timeout: 10000   # 10秒连接超时
     keep-alive-timeout: 30s     # 长连接保持30秒（前端轮询需要）
@@ -24,7 +24,7 @@ gateway:
   security-enabled: true
 
   # 全局限流（保护整个服务不被打垮）
-  global-rps: 100          # 全局每秒最大请求数
+  global-rps: 10000          # 全局每秒最大请求数
   global-window-seconds: 1 # 滑动窗口1秒
 
   # IP限流（防止单IP攻击）
@@ -32,7 +32,7 @@ gateway:
   ip-window-seconds: 1
 
   # 用户限流（防止刷接口）
-  user-rps: 10             # 单用户每秒最大请求
+  user-rps: 1000             # 单用户每秒最大请求
   user-window-seconds: 1
 
   # 下单接口专用严格限流（核心业务保护）
@@ -83,8 +83,8 @@ spring:
     druid:
       # 连接池核心配置
       initial-size: 15       # 从10提升至15（Consumer启动时需要更多连接）
-      min-idle: 15           # 从10提升至15（保持更多热连接）
-      max-active: 150        # 保持不变（总DB并发未变）
+      min-idle: 30           # 从10提升至30（保持更多热连接）
+      max-active: 250        # 保持不变（总DB并发未变）
       max-wait: 3000         # 从5000降至3000（快速失败，避免阻塞）
       
       # 连接有效性检测

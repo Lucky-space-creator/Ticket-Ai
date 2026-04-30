@@ -1,8 +1,8 @@
 package com.ticket.admin.controller;
 
 import com.ticket.admin.service.EmployeeService;
-import com.ticket.common.util.ResponseUtil;
-import com.ticket.common.util.UserContext;
+import com.ticket.util.ResponseUtil;
+import com.ticket.util.UserContext;
 import com.ticket.entity.Employee;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;

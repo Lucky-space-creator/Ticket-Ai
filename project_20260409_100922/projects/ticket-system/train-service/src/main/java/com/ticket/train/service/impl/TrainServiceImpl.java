@@ -2,14 +2,14 @@ package com.ticket.train.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.ticket.common.enums.CacheKey;
-import com.ticket.common.entity.TicketStock;
-import com.ticket.common.entity.Train;
+import com.ticket.enums.CacheKey;
+import com.ticket.entity.TicketStock;
+import com.ticket.entity.Train;
 import com.ticket.train.mapper.TicketStockMapper;
 import com.ticket.train.mapper.TrainMapper;
 import com.ticket.train.service.StockLockService;
 import com.ticket.train.service.TrainService;
-import com.ticket.common.util.RedisUtil;
+import com.ticket.util.RedisUtil;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

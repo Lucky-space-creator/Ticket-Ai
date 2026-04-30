@@ -1,6 +1,5 @@
 package com.ticket.order.service.impl;
 
-import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -15,11 +14,11 @@ import com.ticket.enums.CacheKey;
 import com.ticket.enums.ResponseCode;
 import com.ticket.order.mapper.OrderItemMapper;
 import com.ticket.order.mapper.OrderMapper;
-import com.ticket.order.service.RocketMQProducerService;
 import com.ticket.order.service.OrderService;
-import com.ticket.order.service.StockLockService;
+import com.ticket.service.RocketMQProducerService;
+import com.ticket.train.service.StockLockService;
 import com.ticket.train.service.TrainService;
-import com.ticket.order.service.UserService;
+import com.ticket.user.service.UserService;
 import com.ticket.util.MQIdempotentUtil;
 import com.ticket.util.RedisUtil;
 import com.ticket.util.SnowflakeIdUtil;

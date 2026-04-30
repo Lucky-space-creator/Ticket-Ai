@@ -1,14 +1,14 @@
 package com.ticket.user.controller;
 
-import com.ticket.common.entity.User;
-import com.ticket.common.entity.Role;
+import com.ticket.entity.User;
+import com.ticket.entity.Role;
+import com.ticket.enums.ResponseCode;
 import com.ticket.user.service.UserService;
 import com.ticket.user.service.RoleService;
-import com.ticket.common.util.CryptoUtil;
-import com.ticket.common.util.ResponseUtil;
-import com.ticket.common.util.UserContext;
+import com.ticket.util.CryptoUtil;
+import com.ticket.util.ResponseUtil;
+import com.ticket.util.UserContext;
 import jakarta.annotation.Resource;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,7 +18,6 @@ import java.util.Map;
 /**
  * 用户控制器
  */
-@Slf4j
 @RestController
 @RequestMapping("/api/user")
 @CrossOrigin(origins = "*")
@@ -38,13 +37,13 @@ public class UserController {
         try {
             Long userId = UserContext.getCurrentUserId();
             if (userId == null) {
-                return ResponseUtil.error(com.ticket.common.enums.ResponseCode.UNAUTHORIZED);
+                return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
             }
 
             User user = userService.getById(userId);
 
             if (user == null) {
-                return ResponseUtil.error(com.ticket.common.enums.ResponseCode.USER_NOT_FOUND);
+                return ResponseUtil.error(ResponseCode.USER_NOT_FOUND);
             }
 
             // 返回用户信息
@@ -89,7 +88,7 @@ public class UserController {
         try {
             Long userId = UserContext.getCurrentUserId();
             if (userId == null) {
-                return ResponseUtil.error(com.ticket.common.enums.ResponseCode.UNAUTHORIZED);
+                return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
             }
 
             boolean result = userService.updateProfile(
@@ -111,9 +110,24 @@ public class UserController {
     /**
      * 更新个人信息请求DTO
      */
-    @lombok.Data
     public static class UpdateProfileRequest {
         private String realName;
         private String idCard;
+        
+        public String getRealName() {
+            return realName;
+        }
+        
+        public void setRealName(String realName) {
+            this.realName = realName;
+        }
+        
+        public String getIdCard() {
+            return idCard;
+        }
+        
+        public void setIdCard(String idCard) {
+            this.idCard = idCard;
+        }
     }
 }
