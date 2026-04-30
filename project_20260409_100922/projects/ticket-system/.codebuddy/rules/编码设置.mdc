@@ -1,0 +1,9 @@
+---
+description: 
+alwaysApply: true
+enabled: true
+updatedAt: 2026-04-30T10:03:52.793Z
+provider: 
+---
+
+不允许改动backend里面的代码，只能照着他改其他服务模块
