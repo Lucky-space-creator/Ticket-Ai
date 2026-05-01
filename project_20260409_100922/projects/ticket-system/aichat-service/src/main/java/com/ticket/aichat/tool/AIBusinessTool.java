@@ -13,7 +13,7 @@ import java.util.List;
  * 在aichat-service中，由于微服务拆分，实际业务工具需要通过Feign调用其他服务
  * 这里提供基本的工具接口，确保编译通过
  */
-@Component
+@Component("aichatAIBusinessTool")
 public class AIBusinessTool {
 
     private static final Logger log = LoggerFactory.getLogger(AIBusinessTool.class);

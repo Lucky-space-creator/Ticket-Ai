@@ -1,8 +1,8 @@
+com\ticket\order\controller\OrderController.class
+com\ticket\order\mapper\OrderItemMapper.class
 com\ticket\order\service\OrderQueueService.class
 com\ticket\order\mapper\OrderMapper.class
 com\ticket\order\service\impl\OrderQueueServiceImpl.class
-com\ticket\order\controller\OrderController.class
 com\ticket\order\service\OrderService.class
-com\ticket\order\mapper\OrderItemMapper.class
 com\ticket\order\OrderServiceApplication.class
 com\ticket\order\service\impl\OrderServiceImpl.class

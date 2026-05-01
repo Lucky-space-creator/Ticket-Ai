@@ -8,7 +8,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 /**
  * 订单服务启动类
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = "com.ticket")
 @EnableDiscoveryClient
 @EnableFeignClients(basePackages = {"com.ticket"})
 public class OrderServiceApplication {

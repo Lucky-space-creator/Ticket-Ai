@@ -7,6 +7,7 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -18,6 +19,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
+@ConditionalOnBean(PermissionService.class)
 public class PermissionInterceptor implements HandlerInterceptor {
 
     @Resource

@@ -5,17 +5,16 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ticket.entity.Role;
 import com.ticket.entity.RolePermission;
 import com.ticket.entity.User;
+import com.ticket.service.PermissionService;
 import com.ticket.user.mapper.RoleMapper;
 import com.ticket.user.mapper.RolePermissionMapper;
 import com.ticket.user.mapper.UserMapper;
-import com.ticket.user.service.PermissionService;
 import com.ticket.user.service.RoleService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.List;
 
 /**

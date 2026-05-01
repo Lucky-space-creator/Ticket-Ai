@@ -1,9 +1,10 @@
 package com.ticket.config;
 
-import jakarta.annotation.Resource;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -20,17 +21,23 @@ import java.util.List;
 @EnableAspectJAutoProxy
 public class WebMvcConfig implements WebMvcConfigurer {
 
-    @Resource
-    private AuthenticationInterceptor authenticationInterceptor;
+    private final ObjectProvider<AuthenticationInterceptor> authenticationInterceptorProvider;
 
-    @Resource
-    private PermissionInterceptor permissionInterceptor;
+    private final ObjectProvider<PermissionInterceptor> permissionInterceptorProvider;
 
-    @Resource
-    private RateLimitInterceptor rateLimitInterceptor;
+    private final ObjectProvider<RateLimitInterceptor> rateLimitInterceptorProvider;
 
-    @Resource
-    private SecurityFilter securityFilter;
+    private final ObjectProvider<SecurityFilter> securityFilterProvider;
+
+    public WebMvcConfig(ObjectProvider<PermissionInterceptor> permissionInterceptorProvider,
+                        ObjectProvider<RateLimitInterceptor> rateLimitInterceptorProvider,
+                        ObjectProvider<AuthenticationInterceptor> authenticationInterceptorProvider,
+                        ObjectProvider<SecurityFilter> securityFilterProvider) {
+        this.permissionInterceptorProvider = permissionInterceptorProvider;
+        this.rateLimitInterceptorProvider = rateLimitInterceptorProvider;
+        this.authenticationInterceptorProvider = authenticationInterceptorProvider;
+        this.securityFilterProvider = securityFilterProvider;
+    }
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
@@ -44,44 +51,55 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         // 0. 限流拦截器（最先执行）
-        registry.addInterceptor(rateLimitInterceptor)
-                .addPathPatterns("/api/**")
-                .excludePathPatterns(
-                        "/api/auth/**",
-                        "/api/trains/**",
-                        "/api/stations/**"
-                );
+        RateLimitInterceptor rateLimitInterceptor = rateLimitInterceptorProvider.getIfAvailable();
+        if (rateLimitInterceptor != null) {
+            registry.addInterceptor(rateLimitInterceptor)
+                    .addPathPatterns("/api/**")
+                    .excludePathPatterns(
+                            "/api/auth/**",
+                            "/api/trains/**",
+                            "/api/stations/**"
+                    );
+        }
 
         // 1. 认证拦截器
-        registry.addInterceptor(authenticationInterceptor)
-                .addPathPatterns("/api/**")
-                .excludePathPatterns(
-                        "/api/auth/**",
-                        "/api/trains/**",
-                        "/api/stations/**"
-                );
+        AuthenticationInterceptor authenticationInterceptor = authenticationInterceptorProvider.getIfAvailable();
+        if (authenticationInterceptor != null) {
+            registry.addInterceptor(authenticationInterceptor)
+                    .addPathPatterns("/api/**")
+                    .excludePathPatterns(
+                            "/api/auth/**",
+                            "/api/trains/**",
+                            "/api/stations/**"
+                    );
+        }
 
         // 2. 权限拦截器
-        registry.addInterceptor(permissionInterceptor)
-                .addPathPatterns("/api/**")
-                .excludePathPatterns(
-                        "/api/auth/**",
-                        "/api/trains/**",
-                        "/api/stations/**",
-                        "/api/knowledge/list",
-                        "/api/chat/**",
-                        "/api/user/**",
-                        "/api/orders/**",
-                        "/api/passengers/**",
-                        "/api/customer-service/user-history"
-                );
+        PermissionInterceptor permissionInterceptor = permissionInterceptorProvider.getIfAvailable();
+        if (permissionInterceptor != null) {
+            registry.addInterceptor(permissionInterceptor)
+                    .addPathPatterns("/api/**")
+                    .excludePathPatterns(
+                            "/api/auth/**",
+                            "/api/trains/**",
+                            "/api/stations/**",
+                            "/api/knowledge/list",
+                            "/api/chat/**",
+                            "/api/user/**",
+                            "/api/orders/**",
+                            "/api/passengers/**",
+                            "/api/customer-service/user-history"
+                    );
+        }
     }
 
     /**
      * 注册安全过滤器（优先级最高，在所有拦截器之前执行）
      */
     @org.springframework.context.annotation.Bean
+    @ConditionalOnBean(SecurityFilter.class)
     public FilterRegistrationBean<SecurityFilter> securityFilterRegistration() {
+        SecurityFilter securityFilter = securityFilterProvider.getObject();
         FilterRegistrationBean<SecurityFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(securityFilter);
         registration.addUrlPatterns("/api/*");

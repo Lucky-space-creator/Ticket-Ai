@@ -30,32 +30,32 @@ public class RedisMasterSlaveConfig {
     /**
      * 主节点主机，默认 localhost
      */
-    @Value("${spring.data.redis.master.host:localhost}")
+    @Value("${spring.data.redis.master.host}")
     private String masterHost;
 
     /**
      * 主节点端口，默认 6379
      */
-    @Value("${spring.data.redis.master.port:6379}")
+    @Value("${spring.data.redis.master.port}")
     private int masterPort;
 
     /**
      * 从节点配置字符串，格式：host:port,host:port
      * 例如：localhost:6380,localhost:6381
      */
-    @Value("${spring.data.redis.slaves:localhost:6381}")
+    @Value("${spring.data.redis.slaves}")
     private String slaves;
 
     /**
      * 数据库索引，默认 0
      */
-    @Value("${spring.data.redis.database:0}")
+    @Value("${spring.data.redis.database}")
     private int database;
 
     /**
      * 连接超时时间（毫秒），默认 10000
      */
-    @Value("${spring.data.redis.timeout:10000}")
+    @Value("${spring.data.redis.timeout}")
     private int timeout;
 
     /**

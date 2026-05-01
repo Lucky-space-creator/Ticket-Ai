@@ -7,6 +7,7 @@ import jakarta.annotation.Resource;
 import org.apache.rocketmq.client.producer.SendCallback;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.Message;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
  * 封装所有Topic的消息发送逻辑，提供类型安全的发送方法
  */
 @Service
+@ConditionalOnBean(RocketMQTemplate.class)
 public class RocketMQProducerService {
 
     private static final Logger logger = LoggerFactory.getLogger(RocketMQProducerService.class);

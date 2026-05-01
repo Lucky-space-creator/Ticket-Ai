@@ -2,6 +2,7 @@ package com.ticket.config;
 
 import com.ticket.tool.AIBusinessTool;
 import com.ticket.util.UserContext;
+import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
@@ -16,10 +17,10 @@ import com.ticket.service.StreamingKnowledgeAssistant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import reactor.core.publisher.Flux;
@@ -28,13 +29,14 @@ import reactor.core.publisher.Flux;
  * RAG 配置
  */
 @Configuration
+@ConditionalOnProperty(name = "ai.enabled", havingValue = "true")
 public class RAGConfig {
     private static final Logger log = LoggerFactory.getLogger(RAGConfig.class);
 
-    @Value("${rag.max-results}")
+    @Value("${rag.max-results:3}")
     private int maxResults;
 
-    @Value("${rag.min-score}")
+    @Value("${rag.min-score:0.7}")
     private Double minScore;
 
     // 存储每个用户的聊天记忆
@@ -98,7 +100,7 @@ public class RAGConfig {
     @Bean
     public KnowledgeAssistant knowledgeAssistant(
             ChatLanguageModel chatLanguageModel,
-            EmbeddingStore embeddingStore,
+            EmbeddingStore<TextSegment> embeddingStore,
             ChatMemory chatMemory,
             EmbeddingModel embeddingModel,
             AIBusinessTool aiBusinessTool) {
@@ -163,7 +165,7 @@ public class RAGConfig {
     @Bean
     public StreamingKnowledgeAssistant streamingKnowledgeAssistant(
             StreamingChatLanguageModel streamingChatLanguageModel,
-            EmbeddingStore embeddingStore,
+            EmbeddingStore<TextSegment> embeddingStore,
             ChatMemory chatMemory,
             EmbeddingModel embeddingModel,
             AIBusinessTool aiBusinessTool) {

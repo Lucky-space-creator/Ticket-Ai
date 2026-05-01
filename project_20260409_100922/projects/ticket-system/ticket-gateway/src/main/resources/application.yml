@@ -4,7 +4,7 @@ server:
 
 spring:
   config:
-    import: optional:nacos:ticket-gateway.yaml
+    import: optional:nacos:sharding-gateway-config.yaml
   cloud:
     gateway:
       routes:
@@ -75,39 +75,20 @@ spring:
           enabled: true  # 启用服务发现自动路由（备用）
           lower-case-service-id: true
 
-  # Redis配置（用于限流）
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      database: 0
-      timeout: 10000
-      lettuce:
-        pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 0
-
   # 安全配置（允许跨域）
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${JWT_ISSUER_URI:}
-
-# 网关自定义配置
-gateway:
-  rate-limit-enabled: true
-  global-rps: 10000
-  ip-rps: 20
-  user-rps: 1000
-  order-per-user-per-minute: 5
+          issuer-uri:
 
 # 日志配置
 logging:
   level:
     com.ticket.gateway: debug
     org.springframework.cloud.gateway: debug
+    com.alibaba.cloud.nacos: DEBUG
+    com.alibaba.nacos.client.naming: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 

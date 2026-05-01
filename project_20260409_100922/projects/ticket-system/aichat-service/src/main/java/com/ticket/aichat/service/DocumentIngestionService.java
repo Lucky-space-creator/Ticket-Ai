@@ -38,10 +38,10 @@ public class DocumentIngestionService {
     @Resource
     private EmbeddingModel embeddingModel;
 
-    @Value("${knowledge.base-path}")
+    @Value("${knowledge.base-path:knowledge-base}")
     private String knowledgeBasePath;
 
-    @Value("${knowledge.init-on-startup}")
+    @Value("${knowledge.init-on-startup:false}")
     private boolean initOnStartup;
 
     @Value("${ai.ollama.base-url}")

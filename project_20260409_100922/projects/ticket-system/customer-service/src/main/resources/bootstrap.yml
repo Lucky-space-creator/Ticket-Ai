@@ -5,19 +5,25 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
-        namespace: ${NACOS_NAMESPACE:}
-        group: ${NACOS_GROUP:DEFAULT_GROUP}
-        cluster-name: ${NACOS_CLUSTER_NAME:DEFAULT}
+        server-addr: localhost:8848
+        namespace: 
+        group: DEFAULT_GROUP
+        cluster-name: DEFAULT
       config:
-        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
-        namespace: ${NACOS_NAMESPACE:}
-        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        server-addr: localhost:8848
+        namespace: 
+        group: DEFAULT_GROUP
         file-extension: yaml
         import-check:
           enabled: false
         shared-configs:
-          - data-id: ticket-common.yaml
+          - data-id: sharding-redis-config.yaml
+            group: DEFAULT_GROUP
+            refresh: true
+          - data-id: sharding-database-config.yaml
+            group: DEFAULT_GROUP
+            refresh: true
+          - data-id: sharding-MyBatisPlus-config.yaml
             group: DEFAULT_GROUP
             refresh: true
         extension-configs:
@@ -25,4 +31,4 @@ spring:
             group: DEFAULT_GROUP
             refresh: true
   profiles:
-    active: ${PROFILE_ACTIVE:dev}
+    active: dev

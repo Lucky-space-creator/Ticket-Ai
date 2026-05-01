@@ -1,5 +1,6 @@
 com\ticket\service\ChatSessionService.class
 com\ticket\controller\admin\AdminUserController.class
+com\ticket\dto\mq\OrderQueueRequest.class
 com\ticket\config\RedisConfig.class
 com\ticket\dto\UserRegisterRequest.class
 com\ticket\entity\TicketStock.class
@@ -22,12 +23,15 @@ com\ticket\service\PassengerService.class
 com\ticket\mapper\KnowledgeBaseMapper.class
 com\ticket\service\impl\AIChatServiceImpl.class
 com\ticket\util\MQIdempotentUtil.class
+com\ticket\config\GatewayConfig.class
 com\ticket\dto\CreateOrderRequest$OrderItemRequest.class
 com\ticket\config\TraceConfig.class
+com\ticket\service\impl\OrderQueueServiceImpl.class
 com\ticket\service\impl\UserServiceImpl.class
 com\ticket\mapper\RoleMapper.class
 com\ticket\service\impl\PassengerServiceImpl.class
 com\ticket\entity\OperationLog.class
+com\ticket\config\SecurityFilter.class
 com\ticket\controller\admin\AdminPermissionController$CreatePermissionRequest.class
 com\ticket\config\RAGConfig.class
 com\ticket\consumer\PaymentConfirmedConsumer.class
@@ -72,6 +76,7 @@ com\ticket\controller\admin\AdminUserController$UpdateStatusRequest.class
 com\ticket\controller\TrainController.class
 com\ticket\util\RedisUtil.class
 com\ticket\service\UserService.class
+com\ticket\dto\mq\OrderQueueRequest$PassengerItem.class
 com\ticket\entity\KnowledgeBase.class
 com\ticket\util\UserContext$Context.class
 com\ticket\util\CacheUtil$CacheItem.class
@@ -98,6 +103,8 @@ com\ticket\service\EmployeeService.class
 com\ticket\mapper\EmployeeMapper.class
 com\ticket\mapper\OrderItemMapper.class
 com\ticket\handler\ChatWebSocketHandler.class
+com\ticket\config\RateLimitInterceptor.class
+com\ticket\config\RocketMQCheckConfig.class
 com\ticket\entity\RolePermission.class
 com\ticket\service\RoleService.class
 com\ticket\enums\ResponseCode.class
@@ -143,6 +150,7 @@ com\ticket\dto\CreateOrderRequest.class
 com\ticket\mapper\PassengerMapper.class
 com\ticket\service\OrderService.class
 com\ticket\service\StockGenerationService.class
+com\ticket\consumer\OrderQueueConsumer.class
 com\ticket\dto\mq\ChatRecordEvent.class
 com\ticket\controller\KnowledgeController$KnowledgeRequest.class
 com\ticket\consumer\OperationLogConsumer.class
@@ -160,3 +168,4 @@ com\ticket\dto\ChatResponse.class
 com\ticket\controller\CustomerServiceController.class
 com\ticket\service\impl\KnowledgeBaseServiceImpl.class
 com\ticket\service\KnowledgeAssistant.class
+com\ticket\service\OrderQueueService.class

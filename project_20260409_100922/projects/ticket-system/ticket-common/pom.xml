@@ -15,6 +15,7 @@
     <artifactId>ticket-common</artifactId>
     <name>ticket-common</name>
     <description>公共模块：实体、DTO、工具类、配置类、常量等</description>
+    <packaging>jar</packaging>
 
     <dependencies>
         <!-- Spring Boot Web (提供Web相关工具) -->
@@ -180,19 +181,18 @@
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
 
-        <!-- Nacos Service Discovery (服务发现) -->
+        <!-- Nacos Config -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+        <!-- Nacos Config 需要引用公共配置的微服务 -->
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
         </dependency>
 
-        <!-- Nacos Config (配置中心) -->
-        <dependency>
-            <groupId>com.alibaba.cloud</groupId>
-            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
-        </dependency>
-
-        <!-- Spring Cloud Bootstrap (Spring Boot 3.x 必需) -->
+        <!-- Spring Cloud Bootstrap（启用 bootstrap.yml 加载） -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-bootstrap</artifactId>

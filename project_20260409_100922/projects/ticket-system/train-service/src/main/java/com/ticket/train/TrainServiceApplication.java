@@ -8,9 +8,9 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 /**
  * 车次服务启动类
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = "com.ticket")
 @EnableDiscoveryClient
-@EnableFeignClients(basePackages = {"com.ticket"})
+@EnableFeignClients
 public class TrainServiceApplication {
     public static void main(String[] args) {
         SpringApplication.run(TrainServiceApplication.class, args);

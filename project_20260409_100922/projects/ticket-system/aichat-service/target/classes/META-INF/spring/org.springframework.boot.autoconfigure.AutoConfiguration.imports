@@ -2,5 +2,3 @@ com.ticket.config.WebMvcConfig
 com.ticket.util.JwtUtil
 com.ticket.util.RedisUtil
 com.ticket.config.PermissionInterceptor
-com.ticket.service.PermissionService
-com.ticket.service.impl.PermissionServiceImpl
