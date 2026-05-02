@@ -1,6 +1,11 @@
 # 本地默认配置（当Nacos配置缺失时使用）
+# 503 常见原因：1) Nacos 未启动或服务未注册，lb:// 无可用实例；2) 带 Redis 限流的路由在 Redis 不可用时失败。
 server:
   port: 8080
+
+# 必须与 user-service / order-service / customer-service / aichat-service 等 JwtUtil 配置一致，否则带 Token 的请求在网关即 401
+jwt:
+  secret: ticket-system-secret-key-2024-please-change-in-production
 
 spring:
   config:
@@ -8,28 +13,39 @@ spring:
   cloud:
     gateway:
       routes:
-        # 用户服务路由
+        # 登录/注册不走 Redis 限流（避免本地 Redis 未起时整页 503）
+        - id: user-service-auth-public
+          uri: lb://user-service
+          order: -10
+          predicates:
+            - Path=/api/auth/login,/api/auth/register
+
+        # 用户服务（需限流的业务接口）
         - id: user-service
           uri: lb://user-service
           predicates:
-            - Path=/api/auth/**,/api/user/**,/api/passengers/**
+            - Path=/api/user/**,/api/passengers/**
           filters:
             - name: RequestRateLimiter
               args:
                 redis-rate-limiter.replenishRate: 10
                 redis-rate-limiter.burstCapacity: 20
                 key-resolver: "#{@userKeyResolver}"
-            - StripPrefix=1
 
         # 车次服务路由
         - id: train-service
           uri: lb://train-service
           predicates:
             - Path=/api/trains/**,/api/ticket-stocks/**
-          filters:
-            - StripPrefix=1
 
-        # 订单服务路由
+        # 下单排队轮询：高频只读，不走 Redis 限流（与下单/支付限流解耦）
+        - id: order-service-queue-read
+          uri: lb://order-service
+          order: -10
+          predicates:
+            - Path=/api/orders/queue/**
+
+        # 订单服务路由（创建/支付/退票/列表等）
         - id: order-service
           uri: lb://order-service
           predicates:
@@ -40,39 +56,46 @@ spring:
                 redis-rate-limiter.replenishRate: 5
                 redis-rate-limiter.burstCapacity: 10
                 key-resolver: "#{@userKeyResolver}"
-            - StripPrefix=1
 
         # AI聊天服务路由
         - id: aichat-service
           uri: lb://aichat-service
           predicates:
             - Path=/api/chat/**,/api/knowledge/**
-          filters:
-            - StripPrefix=1
 
-        # 客服服务路由
+        # 客服服务路由（REST）
         - id: customer-service
           uri: lb://customer-service
           predicates:
             - Path=/api/customer-service/**
-          filters:
-            - StripPrefix=1
+
+        # 客服 WebSocket（customer-service 注册为 /ws/chat/**，不经 StripPrefix）
+        - id: customer-service-ws
+          uri: lb://customer-service
+          predicates:
+            - Path=/ws/**
+
+        # 管理端登录单独声明（便于与 Jwt 白名单、后续扩展对齐；order 更高优先于 /api/admin/**）
+        - id: admin-service-auth-public
+          uri: lb://admin-service
+          order: -10
+          predicates:
+            - Path=/api/admin/auth/login
 
         # 管理服务路由
         - id: admin-service
           uri: lb://admin-service
           predicates:
             - Path=/api/admin/**
-          filters:
-            - StripPrefix=1
 
       default-filters:
         - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
         - AddResponseHeader=X-Gateway-Version, ticket-gateway-1.0
 
+      # 关闭按服务名自动暴露路由，避免与显式 /api/** 路由混淆及误暴露内部端口
       discovery:
         locator:
-          enabled: true  # 启用服务发现自动路由（备用）
+          enabled: false
           lower-case-service-id: true
 
   # 安全配置（允许跨域）
@@ -85,10 +108,10 @@ spring:
 # 日志配置
 logging:
   level:
-    com.ticket.gateway: debug
-    org.springframework.cloud.gateway: debug
-    com.alibaba.cloud.nacos: DEBUG
-    com.alibaba.nacos.client.naming: DEBUG
+    com.ticket.gateway: INFO
+    org.springframework.cloud.gateway: INFO
+    com.alibaba.cloud.nacos: WARN
+    com.alibaba.nacos.client.naming: WARN
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 

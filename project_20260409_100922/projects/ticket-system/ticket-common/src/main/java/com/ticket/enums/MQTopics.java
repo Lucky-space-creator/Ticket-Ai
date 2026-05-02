@@ -3,6 +3,9 @@ package com.ticket.enums;
 /**
  * RocketMQ Topic 常量定义
  * 按优先级排序：数字越小优先级越高
+ *
+ * <p><b>运行平面内的消费者归属</b>（勿与 {@code backend} 同组重复消费）见仓库文档
+ * {@code docs/microservices/ORDER-AND-MQ.md}。</p>
  */
 public class MQTopics {
 

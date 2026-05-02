@@ -22,7 +22,7 @@ public class RocketMQCheckConfig {
     @Value("${rocketmq.detect-enabled:true}")
     private boolean detectEnabled;
 
-    private RocketMQTemplate rocketMQTemplate;
+    private final RocketMQTemplate rocketMQTemplate;
 
     public RocketMQCheckConfig(RocketMQTemplate rocketMQTemplate) {
         this.rocketMQTemplate = rocketMQTemplate;

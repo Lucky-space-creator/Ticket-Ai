@@ -16,7 +16,15 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 库存锁服务实现（混合方案：核心扣减使用Lua脚本保证最高性能，其他操作使用Redisson便捷API）
+ * 库存锁服务实现。
+ *
+ * <p><b>职责边界（学习与维护要点）</b>：</p>
+ * <ul>
+ *   <li>{@link #tryDeduct}：仅依赖 <b>Redis Lua</b> 在单次脚本内完成「扣可用 + 加预占」，不在热路径叠加 {@code RLock}。</li>
+ *   <li>{@link #rollback} / {@link #confirm}：在 Lua 原子操作之外使用 <b>Redisson 锁</b>，主要与脚本失败后的 Redisson 降级分支协同；
+ *   跨服务一致性（订单 ↔ 库存）应靠编排与补偿，而非在调用方再套分布式锁。</li>
+ * </ul>
+ * 详细说明见 {@code docs/microservices/STOCK-LOCK-STRATEGY.md}。
  */
 @Service
 public class StockLockServiceImpl implements StockLockService {

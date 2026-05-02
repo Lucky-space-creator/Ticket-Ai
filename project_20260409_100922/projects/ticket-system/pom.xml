@@ -25,7 +25,9 @@
         <langchain4j.version>0.36.2</langchain4j.version>
         <druid.version>1.2.20</druid.version>
         <redisson.version>3.29.0</redisson.version>
-        <rocketMq.version>2.3.1</rocketMq.version>
+        <rocketMq.version>2.3.3</rocketMq.version>
+        <!-- rocketmq-spring-boot 2.3.x 会调用 DefaultMQPushConsumer#setNamespaceV2，5.1.4 客户端无此方法，需与 Spring 侧对齐 -->
+        <rocketmq.client.version>5.3.1</rocketmq.client.version>
         <hutool.version>5.8.24</hutool.version>
         <fastjson2.version>2.0.43</fastjson2.version>
         <logstash-logback-encoder.version>7.4</logstash-logback-encoder.version>
@@ -133,11 +135,43 @@
                 <version>${redisson.version}</version>
             </dependency>
 
-            <!-- RocketMQ -->
+            <!-- 本仓库公共模块（子服务无需再写 version） -->
+            <dependency>
+                <groupId>com.ticket</groupId>
+                <artifactId>ticket-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- RocketMQ：starter 版本 + 与 rocketmq-spring-boot 2.3.x 对齐的 Java 客户端栈（避免 5.1.4 缺 setNamespaceV2） -->
             <dependency>
                 <groupId>org.apache.rocketmq</groupId>
                 <artifactId>rocketmq-spring-boot-starter</artifactId>
                 <version>${rocketMq.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-client</artifactId>
+                <version>${rocketmq.client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-acl</artifactId>
+                <version>${rocketmq.client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-common</artifactId>
+                <version>${rocketmq.client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-remoting</artifactId>
+                <version>${rocketmq.client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-srvutil</artifactId>
+                <version>${rocketmq.client.version}</version>
             </dependency>
 
             <!-- Hutool -->
@@ -159,6 +193,13 @@
                 <groupId>net.logstash.logback</groupId>
                 <artifactId>logstash-logback-encoder</artifactId>
                 <version>${logstash-logback-encoder.version}</version>
+            </dependency>
+
+            <!-- OpenAPI（契约与 Swagger UI） -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>2.3.0</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -197,6 +238,7 @@
                     <source>${java.version}</source>
                     <target>${java.version}</target>
                     <encoding>${project.build.sourceEncoding}</encoding>
+                    <parameters>true</parameters>
                 </configuration>
             </plugin>
         </plugins>

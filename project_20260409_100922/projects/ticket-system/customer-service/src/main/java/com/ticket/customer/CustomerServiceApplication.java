@@ -11,7 +11,7 @@ import org.springframework.context.annotation.ComponentScan;
  */
 @SpringBootApplication(scanBasePackages = {"com.ticket"})
 @EnableDiscoveryClient
-@EnableFeignClients(basePackages = {"com.ticket"})
+@EnableFeignClients(basePackages = {"com.ticket.customer.client"})
 public class CustomerServiceApplication {
     public static void main(String[] args) {
         SpringApplication.run(CustomerServiceApplication.class, args);

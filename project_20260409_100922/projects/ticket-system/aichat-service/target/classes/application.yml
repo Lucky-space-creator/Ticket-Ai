@@ -2,6 +2,11 @@
 server:
   port: 8084
 
+# 与用户服务签发 Token 的密钥一致（网关与 AuthenticationInterceptor 校验）
+jwt:
+  secret: ticket-system-secret-key-2024-please-change-in-production
+  expiration: 604800000
+
 spring:
   config:
     import: optional:nacos:localhost:8848
@@ -27,19 +32,30 @@ management:
 # AI配置
 ai:
   enabled: true
-  model-type: ollama
+  model-type: http-api
   fallback:
     enabled: true
     fallback-type: http-api
   ollama:
-    base-url: http://localhost:11434
-    chat-model: qwen2.5:7b
+    base-url: http://192.168.48.135:11434
+    chat-model: llama3.2:3b # qwen2:1.5b不支持LangChain4j中的Tools注解     # 对话模型
     embedding-model: nomic-embed-text
     temperature: 0.7
-    timeout: 60
+    timeout: 600
   http-api:
-    base-url: https://api.openai.com/v1
-    api-key: 
+    base-url: https://api.cphone.vip/v1
+    api-key: sk-R0DiGIWSBV8mcxqouFxxqziqTSzK0YPJG7BpBCJuDY3fEIOT
     model: gpt-3.5-turbo
     temperature: 0.7
-    timeout: 60
+    timeout: 600
+
+# 知识库配置
+knowledge:
+  base-path: knowledge-base     # 知识库文件目录（相对于项目根目录）
+  init-on-startup: true        # 启动时初始化知识库
+
+# chroma配置
+chroma:
+  host: 192.168.48.135
+  port: 8000
+  collection: ticket_knowledge

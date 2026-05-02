@@ -9,14 +9,18 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * AI业务工具类（占位符）
- * 在aichat-service中，由于微服务拆分，实际业务工具需要通过Feign调用其他服务
- * 这里提供基本的工具接口，确保编译通过
+ * AI 可调用的业务工具。
+ * <p>写操作（下单/支付/退票/改资料/改乘客）在微服务场景下必须由用户经网关与领域服务显式确认，
+ * 禁止由 LLM 自动触发；见 {@code docs/microservices/AI-GUARDRAILS.md}。</p>
  */
 @Component("aichatAIBusinessTool")
 public class AIBusinessTool {
 
     private static final Logger log = LoggerFactory.getLogger(AIBusinessTool.class);
+
+    private static RuntimeException denyAutonomousWrite(String toolName) {
+        return new IllegalStateException("策略禁止：AI 工具「" + toolName + "」不得自动执行写操作，请通过官方购票/个人中心完成。");
+    }
 
     @Tool("查询车次信息，根据出发地、目的地和日期返回可用车次列表")
     public List<Object> searchTrains(
@@ -42,20 +46,17 @@ public class AIBusinessTool {
             @P(value = "座位类型", required = true) Integer seatType,
             @P(value = "乘客姓名", required = true) String passengerNames,
             @P(value = "身份证号", required = true) String idCards) {
-        log.warn("createOrder工具未实现，需要通过Feign调用order-service");
-        return null;
+        throw denyAutonomousWrite("createOrder");
     }
 
     @Tool("支付订单，根据订单号完成支付")
     public boolean payOrder(@P(value = "订单号", required = true) String orderNo) {
-        log.warn("payOrder工具未实现，需要通过Feign调用order-service");
-        return false;
+        throw denyAutonomousWrite("payOrder");
     }
 
     @Tool("取消订单，根据订单号取消未支付的订单或退票")
     public boolean refundOrder(@P(value = "订单号", required = true) String orderNo) {
-        log.warn("refundOrder工具未实现，需要通过Feign调用order-service");
-        return false;
+        throw denyAutonomousWrite("refundOrder");
     }
 
     @Tool("查询用户的所有订单")
@@ -74,8 +75,7 @@ public class AIBusinessTool {
     public boolean updateProfile(
             @P(value = "真实姓名", required = true) String realName,
             @P(value = "身份证号", required = true) String idCard) {
-        log.warn("updateProfile工具未实现，需要通过Feign调用user-service");
-        return false;
+        throw denyAutonomousWrite("updateProfile");
     }
 
     @Tool("获取常用联系人列表")
@@ -89,14 +89,12 @@ public class AIBusinessTool {
             @P(value = "姓名", required = true) String name,
             @P(value = "身份证号", required = true) String idCard,
             @P(value = "手机号", required = true) String phone) {
-        log.warn("addPassenger工具未实现，需要通过Feign调用user-service");
-        return null;
+        throw denyAutonomousWrite("addPassenger");
     }
 
     @Tool("删除常用联系人")
     public boolean deletePassenger(@P(value = "联系人ID", required = true) Long passengerId) {
-        log.warn("deletePassenger工具未实现，需要通过Feign调用user-service");
-        return false;
+        throw denyAutonomousWrite("deletePassenger");
     }
 
     @Tool("获取当前用户个人信息")

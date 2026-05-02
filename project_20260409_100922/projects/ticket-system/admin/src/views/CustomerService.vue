@@ -141,6 +141,7 @@ import { User, ChatDotRound } from '@element-plus/icons-vue'
 import { getPendingSessions, getServingSessions, getEndedSessions, acceptSession as apiAcceptSession, endSession as apiEndSession, getHistory, sendMessage as apiSendMessage } from '@/api/customerService'
 import { formatTime } from '@/utils/date'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { getWsBaseUrl } from '@/utils/wsBase'
 
 // 响应式数据
 const activeTab = ref('pending')
@@ -200,9 +201,8 @@ onUnmounted(() => {
 
 // 初始化 WebSocket
 const initWebSocket = () => {
-  // 建立连接，但不指定具体会话，等选择会话后再订阅
-  // 直接连接到后端 WebSocket 端口
-  const wsUrl = `ws://localhost:8080/ws/chat/global`
+  // 与网关 /ws/** 或 Vite 代理到 customer-service 一致
+  const wsUrl = `${getWsBaseUrl()}/ws/chat/global`
   connect(wsUrl, {
     onMessage: handleWebSocketMessage,
     onOpen: () => console.log('WebSocket connected'),

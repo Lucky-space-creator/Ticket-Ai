@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
 public class ChromaDBConfig {
     private static final Logger log = LoggerFactory.getLogger(ChromaDBConfig.class);
 
-    @Value("${chroma.host:localhost}")
+    @Value("${chroma.host:192.168.48.135}")
     private String host;
 
     @Value("${chroma.port:8000}")

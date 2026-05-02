@@ -8,17 +8,13 @@ import com.ticket.entity.Train;
 import com.ticket.train.mapper.TicketStockMapper;
 import com.ticket.train.mapper.TrainMapper;
 import com.ticket.service.StockLockService;
-import com.ticket.service.TrainService;
+import com.ticket.train.service.TrainService;
 import com.ticket.util.RedisUtil;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -126,14 +122,13 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
     }
 
     /**
-     * 车站到达时间 - 当前时间的函数
+     * 车次相关缓存过期时间（分钟）。
+     * 不可使用 Long.MAX_VALUE：写入 Redis TTL 时换算为毫秒会溢出为负数，导致 Lettuce 抛错或接口 500。
      */
-    private long getExpireTrainTime(Train train) {
-        //测试环境先直接返回大于0的天数
-//        LocalDateTime endDateTime = LocalDateTime.from(train.getEndTime());
-//        return ChronoUnit.SECONDS.between(LocalDateTime.now(), endDateTime);
+    private static final long TRAIN_CACHE_TTL_MINUTES = 30L;
 
-        return Long.MAX_VALUE;
+    private long getExpireTrainTime(Train train) {
+        return TRAIN_CACHE_TTL_MINUTES;
     }
 
     @Override

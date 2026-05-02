@@ -58,8 +58,7 @@ public class SecurityFilter extends OncePerRequestFilter {
         MALICIOUS_UA_KEYWORDS.add("dirbuster");
         MALICIOUS_UA_KEYWORDS.add("gobuster");
         MALICIOUS_UA_KEYWORDS.add("nuclei");
-        MALICIOUS_UA_KEYWORDS.add("python-requests");
-        MALICIOUS_UA_KEYWORDS.add("curl");
+        // 不拦截 curl / python-requests：易误判健康检查与本地脚本，且 UA 可伪造
     }
 
     @Override

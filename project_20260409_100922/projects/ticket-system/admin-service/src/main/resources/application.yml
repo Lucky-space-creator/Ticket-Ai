@@ -9,10 +9,10 @@ jwt:
 # 日志配置
 logging:
   level:
-    com.ticket.admin: debug
-    com.ticket.mapper: debug
-    com.alibaba.cloud.nacos: DEBUG
-    com.alibaba.nacos.client.naming: DEBUG
+    com.ticket.admin: DEBUG
+    com.ticket.mapper: DEBUG
+    com.alibaba.cloud.nacos: WARN
+    com.alibaba.nacos.client.naming: WARN
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{traceId:-}] %-5level %logger{36} - %msg%n"
 

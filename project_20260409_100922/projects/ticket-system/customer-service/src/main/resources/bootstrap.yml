@@ -26,8 +26,7 @@ spring:
           - data-id: sharding-MyBatisPlus-config.yaml
             group: DEFAULT_GROUP
             refresh: true
-        extension-configs:
-          - data-id: ticket-customer-service.yaml
+          - data-id: sharding-rocketmq-config.yaml
             group: DEFAULT_GROUP
             refresh: true
   profiles:

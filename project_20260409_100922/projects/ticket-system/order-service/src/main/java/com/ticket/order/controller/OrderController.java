@@ -3,18 +3,16 @@ package com.ticket.order.controller;
 import com.ticket.dto.CreateOrderRequest;
 import com.ticket.dto.mq.OrderQueueRequest;
 import com.ticket.entity.Order;
-import com.ticket.entity.OrderItem;
 import com.ticket.enums.ResponseCode;
+import com.ticket.order.integration.TrainOrderGateway;
 import com.ticket.order.service.OrderQueueService;
 import com.ticket.order.service.OrderService;
-import com.ticket.service.TrainService;
 import com.ticket.order.service.impl.OrderQueueServiceImpl;
 import com.ticket.util.CryptoUtil;
 import com.ticket.util.ResponseUtil;
 import com.ticket.util.UserContext;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -41,7 +39,7 @@ public class OrderController {
     private OrderService orderService;
 
     @Resource
-    private TrainService trainService;
+    private TrainOrderGateway trainOrderGateway;
 
     /**
      * 创建订单（快速入队模式 — MQ削峰核心改造）
@@ -67,7 +65,7 @@ public class OrderController {
             validateCreateOrderRequest(request);
 
             // 2. 查询真实票价
-            BigDecimal seatPrice = trainService.getSeatPrice(
+            BigDecimal seatPrice = trainOrderGateway.getSeatPrice(
                     request.getTrainId(), request.getTrainDate(),
                     request.getStartStation(), request.getEndStation(),
                     request.getSeatType()
@@ -88,51 +86,8 @@ public class OrderController {
             queueRequest.setClientIp(getClientIp(httpRequest));
             queueRequest.setEnqueueTime(System.currentTimeMillis());
 
-            // 5. 入队：Redis预扣库存 + MQ发送（核心！）
-            String requestId;
-            boolean useAsync = true;
-            try {
-                requestId = orderQueueService.enqueue(queueRequest);
-            } catch (RuntimeException mqEx) {
-                // MQ不可用时降级为同步模式（保证可用性）
-                if (mqEx.getMessage() != null && (
-                        mqEx.getMessage().contains("入队失败")
-                                || mqEx.getMessage().contains("RocketMQ")
-                                || mqEx.getMessage().contains("消息队列"))) {
-                    LoggerFactory.getLogger(OrderController.class)
-                            .warn("MQ入队失败，降级为同步模式: userId={}, error={}",
-                                    userId, mqEx.getMessage());
-                    useAsync = false;
-
-                    // 降级：直接同步调用原 OrderService 创建订单
-                    List<OrderItem> syncItems = buildSyncOrderItems(request.getItems(), seatPrice);
-                    Order order = orderService.createOrder(
-                            userId, request.getTrainId(), request.getTrainDate(),
-                            request.getStartStation(), request.getEndStation(),
-                            request.getSeatType(), syncItems
-                    );
-
-                    // 将同步结果写入Redis，以便轮询接口能正确返回
-                    try {
-                        orderQueueService.updateResult("sync-" + order.getOrderNo(),
-                                OrderQueueServiceImpl.STATUS_SUCCESS,
-                                order.getOrderNo(),
-                                null);
-                    } catch (Exception e) {
-                        LoggerFactory.getLogger(OrderController.class)
-                                .error("写入同步订单结果到Redis失败，不影响主流程: orderNo={}, error={}",
-                                        order.getOrderNo(), e.getMessage());
-                    }
-
-                    // 兼容前端轮询格式：直接返回SUCCESS（无需轮询）
-                    Map<String, Object> fallbackData = new HashMap<>(4);
-                    fallbackData.put("requestId", "sync-" + order.getOrderNo());
-                    fallbackData.put("status", "SUCCESS");
-                    fallbackData.put("orderNo", order.getOrderNo());
-                    return ResponseUtil.success("下单成功", fallbackData);
-                }
-                throw mqEx;
-            }
+            // 5. 入队：Redis预扣库存 + MQ发送（失败时已回滚预扣并标记 FAILED，不再做「同进程同步写单」降级）
+            String requestId = orderQueueService.enqueue(queueRequest);
 
             // 6. 异步模式：立即返回 PROCESSING 状态（前端开始轮询）
             Map<String, Object> resultData = new HashMap<>(4);
@@ -147,49 +102,9 @@ public class OrderController {
         }
     }
 
-    /**
-     * 轮询排队结果
-     * 前端以1~2秒间隔轮询此接口，直到获得SUCCESS或FAILED
-     */
-    @GetMapping("/queue/{requestId}")
-    public ResponseUtil.Result<?> queryQueueStatus(@PathVariable String requestId) {
-        try {
-            int status = orderQueueService.queryStatus(requestId);
-
-            Map<String, Object> result = new HashMap<>(4);
-            result.put("requestId", requestId);
-
-            switch (status) {
-                case OrderQueueServiceImpl.STATUS_PROCESSING:
-                    result.put("status", "PROCESSING");
-                    result.put("message", "订单正在处理中...");
-                    break;
-                case OrderQueueServiceImpl.STATUS_SUCCESS:
-                    result.put("status", "SUCCESS");
-                    result.put("orderNo", orderQueueService.getOrderNo(requestId));
-                    result.put("message", "下单成功");
-                    break;
-                case OrderQueueServiceImpl.STATUS_FAILED:
-                    result.put("status", "FAILED");
-                    String errMsg = orderQueueService.getErrorMessage(requestId);
-                    result.put("errorMessage", errMsg);
-                    result.put("message", "下单失败: " + errMsg);
-                    break;
-                default:
-                    result.put("status", "EXPIRED");
-                    result.put("message", "查询结果已过期，请重新下单");
-                    break;
-            }
-
-            return ResponseUtil.success(result);
-        } catch (Exception e) {
-            return ResponseUtil.error(e.getMessage());
-        }
-    }
-
     /** 支付订单（委托给原OrderService） */
     @PostMapping("/{orderNo}/pay")
-    public ResponseUtil.Result<?> payOrder(@PathVariable String orderNo) {
+    public ResponseUtil.Result<?> payOrder(@PathVariable("orderNo") String orderNo) {
         try {
             Long userId = UserContext.getCurrentUserId();
             if (userId == null) {
@@ -217,6 +132,45 @@ public class OrderController {
         }
     }
 
+    /**
+     * 轮询排队结果（路径必须与 {@code /api/orders/{orderNo}} 同控制器声明，避免部分环境下映射解析异常）
+     */
+    @GetMapping("/queue/{requestId}")
+    public ResponseUtil.Result<?> queryQueueStatus(@PathVariable("requestId") String requestId) {
+        try {
+            int status = orderQueueService.queryStatus(requestId);
+
+            Map<String, Object> result = new HashMap<>(6);
+            result.put("requestId", requestId);
+
+            switch (status) {
+                case OrderQueueServiceImpl.STATUS_PROCESSING:
+                    result.put("status", "PROCESSING");
+                    result.put("message", "订单正在处理中...");
+                    break;
+                case OrderQueueServiceImpl.STATUS_SUCCESS:
+                    result.put("status", "SUCCESS");
+                    result.put("orderNo", orderQueueService.getOrderNo(requestId));
+                    result.put("message", "下单成功");
+                    break;
+                case OrderQueueServiceImpl.STATUS_FAILED:
+                    result.put("status", "FAILED");
+                    String errMsg = orderQueueService.getErrorMessage(requestId);
+                    result.put("errorMessage", errMsg);
+                    result.put("message", "下单失败: " + (errMsg != null ? errMsg : ""));
+                    break;
+                default:
+                    result.put("status", "EXPIRED");
+                    result.put("message", "查询结果已过期，请重新下单");
+                    break;
+            }
+
+            return ResponseUtil.success(result);
+        } catch (Exception e) {
+            return ResponseUtil.error(e.getMessage());
+        }
+    }
+
     /** 获取订单列表（委托给原OrderService） */
     @GetMapping
     public ResponseUtil.Result<?> getOrders() {
@@ -234,7 +188,7 @@ public class OrderController {
 
     /** 获取订单详情（委托给原OrderService） */
     @GetMapping("/{orderNo}")
-    public ResponseUtil.Result<?> getOrderDetail(@PathVariable String orderNo) {
+    public ResponseUtil.Result<?> getOrderDetail(@PathVariable("orderNo") String orderNo) {
         try {
             Long userId = UserContext.getCurrentUserId();
             if (userId == null) {
@@ -288,29 +242,6 @@ public class OrderController {
                 throw new RuntimeException("身份证号不能为空");
             }
             OrderQueueRequest.PassengerItem item = new OrderQueueRequest.PassengerItem();
-            item.setPassengerName(name.trim());
-            item.setIdCard(CryptoUtil.encrypt(idCard.trim()));
-            item.setPrice(price);
-            items.add(item);
-        }
-        return items;
-    }
-
-    /**
-     * 构建同步模式的订单明细列表（MQ降级时使用）
-     */
-    private List<OrderItem> buildSyncOrderItems(List<CreateOrderRequest.OrderItemRequest> itemRequests, BigDecimal price) {
-        List<OrderItem> items = new ArrayList<>();
-        for (CreateOrderRequest.OrderItemRequest itemReq : itemRequests) {
-            String name = itemReq.getPassengerName();
-            String idCard = itemReq.getIdCard();
-            if (name == null || name.trim().isEmpty()) {
-                throw new RuntimeException("乘客姓名不能为空");
-            }
-            if (idCard == null || idCard.trim().isEmpty()) {
-                throw new RuntimeException("身份证号不能为空");
-            }
-            OrderItem item = new OrderItem();
             item.setPassengerName(name.trim());
             item.setIdCard(CryptoUtil.encrypt(idCard.trim()));
             item.setPrice(price);

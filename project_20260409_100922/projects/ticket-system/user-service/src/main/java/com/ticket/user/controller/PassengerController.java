@@ -24,8 +24,6 @@ public class PassengerController {
 
     @Resource
     private PassengerService passengerService;
-    @Resource
-    private UserService  userService;
 
     /**
      * 获取常用联系人列表

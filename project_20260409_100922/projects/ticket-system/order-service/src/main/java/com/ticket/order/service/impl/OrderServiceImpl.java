@@ -8,33 +8,30 @@ import com.ticket.dto.mq.PaymentConfirmedEvent;
 import com.ticket.entity.Order;
 import com.ticket.entity.OrderItem;
 import com.ticket.entity.Train;
-import com.ticket.entity.User;
 import com.ticket.enums.BusinessStatus;
 import com.ticket.enums.CacheKey;
 import com.ticket.enums.ResponseCode;
+import com.ticket.order.client.UserAdminFeignClient;
+import com.ticket.order.integration.TrainOrderGateway;
 import com.ticket.order.mapper.OrderItemMapper;
 import com.ticket.order.mapper.OrderMapper;
 import com.ticket.order.service.OrderService;
 import com.ticket.service.RocketMQProducerService;
-import com.ticket.service.StockLockService;
-import com.ticket.service.TrainService;
-import com.ticket.service.UserService;
 import com.ticket.util.MQIdempotentUtil;
 import com.ticket.util.RedisUtil;
 import com.ticket.util.SnowflakeIdUtil;
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -50,19 +47,16 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private OrderItemMapper orderItemMapper;
 
     @Resource
-    private TrainService trainService;
+    private TrainOrderGateway trainOrderGateway;
 
     @Resource
     private RedisUtil redisUtil;
 
     @Resource
-    private UserService userService;
+    private UserAdminFeignClient userAdminFeignClient;
 
     @Resource
-    private StockLockService stockLockService;
-
-    @Resource
-    private RocketMQProducerService rocketMQProducerService;
+    private ObjectProvider<RocketMQProducerService> rocketMQProducerService;
 
     @Resource
     private MQIdempotentUtil idempotentUtil;
@@ -73,13 +67,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                              String startStation, String endStation,
                              Integer seatType, List<OrderItem> items) {
         // 1. 检查车次信息
-        Train train = trainService.getById(trainId);
+        Train train = trainOrderGateway.getTrainById(trainId);
         if (train == null || Objects.equals(train.getStatus(), BusinessStatus.TRAIN_STATUS_STOPPED)) {
             throw new RuntimeException(ResponseCode.TRAIN_NOT_FOUND.getMessage());
         }
 
         // 2. 扣减库存（仅Redis预扣）- 核心同步路径
-        trainService.deductStock(trainId, trainDate, startStation, endStation, seatType, items.size());
+        trainOrderGateway.deductStock(trainId, trainDate, startStation, endStation, seatType, items.size());
 
         try {
             // 3. 计算总价
@@ -124,14 +118,14 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             event.setTotalAmount(totalAmount);
             event.setItemCount(items.size());
             event.setCreatedAt(LocalDateTime.now());
-            rocketMQProducerService.sendOrderCreatedEvent(event);
+            rocketMQProducerService.ifAvailable(s -> s.sendOrderCreatedEvent(event));
 
             return order;
         } catch (Exception e) {
             // 订单创建失败，回滚Redis预占库存
             logger.error("创建订单失败，回滚库存: userId={}, trainId={}, trainDate={}, seatType={}, count={}",
                     userId, trainId, trainDate, seatType, items.size(), e);
-            stockLockService.rollback(trainId, trainDate, seatType, startStation, endStation, items.size());
+            trainOrderGateway.rollbackReservation(trainId, trainDate, startStation, endStation, seatType, items.size());
             throw e;
         }
     }
@@ -182,7 +176,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             paymentEvent.setSeatType(order.getSeatType());
             paymentEvent.setCount(count);
             paymentEvent.setPayTimestamp(System.currentTimeMillis());
-            rocketMQProducerService.sendPaymentConfirmedEvent(paymentEvent);
+            rocketMQProducerService.ifAvailable(s -> s.sendPaymentConfirmedEvent(paymentEvent));
 
             logger.info("支付成功，已发送异步确认事件: orderNo={}, itemCount={}", orderNo, count);
         }
@@ -214,7 +208,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         int count = Math.toIntExact(orderItemMapper.selectCount(itemWrapper));
 
         // 回滚库存（退票必须同步执行，保证数据一致性）
-        trainService.rollbackStock(order.getTrainId(), order.getTrainDate().toString(),
+        trainOrderGateway.rollbackStock(order.getTrainId(), order.getTrainDate().toString(),
                 order.getStartStation(), order.getEndStation(), order.getSeatType(), count);
 
         // 更新订单状态
@@ -288,13 +282,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         // 用户手机号模糊查询
         if (phone != null && !phone.trim().isEmpty()) {
-            // 通过手机号模糊查询用户ID列表
-            LambdaQueryWrapper<User> userWrapper = new LambdaQueryWrapper<>();
-            userWrapper.like(User::getPhone, "%" + phone.trim() + "%");
-            List<Long> userIds = userService.list(userWrapper)
-                    .stream()
-                    .map(User::getId)
-                    .collect(Collectors.toList());
+            List<Long> userIds = userAdminFeignClient.listUserIdsByPhone(phone.trim());
             if (!userIds.isEmpty()) {
                 wrapper.in(Order::getUserId, userIds);
             } else {

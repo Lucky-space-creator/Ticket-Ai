@@ -5,6 +5,20 @@ server:
 spring:
   config:
     import: optional:nacos:localhost:8848
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 3000
+            readTimeout: 10000
+          train-service:
+            connectTimeout: 3000
+            readTimeout: 12000
+
+# 与网关、用户服务保持一致（JWT 解析）
+jwt:
+  secret: ticket-system-secret-key-2024-please-change-in-production
 
 # 日志配置
 logging:

@@ -35,6 +35,7 @@ com\ticket\dto\mq\OrderCreatedEvent.class
 com\ticket\config\RAGConfig$UserScopedChatMemory.class
 com\ticket\dto\ChatRequest.class
 com\ticket\config\PermissionInterceptor.class
+com\ticket\dto\internal\TrainStockCommand.class
 com\ticket\service\RocketMQProducerService$1.class
 com\ticket\entity\Employee.class
 com\ticket\util\SnowflakeIdUtil.class
@@ -51,7 +52,6 @@ com\ticket\dto\UserLoginRequest.class
 com\ticket\util\UserContext.class
 com\ticket\entity\ChatRecord.class
 com\ticket\entity\Department.class
-com\ticket\service\TrainService.class
 com\ticket\config\ElkConfig.class
 com\ticket\util\CacheUtil.class
 com\ticket\entity\TrainStation.class
@@ -67,7 +67,6 @@ com\ticket\dto\mq\ChatRecordEvent.class
 com\ticket\util\ResponseUtil.class
 com\ticket\util\RedisUtil.class
 com\ticket\config\JacksonConfig$LongToStringSerializer.class
-com\ticket\service\UserService.class
 com\ticket\dto\mq\OrderQueueRequest$PassengerItem.class
 com\ticket\util\ResponseUtil$Result.class
 com\ticket\entity\KnowledgeBase.class
@@ -78,5 +77,6 @@ com\ticket\util\CacheUtil$CacheItem.class
 com\ticket\dto\ChatResponse.class
 com\ticket\service\StreamingKnowledgeAssistant.class
 com\ticket\util\DateUtils.class
+com\ticket\dto\internal\OrderRefundCommand.class
 com\ticket\service\KnowledgeAssistant.class
 com\ticket\dto\mq\OperationLogEvent.class

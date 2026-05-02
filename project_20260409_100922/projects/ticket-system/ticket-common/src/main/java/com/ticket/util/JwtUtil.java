@@ -21,7 +21,7 @@ public class JwtUtil {
     /**
      * JWT 密钥（从配置文件读取，默认值）
      */
-    @Value("${jwt.secret:ticket-system-secret-key-2024}")
+    @Value("${jwt.secret:ticket-system-secret-key-2024-please-change-in-production}")
     private String secret;
 
     /**

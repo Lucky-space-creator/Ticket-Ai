@@ -142,6 +142,7 @@
 import { ref, reactive, nextTick, onMounted, onUnmounted, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
+import { getWsBaseUrl } from '@/utils/wsBase'
 import { useUserStore } from '@/stores/user'
 
 const isMinimized = ref(true)
@@ -244,7 +245,7 @@ const connectWebSocket = () => {
   // 更新连接状态
   connectionStatus.value = 'connecting'
   
-  const wsUrl = `ws://localhost:8080/ws/chat/${sessionId.value}`
+  const wsUrl = `${getWsBaseUrl()}/ws/chat/${sessionId.value}`
   try {
     socket.value = new WebSocket(wsUrl)
     

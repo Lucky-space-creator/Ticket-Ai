@@ -1,6 +1,7 @@
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\Permission.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\dto\mq\OperationLogEvent.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\dto\mq\PaymentConfirmedEvent.java
+C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\dto\internal\TrainStockCommand.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\JacksonConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\AuthenticationInterceptor.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\dto\ChatResponse.java
@@ -30,6 +31,7 @@ C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\util\UserContext.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\TrainStation.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\dto\mq\OrderCreatedEvent.java
+C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\dto\internal\OrderRefundCommand.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\Role.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\tool\AIBusinessTool.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\Employee.java
@@ -51,7 +53,6 @@ C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\GatewayConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\util\AiChatStopWatch.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\enums\BusinessStatus.java
-C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\service\TrainService.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\dto\CreateOrderRequest.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\TicketStock.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\util\TraceMdcHelper.java
@@ -59,7 +60,6 @@ C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\RateLimitInterceptor.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\ChatSession.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\util\TokenCountUtil.java
-C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\service\UserService.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\service\PermissionService.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\util\DateUtils.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\RedissonConfig.java

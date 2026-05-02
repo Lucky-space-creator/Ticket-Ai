@@ -4,14 +4,14 @@ import cn.hutool.core.util.IdUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticket.dto.mq.OrderQueueRequest;
-import com.ticket.enums.MQTopics;
+import com.ticket.order.integration.TrainOrderGateway;
 import com.ticket.order.service.OrderQueueService;
 import com.ticket.service.RocketMQProducerService;
-import com.ticket.service.TrainService;
 import com.ticket.util.RedisUtil;
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.TimeUnit;
@@ -41,10 +41,10 @@ public class OrderQueueServiceImpl implements OrderQueueService {
     private static final long RESULT_TTL_MINUTES = 30;
 
     @Resource
-    private TrainService trainService;
+    private TrainOrderGateway trainOrderGateway;
 
     @Resource
-    private RocketMQProducerService rocketMQProducerService;
+    private ObjectProvider<RocketMQProducerService> rocketMQProducerService;
 
     @Resource
     private RedisUtil redisUtil;
@@ -67,7 +67,7 @@ public class OrderQueueServiceImpl implements OrderQueueService {
 
         // 4. Redis预扣库存（唯一的同步重量级操作）
         try {
-            trainService.deductStock(
+            trainOrderGateway.deductStock(
                     request.getTrainId(),
                     request.getTrainDate(),
                     request.getStartStation(),
@@ -87,12 +87,16 @@ public class OrderQueueServiceImpl implements OrderQueueService {
 
         // 6. 发送MQ消息到订单队列（异步，不阻塞）
         try {
-            rocketMQProducerService.sendOrderQueueMessage(request);
+            RocketMQProducerService producer = rocketMQProducerService.getIfAvailable();
+            if (producer == null) {
+                throw new RuntimeException("消息队列不可用");
+            }
+            producer.sendOrderQueueMessage(request);
         } catch (RuntimeException mqEx) {
             // MQ发送失败：回滚已预扣的库存 + 标记失败 + 抛出供上层降级
             logger.error("MQ发送失败，回滚预扣库存: requestId={}, error={}", requestId, mqEx.getMessage());
             try {
-                trainService.rollbackStock(
+                trainOrderGateway.rollbackStock(
                         request.getTrainId(), request.getTrainDate(),
                         request.getStartStation(), request.getEndStation(),
                         request.getSeatType(), request.getItems().size()

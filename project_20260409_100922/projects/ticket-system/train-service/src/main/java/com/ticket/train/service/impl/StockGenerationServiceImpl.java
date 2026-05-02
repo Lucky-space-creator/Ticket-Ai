@@ -7,7 +7,7 @@ import com.ticket.enums.BusinessStatus;
 import com.ticket.train.mapper.TicketStockMapper;
 import com.ticket.train.service.StockGenerationService;
 import com.ticket.service.StockLockService;
-import com.ticket.service.TrainService;
+import com.ticket.train.service.TrainService;
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

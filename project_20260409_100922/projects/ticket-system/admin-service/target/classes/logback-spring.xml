@@ -51,7 +51,7 @@
     <logger name="com.ticket.admin.service.impl.EmployeeServiceImpl" level="DEBUG"/>
 
     <!-- 管理员控制器 -->
-    <logger name="com.ticket.admin.controller.EmployeeController" level="DEBUG"/>
+    <logger name="com.ticket.admin.interfaces.web.EmployeeController" level="DEBUG"/>
 
     <!-- Mapper层SQL日志 -->
     <logger name="com.ticket.admin.mapper" level="DEBUG"/>

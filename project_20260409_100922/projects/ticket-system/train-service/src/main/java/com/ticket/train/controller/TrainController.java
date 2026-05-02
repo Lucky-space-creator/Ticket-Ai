@@ -3,7 +3,7 @@ package com.ticket.train.controller;
 import com.ticket.entity.TicketStock;
 import com.ticket.enums.BusinessStatus;
 import com.ticket.entity.Train;
-import com.ticket.service.TrainService;
+import com.ticket.train.service.TrainService;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
@@ -33,9 +33,9 @@ public class TrainController {
      */
     @GetMapping("/search")
     public ResponseUtil.Result<?> searchTrains(
-            @RequestParam String startStation,
-            @RequestParam String endStation,
-            @RequestParam String trainDate
+            @RequestParam(name = "startStation") String startStation,
+            @RequestParam(name = "endStation") String endStation,
+            @RequestParam(name = "trainDate") String trainDate
     ) {
         try {
             List<Train> trains = trainService.searchTrains(startStation, endStation, trainDate);
@@ -70,7 +70,7 @@ public class TrainController {
      * 获取车次详情
      */
     @GetMapping("/{id}")
-    public ResponseUtil.Result<?> getTrainDetail(@PathVariable Long id) {
+    public ResponseUtil.Result<?> getTrainDetail(@PathVariable("id") Long id) {
         try {
             Train train = trainService.getTrainDetailById(id);
 

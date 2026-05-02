@@ -73,6 +73,12 @@ request.interceptors.response.use(
               duration: 1000
             })
             break
+          case 503:
+            ElMessage.error({
+              message: '网关或服务不可用，请确认 Nacos、ticket-gateway、user/order 等微服务已启动',
+              duration: 2800
+            })
+            break
           case 500:
             ElMessage.error({
               message: '服务器错误',

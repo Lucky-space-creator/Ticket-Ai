@@ -1,4 +1,5 @@
 import { ref, onUnmounted } from 'vue'
+import { getWsBaseUrl } from '@/utils/wsBase'
 
 /**
  * WebSocket 组合式函数
@@ -20,11 +21,11 @@ export function useWebSocket() {
     }
 
     try {
-      // 如果URL已经是完整的WebSocket地址（以ws://或wss://开头），直接使用
-      // 否则，添加当前主机前缀
-      const wsUrl = url.startsWith('ws://') || url.startsWith('wss://') 
-        ? url 
-        : `ws://${window.location.host}${url}`
+      // 完整 ws(s):// 地址直接使用；否则视为路径，拼到与页面/环境一致的 WS 基址上
+      const wsUrl =
+        url.startsWith('ws://') || url.startsWith('wss://')
+          ? url
+          : `${getWsBaseUrl()}${url.startsWith('/') ? url : `/${url}`}`
       socket.value = new WebSocket(wsUrl)
 
       socket.value.onopen = () => {

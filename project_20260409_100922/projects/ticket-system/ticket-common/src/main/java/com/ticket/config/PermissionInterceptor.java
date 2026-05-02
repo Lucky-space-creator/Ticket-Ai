@@ -112,6 +112,11 @@ public class PermissionInterceptor implements HandlerInterceptor {
             // 如果没有用户ID（认证拦截器未设置），直接放行，由认证拦截器处理
             return true;
         }
+
+        // 用户端人工客服：已登录即可，具体鉴权由各接口内校验 UserContext
+        if (requestUri.startsWith("/api/customer-service/")) {
+            return true;
+        }
         
         // 检查是否为超级管理员（角色ID=1）
         Long roleId = UserContext.getCurrentRoleId();

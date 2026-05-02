@@ -1,6 +1,8 @@
 # 12306购票系统 + 智能客服
 
-> 版本: v2.0.0
+> 版本: v2.0.0  
+> **微服务运行说明**：业务运行以仓库根目录 `pom.xml` 子模块（`ticket-gateway`、`user-service` 等）为准；`backend/` 仅作单体对照，不参与注册发现。本地依赖与分层改造要点见 [docs/microservices/README.md](docs/microservices/README.md)，一键基础设施见根目录 [docker-compose.yml](docker-compose.yml)。
+
 > 状态: 开发完成，可直接运行
 
 ## 项目简介
