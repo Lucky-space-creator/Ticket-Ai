@@ -2,8 +2,8 @@ package com.ticket.admin.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.ticket.admin.infrastructure.persistence.RoleMapper;
-import com.ticket.admin.infrastructure.persistence.RolePermissionMapper;
+import com.ticket.admin.mapper.RoleMapper;
+import com.ticket.admin.mapper.RolePermissionMapper;
 import com.ticket.admin.mapper.UserMapper;
 import com.ticket.admin.service.RoleService;
 import com.ticket.entity.Role;

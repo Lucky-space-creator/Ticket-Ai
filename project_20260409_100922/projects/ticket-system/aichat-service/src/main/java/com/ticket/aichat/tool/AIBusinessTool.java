@@ -22,7 +22,7 @@ public class AIBusinessTool {
         return new IllegalStateException("策略禁止：AI 工具「" + toolName + "」不得自动执行写操作，请通过官方购票/个人中心完成。");
     }
 
-    @Tool("查询车次信息，根据出发地、目的地和日期返回可用车次列表")
+    @Tool("查询车次信息，根据出发地、目的地和日期返回可用车次列表，注意：参数必须是日期字符串（如 '2025-12-31'），不是数据库ID。")
     public List<Object> searchTrains(
             @P(value = "出发地", required = true) String from,
             @P(value = "目的地", required = true) String to,
@@ -37,7 +37,7 @@ public class AIBusinessTool {
         return null;
     }
 
-    @Tool("购买车票，根据车次信息、乘客信息和座位类型下单")
+    @Tool("购买车票，根据车次信息、乘客信息和座位类型下单，注意：不可缺少参数信息。")
     public Object createOrder(
             @P(value = "车次ID", required = true) Long trainId,
             @P(value = "出发日期", required = true) String trainDate,
@@ -49,7 +49,7 @@ public class AIBusinessTool {
         throw denyAutonomousWrite("createOrder");
     }
 
-    @Tool("支付订单，根据订单号完成支付")
+    @Tool("支付订单，根据订单号完成支付，注意：订单号必须是字符串，不是数据库ID。")
     public boolean payOrder(@P(value = "订单号", required = true) String orderNo) {
         throw denyAutonomousWrite("payOrder");
     }

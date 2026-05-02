@@ -16,13 +16,15 @@ logging:
     file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
   file:
     name: logs/customer-service.log
-    max-size: 10MB
-    max-history: 30
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 30
 
 # JWT配置
 jwt:
   secret: ticket-system-secret-key-2024-please-change-in-production
-  expiration: 604800000
+  expiration: 604800000 # 7天
 
 # 管理端点
 management:

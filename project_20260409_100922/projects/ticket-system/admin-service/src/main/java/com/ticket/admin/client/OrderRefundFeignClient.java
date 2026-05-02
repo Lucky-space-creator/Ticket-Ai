@@ -1,4 +1,4 @@
-package com.ticket.admin.infrastructure.client;
+package com.ticket.admin.client;
 
 import com.ticket.dto.internal.OrderRefundCommand;
 import com.ticket.util.ResponseUtil;

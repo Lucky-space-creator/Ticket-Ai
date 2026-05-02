@@ -1,4 +1,4 @@
-package com.ticket.admin.application.catalog;
+package com.ticket.admin.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.ticket.entity.Train;

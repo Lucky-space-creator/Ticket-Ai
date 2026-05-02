@@ -1,6 +1,6 @@
-package com.ticket.admin.interfaces.web;
+package com.ticket.admin.controller;
 
-import com.ticket.admin.application.catalog.AdminTrainService;
+import com.ticket.admin.service.AdminTrainService;
 import com.ticket.entity.Train;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;

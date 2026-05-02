@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -255,14 +257,20 @@ public class DocumentIngestionService {
         try {
             Path knowledgeDir = Paths.get(knowledgeBasePath);
             if (!knowledgeDir.toFile().exists()) {
-                knowledgeDir.toFile().mkdirs();
+                boolean mkdirsBool = knowledgeDir.toFile().mkdirs();
+
+                if (!mkdirsBool) {
+                    log.warn("无法创建知识库目录: {}", knowledgeDir);
+                    log.warn("创建知识库目录失败，不影响知识库加载");
+                }
+
             }
             
             // 确保文件名安全，移除路径分隔符
             String safeFilename = Paths.get(filename).getFileName().toString();
             Path filePath = knowledgeDir.resolve(safeFilename);
             
-            java.nio.file.Files.writeString(filePath, content, java.nio.charset.StandardCharsets.UTF_8);
+            Files.writeString(filePath, content, StandardCharsets.UTF_8);
             log.info("文档已保存到文件: {}", filePath);
         } catch (Exception e) {
             log.warn("无法保存文档到文件系统: {}", e.getMessage());

@@ -3,7 +3,7 @@ package com.ticket.admin.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.ticket.admin.infrastructure.client.OrderRefundFeignClient;
+import com.ticket.admin.client.OrderRefundFeignClient;
 import com.ticket.admin.mapper.OrderMapper;
 import com.ticket.admin.mapper.UserMapper;
 import com.ticket.admin.service.OrderService;

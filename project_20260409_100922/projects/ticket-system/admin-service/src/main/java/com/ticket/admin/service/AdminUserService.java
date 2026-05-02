@@ -1,4 +1,4 @@
-package com.ticket.admin.application.user;
+package com.ticket.admin.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.ticket.entity.User;
@@ -8,5 +8,12 @@ import com.ticket.entity.User;
  */
 public interface AdminUserService extends IService<User> {
 
+    /**
+     * 更新用户角色。
+     *
+     * @param userId 用户 ID
+     * @param roleId 角色 ID
+     * @return 是否更新成功
+     */
     boolean updateUserRole(Long userId, Long roleId);
 }

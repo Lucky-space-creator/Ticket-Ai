@@ -1,5 +1,6 @@
 package com.ticket.aichat.controller;
 
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.ticket.entity.KnowledgeBase;
 import com.ticket.aichat.service.DocumentIngestionService;
 import com.ticket.aichat.service.KnowledgeBaseService;

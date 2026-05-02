@@ -1,6 +1,7 @@
-package com.ticket.admin.application.user;
+package com.ticket.admin.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.ticket.admin.service.AdminUserService;
 import com.ticket.admin.mapper.UserMapper;
 import com.ticket.entity.User;
 import com.ticket.enums.CacheKey;

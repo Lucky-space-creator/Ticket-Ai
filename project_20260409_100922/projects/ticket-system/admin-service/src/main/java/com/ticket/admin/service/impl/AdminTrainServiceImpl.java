@@ -1,7 +1,8 @@
-package com.ticket.admin.application.catalog;
+package com.ticket.admin.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ticket.admin.mapper.TrainMapper;
+import com.ticket.admin.service.AdminTrainService;
 import com.ticket.entity.Train;
 import org.springframework.stereotype.Service;
 

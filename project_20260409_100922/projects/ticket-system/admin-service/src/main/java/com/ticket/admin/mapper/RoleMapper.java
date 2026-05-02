@@ -1,4 +1,4 @@
-package com.ticket.admin.infrastructure.persistence;
+package com.ticket.admin.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.ticket.entity.Role;

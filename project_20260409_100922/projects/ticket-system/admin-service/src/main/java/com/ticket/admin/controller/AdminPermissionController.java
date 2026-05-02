@@ -1,4 +1,4 @@
-package com.ticket.admin.interfaces.web;
+package com.ticket.admin.controller;
 
 import com.ticket.entity.Permission;
 import com.ticket.service.PermissionService;

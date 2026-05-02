@@ -13,9 +13,9 @@ import org.springframework.core.env.Environment;
  * 通用技术组件（JWT、拦截器等）仍来自 {@code com.ticket.util}、{@code com.ticket.config}。
  */
 @SpringBootApplication(scanBasePackages = {"com.ticket.admin", "com.ticket.util", "com.ticket.config"})
-@MapperScan({"com.ticket.admin.mapper", "com.ticket.admin.infrastructure.persistence"})
+@MapperScan({"com.ticket.admin.mapper"})
 @EnableDiscoveryClient
-@EnableFeignClients(basePackages = "com.ticket.admin.infrastructure.client")
+@EnableFeignClients(basePackages = "com.ticket.admin.client")
 public class AdminServiceApplication {
     public static void main(String[] args) {
         ConfigurableApplicationContext context = SpringApplication.run(AdminServiceApplication.class, args);

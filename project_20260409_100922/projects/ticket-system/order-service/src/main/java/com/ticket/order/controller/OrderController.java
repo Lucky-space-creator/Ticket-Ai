@@ -29,6 +29,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/orders")
+// 允许跨域请求
 @CrossOrigin(origins = "*")
 public class OrderController {
 

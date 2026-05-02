@@ -9,7 +9,7 @@ jwt:
 # 日志配置
 logging:
   level:
-    com.ticket.admin: DEBUG
+    com.ticket.admin: INFO
     com.ticket.mapper: DEBUG
     com.alibaba.cloud.nacos: WARN
     com.alibaba.nacos.client.naming: WARN

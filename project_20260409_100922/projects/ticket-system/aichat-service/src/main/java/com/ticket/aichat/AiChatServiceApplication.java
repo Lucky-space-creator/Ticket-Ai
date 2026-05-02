@@ -11,8 +11,8 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @SpringBootApplication(scanBasePackages = "com.ticket")
 @EnableDiscoveryClient
 @EnableFeignClients(basePackages = {"com.ticket"})
-public class AichatServiceApplication {
+public class AiChatServiceApplication {
     public static void main(String[] args) {
-        SpringApplication.run(AichatServiceApplication.class, args);
+        SpringApplication.run(AiChatServiceApplication.class, args);
     }
 }

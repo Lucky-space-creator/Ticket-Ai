@@ -39,11 +39,11 @@ public class InternalOrderStockStatsController {
      */
     @GetMapping("/valid-item-count")
     public int countValidOrderItems(
-            @RequestParam Long trainId,
-            @RequestParam String trainDate,
-            @RequestParam Integer seatType,
-            @RequestParam String startStation,
-            @RequestParam String endStation) {
+            @RequestParam("trainId") Long trainId,
+            @RequestParam("trainDate") String trainDate,
+            @RequestParam("seatType") Integer seatType,
+            @RequestParam("startStation") String startStation,
+            @RequestParam("endStation") String endStation) {
         LocalDate date = LocalDate.parse(trainDate);
         LambdaQueryWrapper<Order> orderWrapper = new LambdaQueryWrapper<>();
         orderWrapper.eq(Order::getTrainId, trainId)
