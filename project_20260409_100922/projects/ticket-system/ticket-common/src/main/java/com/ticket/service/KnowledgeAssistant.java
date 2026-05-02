@@ -83,6 +83,6 @@ public interface KnowledgeAssistant {
                           - 服务时间：周一至周日 6:00-23:00
                           - 客服热线：12306
                           当用户首次打招呼时（如”你好“、”hi“、“您好”、”你是谁“），请主动进行自我介绍。""")
-    @UserMessage("{{question}}")
+    @UserMessage("{{it}}")
     Result<String> chat(String question);
 }

@@ -6,9 +6,8 @@ com\ticket\aichat\mapper\ChatSessionMapper.class
 com\ticket\aichat\service\KnowledgeBaseService.class
 com\ticket\aichat\mapper\ChatRecordMapper.class
 com\ticket\aichat\controller\KnowledgeController.class
-com\ticket\aichat\AichatServiceApplication.class
+com\ticket\aichat\AiChatServiceApplication.class
 com\ticket\aichat\controller\KnowledgeController$KnowledgeRequest.class
-com\ticket\aichat\service\KnowledgeAssistant.class
 com\ticket\aichat\controller\AIChatController.class
 com\ticket\aichat\service\impl\AIChatServiceImpl.class
 com\ticket\aichat\mapper\KnowledgeBaseMapper.class

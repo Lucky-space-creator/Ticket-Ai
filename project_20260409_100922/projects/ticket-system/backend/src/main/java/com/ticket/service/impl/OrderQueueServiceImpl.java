@@ -90,7 +90,7 @@ public class OrderQueueServiceImpl implements OrderQueueService {
         try {
             rocketMQProducerService.sendOrderQueueMessage(request);
         } catch (RuntimeException mqEx) {
-            // MQ发送失败：回滚已预扣的库存 + 标记失败 + 抛出供上层降级
+            // MQ 发送失败：回滚 Redis 预占，不降级同步写单
             logger.error("MQ发送失败，回滚预扣库存: requestId={}, error={}", requestId, mqEx.getMessage());
             try {
                 trainService.rollbackStock(
@@ -101,7 +101,8 @@ public class OrderQueueServiceImpl implements OrderQueueService {
             } catch (Exception rollbackEx) {
                 logger.error("回滚库存也失败了: requestId={}, error={}", requestId, rollbackEx.getMessage());
             }
-            updateResult(requestId, STATUS_FAILED, null, "消息队列不可用");
+            String err = mqEx.getMessage() != null ? mqEx.getMessage() : "消息发送失败";
+            updateResult(requestId, STATUS_FAILED, null, err);
             throw mqEx;
         }
 

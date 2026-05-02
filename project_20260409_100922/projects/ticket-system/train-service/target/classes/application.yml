@@ -2,6 +2,12 @@
 server:
   port: 8082
 
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+  producer:
+    group: train-service-producer-group
+  detect-enabled: false
+
 # 日志配置
 logging:
   level:

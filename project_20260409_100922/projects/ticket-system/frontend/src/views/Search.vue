@@ -472,44 +472,34 @@ const handleSubmitOrder = async () => {
     const initialStatus = submitRes.data.status
     let orderNo = null
 
-    // 检查初始状态
-    if (initialStatus === 'SUCCESS') {
-      // 同步降级模式：直接成功，无需轮询
-      orderNo = submitRes.data.orderNo
-      ElMessage.success('下单成功！')
-    } else if (initialStatus === 'PROCESSING') {
-      // 异步模式：需要轮询排队结果
-      ElMessage.info('订单已提交，正在处理中...')
+    if (!requestId || initialStatus !== 'PROCESSING') {
+      throw new Error(submitRes.data?.message || '下单提交异常，请重试')
+    }
 
-      // Step 2: 轮询排队结果（1秒间隔，最多等待30次=30秒）
-      const MAX_POLL_COUNT = 30
-      const POLL_INTERVAL_MS = 1000
+    ElMessage.info('订单已提交，正在处理中...')
 
-      for (let i = 0; i < MAX_POLL_COUNT; i++) {
-        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
+    const MAX_POLL_COUNT = 30
+    const POLL_INTERVAL_MS = 1000
 
-        const pollRes = await request.get(`/orders/queue/${requestId}`)
-        const status = pollRes.data.status
+    for (let i = 0; i < MAX_POLL_COUNT; i++) {
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
 
-        if (status === 'SUCCESS') {
-          orderNo = pollRes.data.orderNo
-          ElMessage.success('下单成功！')
-          break
-        } else if (status === 'FAILED') {
-          throw new Error(pollRes.data.errorMessage || '下单失败')
-        } else if (status === 'EXPIRED') {
-          throw new Error('查询结果已过期，请重新下单')
-        }
-        // PROCESSING 状态继续轮询
+      const pollRes = await request.get(`/orders/queue/${requestId}`)
+      const status = pollRes.data.status
+
+      if (status === 'SUCCESS') {
+        orderNo = pollRes.data.orderNo
+        ElMessage.success('下单成功！')
+        break
+      } else if (status === 'FAILED') {
+        throw new Error(pollRes.data.errorMessage || '下单失败')
+      } else if (status === 'EXPIRED') {
+        throw new Error('查询结果已过期，请重新下单')
       }
+    }
 
-      // 超时未完成
-      if (!orderNo) {
-        throw new Error('订单处理超时，请在"我的订单"页面查看结果')
-      }
-    } else {
-      // 未知状态
-      throw new Error(`未知订单状态: ${initialStatus}`)
+    if (!orderNo) {
+      throw new Error('订单处理超时，请在"我的订单"页面查看结果')
     }
 
     // Step 3: 发起支付

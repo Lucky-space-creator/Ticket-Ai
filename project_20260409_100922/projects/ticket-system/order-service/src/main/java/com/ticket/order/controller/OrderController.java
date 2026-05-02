@@ -87,7 +87,7 @@ public class OrderController {
             queueRequest.setClientIp(getClientIp(httpRequest));
             queueRequest.setEnqueueTime(System.currentTimeMillis());
 
-            // 5. 入队：Redis预扣库存 + MQ发送（失败时已回滚预扣并标记 FAILED，不再做「同进程同步写单」降级）
+            // 5. 入队：Redis预扣 + MQ；入队失败时由 OrderQueueServiceImpl 回滚预占，不降级同步写单
             String requestId = orderQueueService.enqueue(queueRequest);
 
             // 6. 异步模式：立即返回 PROCESSING 状态（前端开始轮询）

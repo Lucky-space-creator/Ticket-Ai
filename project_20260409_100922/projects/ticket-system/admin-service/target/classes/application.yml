@@ -6,10 +6,16 @@ jwt:
   secret: ticket-system-secret-key-2024-please-change-in-production
   expiration: 604800000
 
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+  producer:
+    group: admin-service-producer-group
+  detect-enabled: false
+
 # 日志配置
 logging:
   level:
-    com.ticket.admin: DEBUG
+    com.ticket.admin: INFO
     com.ticket.mapper: DEBUG
     com.alibaba.cloud.nacos: WARN
     com.alibaba.nacos.client.naming: WARN

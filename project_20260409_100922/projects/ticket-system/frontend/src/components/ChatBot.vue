@@ -292,15 +292,9 @@ const connectWebSocket = () => {
           } else if (msgType === 'pending') {
             // 待接入消息，忽略（避免重复显示）
           } else {
-            // 其他类型（客服消息或未知类型）都视为客服消息
-            // 如果msgType是数字字符串，则为客服工号
-            if (msgType && !isNaN(msgType)) {
-              // 延迟5秒后标记为客服已介入，让用户看到"客服已接入"的消息后再切换按钮
-              if (!isHumanService.value) {
-                setTimeout(() => {
-                  isHumanService.value = true
-                }, 5000)
-              }
+            // 仅已分配坐席的消息才进入人工发送通道，避免误把 AI 会话切到客服侧
+            if (data.employeeId != null) {
+              isHumanService.value = true
             }
             messages.value.push({
               role: 'assistant',
@@ -564,7 +558,7 @@ async function requestHumanService() {
       reason: '用户主动点击转接按钮'
     });
     ElMessage.success(result.data || '转人工请求已提交，请稍候');
-    // 可以添加一条系统消息到聊天窗口
+    isHumanService.value = true
     messages.value.push({
       role: 'assistant',
       content: '已为您转接人工客服，请稍候，客服人员将很快为您服务。',

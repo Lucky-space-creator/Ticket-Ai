@@ -65,14 +65,15 @@ public class OrderQueueConsumer implements RocketMQListener<OrderQueueRequest> {
 
         } catch (Exception e) {
             log.error("排队下单请求处理失败: requestId={}, error={}", requestId, e.getMessage(), e);
-            rollbackStock(request);
+            releasePrelockedStock(request);
             orderQueueService.updateResult(requestId, OrderQueueServiceImpl.STATUS_FAILED, null, e.getMessage());
         }
     }
 
-    private void rollbackStock(OrderQueueRequest request) {
+    /** 异步写单失败：仅释放 Redis 预占（与 enqueue 时 deduct 一致，勿调 rollbackStock 以免误增 MySQL 余票） */
+    private void releasePrelockedStock(OrderQueueRequest request) {
         try {
-            trainOrderGateway.rollbackStock(
+            trainOrderGateway.rollbackReservation(
                     request.getTrainId(),
                     request.getTrainDate(),
                     request.getStartStation(),
@@ -80,9 +81,9 @@ public class OrderQueueConsumer implements RocketMQListener<OrderQueueRequest> {
                     request.getSeatType(),
                     request.getItems().size()
             );
-            log.info("已回滚Redis预占库存: requestId={}, trainId={}", request.getRequestId(), request.getTrainId());
+            log.info("已释放Redis预占: requestId={}, trainId={}", request.getRequestId(), request.getTrainId());
         } catch (Exception e) {
-            log.error("回滚库存失败: requestId={}, error={}", request.getRequestId(), e.getMessage(), e);
+            log.error("释放预占失败: requestId={}, error={}", request.getRequestId(), e.getMessage(), e);
         }
     }
 }

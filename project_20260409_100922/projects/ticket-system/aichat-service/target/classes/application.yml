@@ -11,6 +11,12 @@ spring:
   config:
     import: optional:nacos:localhost:8848
 
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+  producer:
+    group: aichat-service-producer-group
+  detect-enabled: false
+
 # 日志配置
 logging:
   level:
@@ -44,7 +50,7 @@ ai:
     timeout: 600
   http-api:
     base-url: https://api.cphone.vip/v1
-    api-key: ${AI_API_KEY}  #写在本地配置文件
+    api-key: ${AI_API_KEY}  #写在本地环境变量
     model: gpt-3.5-turbo
     temperature: 0.7
     timeout: 600

@@ -20,6 +20,13 @@ spring:
 jwt:
   secret: ticket-system-secret-key-2024-please-change-in-production
 
+# RocketMQ：与 docker-compose 中 namesrv 端口 9876 一致；Nacos 的 sharding-rocketmq-config.yaml 可覆盖
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+  producer:
+    group: order-service-producer-group
+  detect-enabled: false
+
 # 日志配置
 logging:
   level:

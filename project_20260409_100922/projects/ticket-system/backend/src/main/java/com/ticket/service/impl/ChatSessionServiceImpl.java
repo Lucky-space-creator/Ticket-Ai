@@ -184,17 +184,33 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         if (userId == null) {
             return createAiOnlySession(null);
         }
-        // 查找用户最近的非结束会话（状态不是ended）
-        LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ChatSession::getUserId, userId)
-                .ne(ChatSession::getStatus, ChatSession.STATUS_ENDED)
+        LambdaQueryWrapper<ChatSession> active = new LambdaQueryWrapper<>();
+        active.eq(ChatSession::getUserId, userId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_ACTIVE)
                 .orderByDesc(ChatSession::getLastMessageAt)
                 .last("LIMIT 1");
-        ChatSession session = chatSessionMapper.selectOne(wrapper);
-        if (session != null) {
-            return session.getId();
+        ChatSession a = chatSessionMapper.selectOne(active);
+        if (a != null) {
+            return a.getId();
         }
-        // 没有找到，创建新的AI_ONLY会话
+        LambdaQueryWrapper<ChatSession> pending = new LambdaQueryWrapper<>();
+        pending.eq(ChatSession::getUserId, userId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_PENDING)
+                .orderByDesc(ChatSession::getLastMessageAt)
+                .last("LIMIT 1");
+        ChatSession p = chatSessionMapper.selectOne(pending);
+        if (p != null) {
+            return p.getId();
+        }
+        LambdaQueryWrapper<ChatSession> aiOnly = new LambdaQueryWrapper<>();
+        aiOnly.eq(ChatSession::getUserId, userId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_AI_ONLY)
+                .orderByDesc(ChatSession::getLastMessageAt)
+                .last("LIMIT 1");
+        ChatSession ai = chatSessionMapper.selectOne(aiOnly);
+        if (ai != null) {
+            return ai.getId();
+        }
         return createAiOnlySession(userId);
     }
 

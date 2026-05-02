@@ -9,6 +9,7 @@ C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\order-service\src\main\java\com\ticket\order\mapper\OrderItemMapper.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\order-service\src\main\java\com\ticket\order\controller\OrderController.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\order-service\src\main\java\com\ticket\order\controller\InternalOrderRefundController.java
+C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\order-service\src\main\java\com\ticket\order\consumer\TicketOrderCreatedConsumer.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\order-service\src\main\java\com\ticket\order\controller\InternalOrderStockStatsController.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\order-service\src\main\java\com\ticket\order\client\TrainOrderFeignClient.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\order-service\src\main\java\com\ticket\order\OrderServiceApplication.java

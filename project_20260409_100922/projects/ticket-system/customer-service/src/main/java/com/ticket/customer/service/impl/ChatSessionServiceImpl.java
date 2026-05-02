@@ -168,14 +168,33 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         if (userId == null) {
             return createAiOnlySession(null);
         }
-        LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ChatSession::getUserId, userId)
-                .ne(ChatSession::getStatus, ChatSession.STATUS_ENDED)
+        // 人工进行中 → 排队等待 → 仅 AI，避免把 AI 会话与人工会话混成一条导致 AI 消息进客服工作台
+        LambdaQueryWrapper<ChatSession> active = new LambdaQueryWrapper<>();
+        active.eq(ChatSession::getUserId, userId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_ACTIVE)
                 .orderByDesc(ChatSession::getLastMessageAt)
                 .last("LIMIT 1");
-        ChatSession session = chatSessionMapper.selectOne(wrapper);
-        if (session != null) {
-            return session.getId();
+        ChatSession a = chatSessionMapper.selectOne(active);
+        if (a != null) {
+            return a.getId();
+        }
+        LambdaQueryWrapper<ChatSession> pending = new LambdaQueryWrapper<>();
+        pending.eq(ChatSession::getUserId, userId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_PENDING)
+                .orderByDesc(ChatSession::getLastMessageAt)
+                .last("LIMIT 1");
+        ChatSession p = chatSessionMapper.selectOne(pending);
+        if (p != null) {
+            return p.getId();
+        }
+        LambdaQueryWrapper<ChatSession> aiOnly = new LambdaQueryWrapper<>();
+        aiOnly.eq(ChatSession::getUserId, userId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_AI_ONLY)
+                .orderByDesc(ChatSession::getLastMessageAt)
+                .last("LIMIT 1");
+        ChatSession ai = chatSessionMapper.selectOne(aiOnly);
+        if (ai != null) {
+            return ai.getId();
         }
         return createAiOnlySession(userId);
     }

@@ -8,17 +8,16 @@ import com.ticket.aichat.mapper.ChatRecordMapper;
 import com.ticket.aichat.service.AIChatService;
 import com.ticket.service.KnowledgeAssistant;
 import com.ticket.service.RocketMQProducerService;
-import com.ticket.service.StreamingKnowledgeAssistant;
 import com.ticket.aichat.service.ChatSessionService;
 import com.ticket.util.MQIdempotentUtil;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.service.Result;
 import com.ticket.util.UserContext;
 import com.ticket.util.TraceContext;
-import com.ticket.util.TraceMdcHelper;
 import com.ticket.util.AiChatStopWatch;
 import com.ticket.util.TokenCountUtil;
 import com.ticket.enums.BusinessStatus;
+import dev.langchain4j.service.UserMessage;
 import reactor.core.publisher.Flux;
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;
@@ -30,7 +29,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 智能客服服务实现
@@ -41,11 +39,13 @@ public class AIChatServiceImpl implements AIChatService {
 
     private static final Logger log = LoggerFactory.getLogger(AIChatServiceImpl.class);
 
-    @Resource
-    private KnowledgeAssistant knowledgeAssistant;
+    private static final String HUMAN_SESSION_HINT = "当前正在与客服对话，请直接在聊天框中发送消息。";
+
+    private static final String EMPTY_MODEL_FALLBACK = "抱歉，未获取到有效回答。请换一种问法或稍后重试；"
+            + "若与查票、订单相关，请说明日期、出发到达站或订单号。";
 
     @Resource
-    private StreamingKnowledgeAssistant streamingKnowledgeAssistant;
+    private KnowledgeAssistant knowledgeAssistant;
 
     @Resource
     private ChatRecordMapper chatRecordMapper;
@@ -63,37 +63,40 @@ public class AIChatServiceImpl implements AIChatService {
     private MQIdempotentUtil idempotentUtil;
     @Override
     @Transactional
-    public String chat(String question) {
+    public String chat(@UserMessage String question) {
         AiChatStopWatch stopWatch = new AiChatStopWatch("ai-chat-service").start();
+        //设置traceId
+        TraceContext.setTraceId(idempotentUtil.generateMessageId());
         log.info("[{}] 开始处理问题：{}", TraceContext.getTraceId(), question);
-        
-        // 保存用户消息
-        String sessionId = getSessionId();
+
+        Long userId = UserContext.getCurrentUserId();
+
+        ChatSession humanServing = findHumanServingSession(userId);
+        if (humanServing != null) {
+            saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, humanServing.getId(), null, 0, 0, 0);
+            saveChatRecord(HUMAN_SESSION_HINT, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, humanServing.getId(), null, 0, 0, 0);
+            stopWatch.stopAndLog();
+            return HUMAN_SESSION_HINT;
+        }
 
         // 检查是否包含转人工关键字
         if (containsHumanServiceKeyword(question)) {
             stopWatch.checkpoint("route_judge");
-            sessionId = chatSessionService.createSession(UserContext.getCurrentUserId(), "");
+            String sessionId = chatSessionService.createSession(userId, "");
             String answer = triggerHumanService(sessionId);
             stopWatch.checkpoint("human_transfer");
             saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, 0, 0);
             stopWatch.stopAndLog();
             return answer;
-        } else {
-            saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0, 0, 0);
-            stopWatch.checkpoint("db_save_user");
         }
 
-        // 检查会话状态
-        if (sessionId != null) {
-            ChatSession session = chatSessionService.getById(sessionId);
-            if (session != null && ChatSession.STATUS_ACTIVE.equals(session.getStatus())) {
-                stopWatch.checkpoint("session_check");
-                stopWatch.stopAndLog();
-                return "";
-            }
+        String sessionId = resolveAiChatSessionId();
+        if (isSessionEnded(sessionId)) {
+            return "会话已结束，若需要客服介入，请点击转客服按钮";
         }
-        
+        saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0, 0, 0);
+        stopWatch.checkpoint("db_save_user");
+
         // 调用AI（Result<String>获取TokenUsage）
         String answer;
         int inputTokens = 0;
@@ -101,6 +104,9 @@ public class AIChatServiceImpl implements AIChatService {
         try {
             Result<String> result = knowledgeAssistant.chat(question);
             answer = result.content();
+            if (answer == null || answer.isBlank()) {
+                answer = EMPTY_MODEL_FALLBACK;
+            }
             if (result.tokenUsage() != null) {
                 inputTokens = result.tokenUsage().inputTokenCount();
                 outputTokens = result.tokenUsage().outputTokenCount();
@@ -118,6 +124,10 @@ public class AIChatServiceImpl implements AIChatService {
             answer = "抱歉，智能客服系统当前正在维护中，预计10分钟内恢复。"
                     + "您可以：1.查看【常见问题】页面 2.拨打客服热线12306";
             outputTokens = TokenCountUtil.estimate(answer);
+        } catch (Exception e) {
+            log.error("[{}] AI 调用异常: {}", TraceContext.getTraceId(), e.getMessage(), e);
+            answer = EMPTY_MODEL_FALLBACK;
+            outputTokens = TokenCountUtil.estimate(answer);
         }
         stopWatch.checkpoint("llm_call");
         saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, inputTokens, outputTokens);
@@ -126,72 +136,12 @@ public class AIChatServiceImpl implements AIChatService {
         return answer;
     }
 
+    /**
+     * 兼容旧接口：内部走同步 {@link #chat(String)}，不再使用模型流式输出。
+     */
     @Override
-    @Transactional
     public Flux<String> streamingChat(String question) {
-        AiChatStopWatch stopWatch = new AiChatStopWatch("ai-stream-service").start();
-        log.info("[{}] 开始流式处理问题：{}", TraceContext.getTraceId(), question);
-        
-        String traceId = TraceContext.getTraceId();
-        String sessionId = getSessionId();
-        saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0, 0, 0);
-        stopWatch.checkpoint("db_save_user");
-        
-        if (isSessionEnded(sessionId)) {
-            String answer = "会话已结束，若需要客服介入，请点击转客服按钮";
-            saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, 0, 0);
-            return Flux.just(answer);
-        }
-
-        // 检查是否包含转人工关键字
-        if (containsHumanServiceKeyword(question)) {
-            stopWatch.checkpoint("route_judge");
-            String answer = triggerHumanService(sessionId);
-            saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, 0, 0);
-            return Flux.just(answer);
-        }
-        
-        // 检查会话状态
-        if (sessionId != null) {
-            ChatSession session = chatSessionService.getById(sessionId);
-            if (session != null && ChatSession.STATUS_ACTIVE.equals(session.getStatus())) {
-                String answer = "当前正在与客服对话，请直接在聊天框中发送消息。";
-                saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, 0, 0);
-                return Flux.just(answer);
-            }
-        }
-        
-        Flux<String> flux = streamingKnowledgeAssistant.chat(question);
-        stopWatch.checkpoint("llm_stream_start");
-
-        AtomicReference<StringBuilder> responseBuilder = new AtomicReference<>(new StringBuilder());
-        
-        return flux
-                .doOnNext(token -> {
-                    TraceMdcHelper.runWithTraceId(traceId, () -> {
-                        log.trace("流式token：{}", token);
-                    });
-                    responseBuilder.get().append(token);
-                })
-                .doOnComplete(() -> {
-                    stopWatch.checkpoint("llm_stream_complete");
-                    log.info("[{}] 流式处理完成", TraceContext.getTraceId());
-                    String answer = responseBuilder.get().toString();
-                    // 流式场景：使用 TokenCountUtil 估算 token 数量
-                    int inputTokens = TokenCountUtil.estimate(question);
-                    int outputTokens = TokenCountUtil.estimate(answer);
-                    log.info("[{}] Token消耗(估算) - input:{}, output:{}", 
-                            TraceContext.getTraceId(), inputTokens, outputTokens);
-                    saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, inputTokens, outputTokens);
-                    stopWatch.checkpoint("db_save_ai");
-                    stopWatch.stopAndLog();
-                })
-                .doOnError(error -> log.error("流式处理出错", error))
-                .doOnSubscribe(subscription ->
-                        TraceMdcHelper.runWithTraceId(traceId, () ->
-                                log.debug("流式订阅开始")
-                        )
-                );
+        return Flux.just(chat(question));
     }
 
     /**
@@ -222,7 +172,7 @@ public class AIChatServiceImpl implements AIChatService {
             event.setCreatedAt(LocalDateTime.now());
             event.setTraceId(TraceContext.getTraceId());
             rocketMQProducerService.sendChatRecordEvent(event);
-            log.debug("已发送聊天记录到RocketMQ异步处理: userId={}, msgType={}", 
+            log.debug("已发送聊天记录到RocketMQ异步处理: userId={}, msgType={}",
                     UserContext.getCurrentUserId(), msgType);
         } catch (Exception e) {
             log.error("发送聊天记录事件失败", e);
@@ -230,19 +180,36 @@ public class AIChatServiceImpl implements AIChatService {
     }
 
     /**
-     * 获取会话ID
+     * 已接入人工客服的会话（ACTIVE 且已分配坐席），AI 通道仅返回提示，消息写入该会话。
      */
-    private String getSessionId() {
-        //查询数据库中是否有未结束的会话且userid=当前用户，包括进行中和等待的
-        LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ChatSession::getUserId, UserContext.getCurrentUserId())
-                .ne(ChatSession::getStatus, ChatSession.STATUS_ENDED)
-                .ne(ChatSession::getStatus, ChatSession.STATUS_AI_ONLY);
-        //查询
-        ChatSession session = chatSessionService.getOne(wrapper);
+    private ChatSession findHumanServingSession(Long userId) {
+        if (userId == null) {
+            return null;
+        }
+        LambdaQueryWrapper<ChatSession> w = new LambdaQueryWrapper<>();
+        w.eq(ChatSession::getUserId, userId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_ACTIVE)
+                .isNotNull(ChatSession::getEmployeeId)
+                .orderByDesc(ChatSession::getLastMessageAt)
+                .last("LIMIT 1");
+        return chatSessionService.getOne(w);
+    }
 
-        return session != null ? session.getId() : null;
-
+    /**
+     * AI 对话落库与 WS 广播使用 {@link ChatSession#STATUS_AI_ONLY} 会话，避免写入排队/人工会话导致客服端误收。
+     */
+    private String resolveAiChatSessionId() {
+        Long userId = UserContext.getCurrentUserId();
+        LambdaQueryWrapper<ChatSession> w = new LambdaQueryWrapper<>();
+        w.eq(ChatSession::getUserId, userId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_AI_ONLY)
+                .orderByDesc(ChatSession::getLastMessageAt)
+                .last("LIMIT 1");
+        ChatSession s = chatSessionService.getOne(w);
+        if (s != null) {
+            return s.getId();
+        }
+        return chatSessionService.createAiOnlySession(userId);
     }
 
     /**
@@ -254,34 +221,28 @@ public class AIChatServiceImpl implements AIChatService {
         if (question == null || question.trim().isEmpty()) {
             return false;
         }
-        
-        // 转人工关键字列表
+
+        // 仅显式转人工表述（避免「联系客服」、英文 human 等正常咨询误判）
         List<String> keywords = Arrays.asList(
-            "转人工",
-            "人工客服", 
-            "人工服务",
-            "转人工客服",
-            "转接人工",
-            "人工坐席",
-            "真人客服",
-            "联系客服",
-            "找客服",
-            "customer service",
-            "human",
-            "operator"
+                "转人工",
+                "转人工客服",
+                "人工客服",
+                "转接人工",
+                "人工坐席",
+                "真人客服",
+                "我要人工",
+                "接人工"
         );
-        
-        String lowerQuestion = question.toLowerCase();
         for (String keyword : keywords) {
-            if (lowerQuestion.contains(keyword.toLowerCase())) {
-                log.info("检测到转人工关键字: {}，用户输入: {}", keyword, question);
+            if (question.contains(keyword)) {
+                log.info("检测到转人工意图: {}，用户输入: {}", keyword, question);
                 return true;
             }
         }
-        
+
         return false;
     }
-    
+
     /**
      * 触发转人工服务
      * @param sessionId 会话ID
@@ -296,7 +257,7 @@ public class AIChatServiceImpl implements AIChatService {
             }
 
             if (sessionId == null) {
-                sessionId = getSessionId();
+                sessionId = chatSessionService.getOrCreateSession(userId);
             }
 
             // 异步保存 pending 消息（通过RocketMQ）

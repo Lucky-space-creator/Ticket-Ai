@@ -93,18 +93,19 @@ public class OrderQueueServiceImpl implements OrderQueueService {
             }
             producer.sendOrderQueueMessage(request);
         } catch (RuntimeException mqEx) {
-            // MQ发送失败：回滚已预扣的库存 + 标记失败 + 抛出供上层降级
-            logger.error("MQ发送失败，回滚预扣库存: requestId={}, error={}", requestId, mqEx.getMessage());
+            // MQ 发送失败：仅释放 Redis 预占，不降级同步下单
+            logger.error("MQ发送失败，释放预占: requestId={}, error={}", requestId, mqEx.getMessage());
             try {
-                trainOrderGateway.rollbackStock(
+                trainOrderGateway.rollbackReservation(
                         request.getTrainId(), request.getTrainDate(),
                         request.getStartStation(), request.getEndStation(),
                         request.getSeatType(), request.getItems().size()
                 );
             } catch (Exception rollbackEx) {
-                logger.error("回滚库存也失败了: requestId={}, error={}", requestId, rollbackEx.getMessage());
+                logger.error("释放预占失败: requestId={}, error={}", requestId, rollbackEx.getMessage());
             }
-            updateResult(requestId, STATUS_FAILED, null, "消息队列不可用");
+            String err = mqEx.getMessage() != null ? mqEx.getMessage() : "消息发送失败";
+            updateResult(requestId, STATUS_FAILED, null, err);
             throw mqEx;
         }
 
