@@ -43,11 +43,11 @@ public class AdminOrderController {
      */
     @GetMapping
     public ResponseUtil.Result<Page<Order>> list(
-            @RequestParam(required = false) String orderNo,
-            @RequestParam(required = false) String phone,
-            @RequestParam(required = false) Integer status,
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(value = "orderNo", required = false) String orderNo,
+            @RequestParam(value = "phone", required = false) String phone,
+            @RequestParam(value = "status", required = false) Integer status,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size
     ) {
         Page<Order> pageResult = orderService.adminPage(orderNo, phone, status, page, size);
         // 填充用户手机号

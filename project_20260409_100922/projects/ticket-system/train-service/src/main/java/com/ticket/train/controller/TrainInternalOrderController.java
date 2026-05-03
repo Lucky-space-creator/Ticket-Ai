@@ -30,11 +30,11 @@ public class TrainInternalOrderController {
 
     @GetMapping("/seat-price")
     public BigDecimal getSeatPrice(
-            @RequestParam Long trainId,
-            @RequestParam String trainDate,
-            @RequestParam String startStation,
-            @RequestParam String endStation,
-            @RequestParam Integer seatType) {
+            @RequestParam("trainId") Long trainId,
+            @RequestParam("trainDate") String trainDate,
+            @RequestParam("startStation") String startStation,
+            @RequestParam("endStation") String endStation,
+            @RequestParam("seatType") Integer seatType) {
         return trainService.getSeatPrice(trainId, trainDate, startStation, endStation, seatType);
     }
 

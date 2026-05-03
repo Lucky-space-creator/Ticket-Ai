@@ -4,12 +4,10 @@ import com.ticket.dto.mq.*;
 import com.ticket.enums.MQTopics;
 import com.ticket.util.MQIdempotentUtil;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.producer.SendCallback;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Service;
@@ -19,10 +17,8 @@ import org.springframework.stereotype.Service;
  * 封装所有Topic的消息发送逻辑，提供类型安全的发送方法
  */
 @Service
-@ConditionalOnBean(RocketMQTemplate.class)
+@Slf4j
 public class RocketMQProducerService {
-
-    private static final Logger logger = LoggerFactory.getLogger(RocketMQProducerService.class);
 
     @Resource
     private RocketMQTemplate rocketMQTemplate;
@@ -38,16 +34,16 @@ public class RocketMQProducerService {
      */
     public void sendOrderQueueMessage(OrderQueueRequest request) {
         if (request == null || request.getRequestId() == null) {
-            logger.error("订单排队请求为空，无法发送MQ");
+            log.error("订单排队请求为空，无法发送MQ");
             return;
         }
         // 使用requestId作为message key，保证同一用户的消息有序
         boolean success = syncSend(MQTopics.ORDER_QUEUE, request.getRequestId(), request);
         if (!success) {
-            logger.error("订单排队消息发送失败: requestId={}", request.getRequestId());
+            log.error("订单排队消息发送失败: requestId={}", request.getRequestId());
             throw new RuntimeException("下单请求入队失败，请重试");
         }
-        logger.info("订单排队消息已发送: requestId={}, userId={}",
+        log.info("订单排队消息已发送: requestId={}, userId={}",
                 request.getRequestId(), request.getUserId());
     }
 
@@ -105,17 +101,17 @@ public class RocketMQProducerService {
             rocketMQTemplate.asyncSend(topic, msg, new SendCallback() {
                 @Override
                 public void onSuccess(SendResult result) {
-                    logger.debug("RocketMQ消息发送成功: topic={}, msgId={}",
+                    log.debug("RocketMQ消息发送成功: topic={}, msgId={}",
                             topic, result.getMsgId());
                 }
 
                 @Override
                 public void onException(Throwable e) {
-                    logger.error("RocketMQ消息发送失败: topic={}, key={}", topic, key, e);
+                    log.error("RocketMQ消息发送失败: topic={}, key={}", topic, key, e);
                 }
             });
         } catch (Exception e) {
-            logger.error("RocketMQ消息发送异常: topic={}, key={}", topic, key, e);
+            log.error("RocketMQ消息发送异常: topic={}, key={}", topic, key, e);
         }
     }
 
@@ -128,10 +124,10 @@ public class RocketMQProducerService {
                     .setHeader("KEYS", key)
                     .build();
             SendResult result = rocketMQTemplate.syncSend(topic, msg);
-            logger.info("RocketMQ同步发送成功: topic={}, msgId={}", topic, result.getMsgId());
+            log.info("RocketMQ同步发送成功: topic={}, msgId={}", topic, result.getMsgId());
             return true;
         } catch (Exception e) {
-            logger.error("RocketMQ同步发送失败: topic={}, key={}", topic, key, e);
+            log.error("RocketMQ同步发送失败: topic={}, key={}", topic, key, e);
             return false;
         }
     }

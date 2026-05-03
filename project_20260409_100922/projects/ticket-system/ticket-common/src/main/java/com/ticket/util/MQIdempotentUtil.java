@@ -1,8 +1,7 @@
 package com.ticket.util;
 
 import jakarta.annotation.Resource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
@@ -12,10 +11,10 @@ import java.util.concurrent.TimeUnit;
  * RocketMQ 幂等性校验工具类
  * 基于Redis实现消息去重，防止重复消费
  */
+@Slf4j
 @Component
 public class MQIdempotentUtil {
 
-    private static final Logger logger = LoggerFactory.getLogger(MQIdempotentUtil.class);
 
     /** 幂等键前缀 */
     private static final String IDEMPOTENT_KEY_PREFIX = "mq:idempotent:";
@@ -36,7 +35,7 @@ public class MQIdempotentUtil {
         String key = buildKey(topic, messageId);
         Boolean exists = redisUtil.exists(key);
         if (Boolean.TRUE.equals(exists)) {
-            logger.debug("消息重复消费，跳过: topic={}, messageId={}", topic, messageId);
+            log.debug("消息重复消费，跳过: topic={}, messageId={}", topic, messageId);
             return true;
         }
         // 标记为已消费（setIfAbsent保证原子性）

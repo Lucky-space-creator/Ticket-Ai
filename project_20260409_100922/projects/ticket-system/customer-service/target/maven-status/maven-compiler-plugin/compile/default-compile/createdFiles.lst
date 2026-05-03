@@ -1,3 +1,4 @@
+com\ticket\customer\consumer\AiChatTraceConsumer.class
 com\ticket\customer\service\impl\ChatSessionServiceImpl.class
 com\ticket\customer\config\WebSocketConfig.class
 com\ticket\customer\config\OpenApiConfig.class

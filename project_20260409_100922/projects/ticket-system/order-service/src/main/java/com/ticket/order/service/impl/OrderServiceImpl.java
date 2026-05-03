@@ -23,7 +23,7 @@ import com.ticket.util.SnowflakeIdUtil;
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,8 +55,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Resource
     private UserAdminFeignClient userAdminFeignClient;
 
-    @Resource
-    private ObjectProvider<RocketMQProducerService> rocketMQProducerService;
+    @Autowired
+    private RocketMQProducerService rocketMQProducerService;
 
     @Resource
     private MQIdempotentUtil idempotentUtil;
@@ -118,7 +118,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             event.setTotalAmount(totalAmount);
             event.setItemCount(items.size());
             event.setCreatedAt(LocalDateTime.now());
-            rocketMQProducerService.ifAvailable(s -> s.sendOrderCreatedEvent(event));
+            rocketMQProducerService.sendOrderCreatedEvent(event);
 
             return order;
         } catch (Exception e) {
@@ -176,7 +176,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             paymentEvent.setSeatType(order.getSeatType());
             paymentEvent.setCount(count);
             paymentEvent.setPayTimestamp(System.currentTimeMillis());
-            rocketMQProducerService.ifAvailable(s -> s.sendPaymentConfirmedEvent(paymentEvent));
+            rocketMQProducerService.sendPaymentConfirmedEvent(paymentEvent);
 
             logger.info("支付成功，已发送异步确认事件: orderNo={}, itemCount={}", orderNo, count);
         }

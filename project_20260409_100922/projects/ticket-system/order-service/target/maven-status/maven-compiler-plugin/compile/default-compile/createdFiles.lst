@@ -14,3 +14,4 @@ com\ticket\order\consumer\OrderQueueConsumer.class
 com\ticket\order\controller\InternalOrderStockStatsController.class
 com\ticket\order\OrderServiceApplication.class
 com\ticket\order\service\impl\OrderServiceImpl.class
+com\ticket\order\consumer\TicketOrderCreatedConsumer.class

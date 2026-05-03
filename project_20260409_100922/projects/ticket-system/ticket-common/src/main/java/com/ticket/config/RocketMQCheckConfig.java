@@ -1,68 +1,79 @@
 package com.ticket.config;
 
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
+import org.springframework.lang.NonNull;
 
 /**
- * RocketMQ 健康检查配置类
- * 在应用启动时检查RocketMQ连接状态，自动禁用问题组件
+ * RocketMQ 启动探测：在 {@link RocketMQTemplate} 初始化完成后立刻拉取路由，
+ * 确保 NameServer 可达后再装配依赖 MQ 的业务 Bean。
  */
-@Slf4j
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @ConditionalOnBean(RocketMQTemplate.class)
 public class RocketMQCheckConfig {
 
-    @Value("${rocketmq.enabled:true}")
-    private boolean enabled;
+    /** Broker 内置 topic，用于探测路由，无需预建业务 topic */
+    private static final String PROBE_TOPIC = "TBW102";
 
-    @Value("${rocketmq.detect-enabled:true}")
-    private boolean detectEnabled;
-
-    private final RocketMQTemplate rocketMQTemplate;
-
-    public RocketMQCheckConfig(RocketMQTemplate rocketMQTemplate) {
-        this.rocketMQTemplate = rocketMQTemplate;
+    @Bean
+    public RocketMQTemplateStartupProbe rocketMQTemplateStartupProbe(
+            @Value("${rocketmq.enabled:true}") boolean enabled,
+            @Value("${rocketmq.detect-enabled:true}") boolean detectEnabled,
+            @Value("${rocketmq.fail-fast:true}") boolean failFast) {
+        return new RocketMQTemplateStartupProbe(enabled, detectEnabled, failFast);
     }
 
-    /**
-     * 启动时检测RocketMQ连接
-     */
-    @PostConstruct
-    public void detectRocketMQ() {
-        if (!enabled) {
-            log.info("RocketMQ功能已全局禁用");
-            return;
+    @Slf4j
+    public static final class RocketMQTemplateStartupProbe implements BeanPostProcessor, Ordered {
+
+        private final boolean enabled;
+        private final boolean detectEnabled;
+        private final boolean failFast;
+
+        public RocketMQTemplateStartupProbe(boolean enabled, boolean detectEnabled, boolean failFast) {
+            this.enabled = enabled;
+            this.detectEnabled = detectEnabled;
+            this.failFast = failFast;
         }
 
-        if (!detectEnabled) {
-            log.info("RocketMQ检测功能已禁用，跳过连接测试");
-            return;
+        @Override
+        public Object postProcessAfterInitialization(@NonNull Object bean, @NonNull String beanName) throws BeansException {
+            if (!(bean instanceof RocketMQTemplate template)) {
+                return bean;
+            }
+            if (!enabled) {
+                log.info("RocketMQ 已全局禁用(rocketmq.enabled=false)，跳过启动探测");
+                return bean;
+            }
+            if (!detectEnabled) {
+                log.info("RocketMQ 启动探测已关闭(rocketmq.detect-enabled=false)，跳过");
+                return bean;
+            }
+            try {
+                template.getProducer().fetchPublishMessageQueues(PROBE_TOPIC);
+                log.info("RocketMQ NameServer 可达: beanName={}, probeTopic={}, producerGroup={}",
+                        beanName, PROBE_TOPIC, template.getProducer().getProducerGroup());
+            } catch (Exception e) {
+                if (failFast) {
+                    throw new BeanCreationException(beanName,
+                            "RocketMQ NameServer 不可达或路由拉取失败，启动终止（rocketmq.fail-fast=true）", e);
+                }
+                log.warn("RocketMQ 启动探测失败但 rocketmq.fail-fast=false，继续启动: {}", e.toString());
+            }
+            return bean;
         }
 
-        log.info("开始检测RocketMQ连接状态...");
-
-        try {
-            // 尝试发送一个测试消息
-            String testTopic = "health-check-topic-" + System.currentTimeMillis();
-            rocketMQTemplate.syncSend(testTopic, "health-check");
-
-            log.info("✅ RocketMQ连接正常，消息队列功能已启用");
-        } catch (Exception e) {
-            log.warn("❌ RocketMQ连接失败，将禁用消息队列功能，错误信息: {}", e.getMessage());
-
-            // 禁用RocketMQ，后续业务代码会检查enabled标志
-            enabled = false;
+        @Override
+        public int getOrder() {
+            return Ordered.HIGHEST_PRECEDENCE;
         }
-    }
-
-    /**
-     * 判断RocketMQ是否可用
-     */
-    public boolean isEnabled() {
-        return enabled;
     }
 }

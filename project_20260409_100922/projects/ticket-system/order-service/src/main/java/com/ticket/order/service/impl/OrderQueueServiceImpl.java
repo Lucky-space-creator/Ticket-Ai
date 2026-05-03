@@ -11,7 +11,7 @@ import com.ticket.util.RedisUtil;
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.TimeUnit;
@@ -43,8 +43,8 @@ public class OrderQueueServiceImpl implements OrderQueueService {
     @Resource
     private TrainOrderGateway trainOrderGateway;
 
-    @Resource
-    private ObjectProvider<RocketMQProducerService> rocketMQProducerService;
+    @Autowired
+    private RocketMQProducerService rocketMQProducerService;
 
     @Resource
     private RedisUtil redisUtil;
@@ -87,11 +87,7 @@ public class OrderQueueServiceImpl implements OrderQueueService {
 
         // 6. 发送MQ消息到订单队列（异步，不阻塞）
         try {
-            RocketMQProducerService producer = rocketMQProducerService.getIfAvailable();
-            if (producer == null) {
-                throw new RuntimeException("消息队列不可用");
-            }
-            producer.sendOrderQueueMessage(request);
+            rocketMQProducerService.sendOrderQueueMessage(request);
         } catch (RuntimeException mqEx) {
             // MQ 发送失败：仅释放 Redis 预占，不降级同步下单
             logger.error("MQ发送失败，释放预占: requestId={}, error={}", requestId, mqEx.getMessage());
