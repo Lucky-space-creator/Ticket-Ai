@@ -6,9 +6,10 @@ import com.ticket.entity.ChatRecord;
 import com.ticket.entity.ChatSession;
 import com.ticket.aichat.mapper.ChatRecordMapper;
 import com.ticket.aichat.service.AIChatService;
-import com.ticket.service.KnowledgeAssistant;
+import com.ticket.aichat.service.KnowledgeAssistant;
 import com.ticket.service.RocketMQProducerService;
 import com.ticket.aichat.service.ChatSessionService;
+import com.ticket.aichat.service.HumanTransferPublisher;
 import com.ticket.util.MQIdempotentUtil;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.service.Result;
@@ -61,6 +62,9 @@ public class AIChatServiceImpl implements AIChatService {
 
     @Resource
     private MQIdempotentUtil idempotentUtil;
+
+    @Resource
+    private HumanTransferPublisher humanTransferPublisher;
     @Override
     @Transactional
     public String chat(@UserMessage String question) {
@@ -83,14 +87,14 @@ public class AIChatServiceImpl implements AIChatService {
         if (containsHumanServiceKeyword(question)) {
             stopWatch.checkpoint("route_judge");
             String sessionId = chatSessionService.createSession(userId, "");
-            String answer = triggerHumanService(sessionId);
+            String answer = humanTransferPublisher.publish(userId, sessionId, null);
             stopWatch.checkpoint("human_transfer");
             saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, 0, 0);
             stopWatch.stopAndLog();
             return answer;
         }
 
-        String sessionId = resolveAiChatSessionId();
+        String sessionId = chatSessionService.getOrCreateAiOnlySessionId(userId);
         if (isSessionEnded(sessionId)) {
             return "会话已结束，若需要客服介入，请点击转客服按钮";
         }
@@ -196,23 +200,6 @@ public class AIChatServiceImpl implements AIChatService {
     }
 
     /**
-     * AI 对话落库与 WS 广播使用 {@link ChatSession#STATUS_AI_ONLY} 会话，避免写入排队/人工会话导致客服端误收。
-     */
-    private String resolveAiChatSessionId() {
-        Long userId = UserContext.getCurrentUserId();
-        LambdaQueryWrapper<ChatSession> w = new LambdaQueryWrapper<>();
-        w.eq(ChatSession::getUserId, userId)
-                .eq(ChatSession::getStatus, ChatSession.STATUS_AI_ONLY)
-                .orderByDesc(ChatSession::getLastMessageAt)
-                .last("LIMIT 1");
-        ChatSession s = chatSessionService.getOne(w);
-        if (s != null) {
-            return s.getId();
-        }
-        return chatSessionService.createAiOnlySession(userId);
-    }
-
-    /**
      * 检测用户输入是否包含转人工关键字
      * @param question 用户输入
      * @return 是否包含转人工关键字
@@ -241,45 +228,6 @@ public class AIChatServiceImpl implements AIChatService {
         }
 
         return false;
-    }
-
-    /**
-     * 触发转人工服务
-     * @param sessionId 会话ID
-     * @return 转人工结果消息
-     */
-    private String triggerHumanService(String sessionId) {
-        try {
-            Long userId = UserContext.getCurrentUserId();
-            if (userId == null) {
-                log.warn("用户未登录，无法转人工");
-                return "请先登录后再请求人工客服";
-            }
-
-            if (sessionId == null) {
-                sessionId = chatSessionService.getOrCreateSession(userId);
-            }
-
-            // 异步保存 pending 消息（通过RocketMQ）
-            ChatRecordEvent event = new ChatRecordEvent();
-            event.setMessageId(idempotentUtil.generateMessageId());
-            event.setUserId(userId);
-            event.setSessionId(sessionId);
-            event.setMessage("用户请求转人工客服");
-            event.setMsgType(BusinessStatus.MSG_TYPE_PENDING);
-            event.setConfidence(java.math.BigDecimal.ONE);
-            event.setInputTokens(0);
-            event.setOutputTokens(0);
-            event.setCreatedAt(LocalDateTime.now());
-            event.setTraceId(TraceContext.getTraceId());
-            rocketMQProducerService.sendChatRecordEvent(event);
-
-            log.info("用户 {} 触发转人工服务，会话ID: {}", userId, sessionId);
-            return "已为您转接人工客服，请稍候，客服人员将很快为您服务。";
-        } catch (Exception e) {
-            log.error("触发转人工服务失败", e);
-            return "转人工服务暂时不可用，请稍后再试或直接联系客服。";
-        }
     }
 
     /**

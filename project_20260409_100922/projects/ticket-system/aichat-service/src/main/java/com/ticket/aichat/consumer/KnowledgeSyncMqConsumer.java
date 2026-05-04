@@ -10,12 +10,14 @@ import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
  * 知识库变更后同步向量库（与 backend 同组名，勿与 backend 同时订阅本 Topic）。
  */
 @Component
+@ConditionalOnProperty(name = "rocketmq.enabled", havingValue = "true", matchIfMissing = true)
 @RocketMQMessageListener(
         topic = MQTopics.KNOWLEDGE_SYNC,
         consumerGroup = "knowledge-sync-consumer-group",

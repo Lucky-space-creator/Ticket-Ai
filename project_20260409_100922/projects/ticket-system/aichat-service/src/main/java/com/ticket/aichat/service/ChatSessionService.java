@@ -102,4 +102,9 @@ public interface ChatSessionService extends IService<ChatSession> {
      * @return 会话ID
      */
     String getOrCreateSession(Long userId);
+
+    /**
+     * 用于 AI 对话落库的会话（{@link ChatSession#STATUS_AI_ONLY}）；不存在则创建。
+     */
+    String getOrCreateAiOnlySessionId(Long userId);
 }

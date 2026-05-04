@@ -7,7 +7,6 @@ C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\dto\ChatResponse.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\ReconciliationResult.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\util\CacheUtil.java
-C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\RAGConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\RedisConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\RolePermission.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\KnowledgeBase.java
@@ -33,7 +32,6 @@ C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\dto\mq\OrderCreatedEvent.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\dto\internal\OrderRefundCommand.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\Role.java
-C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\tool\AIBusinessTool.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\Employee.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\Train.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\User.java
@@ -42,21 +40,17 @@ C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\dto\UserRegisterRequest.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\RocketMQCheckConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\enums\ResponseCode.java
-C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\AIModelConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\OperationLog.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\Order.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\MyBatisPlusConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\FeignConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\util\ResponseUtil.java
-C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\ChromaDBConfig.java
-C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\service\StreamingKnowledgeAssistant.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\GatewayConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\util\AiChatStopWatch.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\enums\BusinessStatus.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\dto\CreateOrderRequest.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\TicketStock.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\util\TraceMdcHelper.java
-C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\ElkConfig.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\config\RateLimitInterceptor.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\ChatSession.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\util\TokenCountUtil.java
@@ -68,4 +62,3 @@ C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\util\CryptoUtil.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\entity\ChatRecord.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\enums\MQTopics.java
-C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\ticket-common\src\main\java\com\ticket\service\KnowledgeAssistant.java

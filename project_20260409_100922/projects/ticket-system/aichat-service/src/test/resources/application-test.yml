@@ -1,0 +1,23 @@
+# 集成测试：不连 Nacos / 不连外部 MQ，使用内存库与嵌入式 Redis
+spring:
+  datasource:
+    url: jdbc:h2:mem:aichat_it;MODE=MySQL;DB_CLOSE_DELAY=-1;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+ticket:
+  redisson:
+    enabled: false
+
+rocketmq:
+  enabled: false
+  fail-fast: false
+
+knowledge:
+  init-on-startup: false
+
+logging:
+  level:
+    root: WARN
+    com.ticket.aichat: INFO

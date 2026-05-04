@@ -4,6 +4,7 @@ import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
@@ -18,6 +19,7 @@ import java.util.List;
  * 节点端口配置：主节点 6379，从节点 6380,6381（可扩展更多从节点）
  */
 @Configuration
+@ConditionalOnProperty(name = "ticket.redisson.enabled", havingValue = "true", matchIfMissing = true)
 public class RedissonConfig {
 
     /**

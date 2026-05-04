@@ -1,6 +1,3 @@
-com.ticket.config.AIModelConfig
-com.ticket.config.ChromaDBConfig
-com.ticket.config.RAGConfig
 com.ticket.config.FeignConfig
 com.ticket.config.GatewayConfig
 com.ticket.config.JacksonConfig

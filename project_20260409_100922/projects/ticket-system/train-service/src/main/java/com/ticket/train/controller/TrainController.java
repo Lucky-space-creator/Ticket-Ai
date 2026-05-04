@@ -67,6 +67,35 @@ public class TrainController {
     }
 
     /**
+     * 按车次号查询详情（供 Feign/内部查询；与 /{id} 区分开）
+     */
+    @GetMapping("/no/{trainNo}")
+    public ResponseUtil.Result<?> getTrainByTrainNo(@PathVariable("trainNo") String trainNo) {
+        try {
+            Train train = trainService.getTrainDetail(trainNo);
+
+            if (train == null) {
+                return ResponseUtil.error("车次不存在");
+            }
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("id", train.getId());
+            data.put("trainNo", train.getTrainNo());
+            data.put("trainType", train.getTrainType());
+            data.put("trainTypeName", getTrainTypeName(train.getTrainType()));
+            data.put("startStation", train.getStartStation());
+            data.put("endStation", train.getEndStation());
+            data.put("startTime", train.getStartTime());
+            data.put("endTime", train.getEndTime());
+            data.put("status", train.getStatus());
+
+            return ResponseUtil.success(data);
+        } catch (Exception e) {
+            return ResponseUtil.error(e.getMessage());
+        }
+    }
+
+    /**
      * 获取车次详情
      */
     @GetMapping("/{id}")

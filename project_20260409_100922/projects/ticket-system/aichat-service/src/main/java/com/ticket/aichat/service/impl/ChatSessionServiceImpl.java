@@ -214,6 +214,23 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         return createAiOnlySession(userId);
     }
 
+    @Override
+    public String getOrCreateAiOnlySessionId(Long userId) {
+        if (userId == null) {
+            return createAiOnlySession(null);
+        }
+        LambdaQueryWrapper<ChatSession> w = new LambdaQueryWrapper<>();
+        w.eq(ChatSession::getUserId, userId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_AI_ONLY)
+                .orderByDesc(ChatSession::getLastMessageAt)
+                .last("LIMIT 1");
+        ChatSession s = chatSessionMapper.selectOne(w);
+        if (s != null) {
+            return s.getId();
+        }
+        return createAiOnlySession(userId);
+    }
+
     /**
      * 生成会话ID
      */

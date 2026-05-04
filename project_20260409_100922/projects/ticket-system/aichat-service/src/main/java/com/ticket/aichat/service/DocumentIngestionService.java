@@ -55,7 +55,7 @@ public class DocumentIngestionService {
     @PostConstruct
     public void ingestDocuments() {
         if (!initOnStartup) {
-            log.info("知识库初始化已禁用（knowledge.init-on-startup=false）");
+            log.info("知识库初始化已禁用");
             return;
         }
 

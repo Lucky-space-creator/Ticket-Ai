@@ -1,0 +1,27 @@
+{
+  "index_patterns": ["ticket-app-*"],
+  "priority": 100,
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "refresh_interval": "5s"
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "level": { "type": "keyword" },
+        "level_value": { "type": "integer" },
+        "logger_name": { "type": "keyword" },
+        "thread_name": { "type": "keyword" },
+        "traceId": { "type": "keyword" },
+        "app": { "type": "keyword", "ignore_above": 64 },
+        "env": { "type": "keyword" },
+        "logType": { "type": "keyword" },
+        "message": { "type": "text" },
+        "stack_trace": { "type": "text", "index": false },
+        "host_name": { "type": "keyword" }
+      }
+    }
+  }
+}

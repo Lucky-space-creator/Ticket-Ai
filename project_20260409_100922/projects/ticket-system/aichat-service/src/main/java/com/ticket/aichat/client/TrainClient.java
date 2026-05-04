@@ -2,6 +2,7 @@ package com.ticket.aichat.client;
 
 import com.ticket.dto.internal.TrainStockCommand;
 import com.ticket.entity.Train;
+import com.ticket.util.ResponseUtil;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,9 +15,19 @@ import java.math.BigDecimal;
 /**
  * 车次服务 Feign（与 train-service 暴露的内部订单接口对齐，供后续 AI 工具接入）
  * 作用: 提供内部订单服务接口,为 AI 模型提供车次信息的工具
+ * context-id: aichatTrainClient 作用为 FeignClient 名称，保证唯一
  */
 @FeignClient(name = "train-service", contextId = "aichatTrainClient")
 public interface TrainClient {
+
+    @GetMapping("/api/trains/search")
+    ResponseUtil.Result<?> searchTrainsPublic(
+            @RequestParam("startStation") String startStation,
+            @RequestParam("endStation") String endStation,
+            @RequestParam("trainDate") String trainDate);
+
+    @GetMapping("/api/trains/no/{trainNo}")
+    ResponseUtil.Result<?> getTrainByTrainNo(@PathVariable("trainNo") String trainNo);
 
     /**
      * 获取车次详情
