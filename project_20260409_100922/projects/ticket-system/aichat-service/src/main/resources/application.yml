@@ -61,12 +61,12 @@ knowledge:
   # none | reconcile_once | full_rebuild（兼容 legacy: init-on-startup=true 等价 reconcile_once）
   startup-sync-mode: reconcile_once
 
-# FAQ 直通匹配（可走 LLM 前短路）
+# FAQ（表 knowledge_base）：先于 LLM 字面匹配短路；不涉及 Chroma/BM25
 faq:
   match:
     enabled: true
 
-# Chroma（生产可将 allow-in-memory-fallback 设为 false）
+# Chroma 向量集合；embedding 不可用且 allow=true 时降级内存库（仅限开发）
 chroma:
   host: 192.168.48.135
   port: 8000
@@ -74,5 +74,11 @@ chroma:
   allow-in-memory-fallback: true
 
 rag:
-  retrieval-expand-multiplier: 5   # 先多取再按手册启停过滤
-  filtered-cap: 40
+  max-results: 3                   # 最终注入 LLM 的片段条数（单路与混合治理后共用）
+  min-score: 0.7                   # EmbeddingStoreContentRetriever 向量初筛阈值 [0,1]
+  retrieval-expand-multiplier: 5   # 向量检索扩展倍数
+  filtered-cap: 40                 # 过滤片段
+  hybrid: # 混合检索
+    enabled: false
+  lexical: # LLM 文本匹配
+    top-k: 40 # 向量检索 Top-K 条数

@@ -1,8 +1,8 @@
 package com.ticket.aichat.controller;
 
-import com.ticket.aichat.manual.ManualKbGovernance;
 import com.ticket.aichat.service.DocumentIngestionService;
 import com.ticket.aichat.service.KnowledgeBaseService;
+import com.ticket.aichat.service.impl.ManualDocImpl;
 import com.ticket.entity.KnowledgeBase;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Collection;
 
 /**
- * FAQ（knowledge_base）与手册（MD/Chroma）治理接口。
+ * FAQ 管理（CRUD DB）与 MD 手册运维：对账/全量入库、磁盘与治理库合并视图、手册启停用。
  */
 @RestController
 @RequestMapping("/api/knowledge")
@@ -27,8 +27,9 @@ public class KnowledgeController {
     private DocumentIngestionService documentIngestionService;
 
     @Resource
-    private ManualKbGovernance manualKbGovernance;
+    private ManualDocImpl manualDocImpl;
 
+    /** FAQ 全量列表（含禁用） */
     @GetMapping("/list")
     public ResponseUtil.Result<java.util.List<KnowledgeBase>> list() {
         return ResponseUtil.success(knowledgeBaseService.list());
@@ -108,6 +109,7 @@ public class KnowledgeController {
         }
     }
 
+    /** 磁盘手册 + kb_manual_document 合并列表，供运维判断是否需要 reconcile */
     @GetMapping("/manual-docs")
     public ResponseUtil.Result<Collection<DocumentIngestionService.ManualKbItemVo>> manualDocs() {
         try {
@@ -118,10 +120,7 @@ public class KnowledgeController {
     }
 
     /**
-     * 手册治理开关。
-     * @param docId 手册文件名
-     * @param body enabled 是否启用
-     * @return 更新结果
+     * 按 doc_id（相对路径哈希）启停手册；停用后向量与 BM25 命中会在 RAG 侧被剔除。
      */
     @PutMapping("/manual-docs/{docId}/enabled")
     public ResponseUtil.Result<?> manualDocToggle(
@@ -130,7 +129,8 @@ public class KnowledgeController {
         if (body == null || body.enabled == null) {
             return ResponseUtil.error("请求体缺少 enabled");
         }
-        boolean ok = manualKbGovernance.setManualDocEnabled(docId, Boolean.TRUE.equals(body.enabled));
+        // 更新向量与 BM25 索引
+        boolean ok = manualDocImpl.setManualDocEnabled(docId, Boolean.TRUE.equals(body.enabled));
         return ok ? ResponseUtil.success("更新成功") : ResponseUtil.error("未见该手册治理记录（请先完成对账入库）");
     }
 

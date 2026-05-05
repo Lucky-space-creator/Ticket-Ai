@@ -33,6 +33,9 @@ public class ChromaDBConfig {
     @Value("${chroma.allow-in-memory-fallback:true}")
     private boolean allowInMemoryFallback;
 
+    /**
+     * LangChain4j EmbeddingStore：在线 Chroma，失败时可降级内存索引（仅限开发调试）。
+     */
     @Bean
     public EmbeddingStore<TextSegment> chromaEmbeddingStore() {
         String baseUrl = String.format("http://%s:%d", host, port);

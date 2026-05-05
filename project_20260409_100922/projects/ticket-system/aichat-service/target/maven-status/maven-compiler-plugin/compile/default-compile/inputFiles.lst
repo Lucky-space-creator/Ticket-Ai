@@ -1,5 +1,6 @@
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\manual\ManualVectorMaintenance.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\controller\AIChatController.java
+C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\rag\aggregate\GovernedHybridContentAggregator.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\service\impl\ChatSessionServiceImpl.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\client\OrderClient.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\client\OrderQueryClient.java
@@ -10,7 +11,9 @@ C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\client\TrainClient.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\service\HumanTransferPublisher.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\service\impl\AIChatServiceImpl.java
+C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\rag\lexical\LexicalBm25ContentRetriever.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\AiChatServiceApplication.java
+C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\rag\lexical\ManualLexicalIndex.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\manual\ManualGovernedContentRetriever.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\manual\ManualKbGovernance.java
 C:\Users\LENOVO\OneDrive\桌面\购票智能客服系统\project_20260409_100922\projects\ticket-system\aichat-service\src\main\java\com\ticket\aichat\client\UserReadFeignClient.java
