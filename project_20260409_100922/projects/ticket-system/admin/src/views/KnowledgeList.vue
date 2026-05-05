@@ -1,7 +1,10 @@
 <template>
   <div class="knowledge-list">
     <div class="header">
-      <h2>知识库管理</h2>
+      <div class="header-text">
+        <h2>FAQ问答管理</h2>
+        <p class="sub">固定话术短问答（不走大模型）；政策类内容由前台 RAG+LLM。</p>
+      </div>
       <el-button type="primary" @click="handleAdd">添加知识</el-button>
     </div>
     <el-card>
@@ -194,8 +197,17 @@ onMounted(() => {
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 16px;
   margin-bottom: 20px;
+}
+.header-text h2 {
+  margin: 0 0 6px;
+}
+.header-text .sub {
+  margin: 0;
+  font-size: 13px;
+  color: #909399;
 }
 .answer-cell {
   max-height: 100px;

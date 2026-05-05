@@ -2,12 +2,16 @@ package com.ticket.admin.controller;
 
 import com.ticket.admin.service.AdminUserService;
 import com.ticket.entity.User;
+import com.ticket.util.CryptoUtil;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * 管理员用户管理
+ */
 @RestController
 @RequestMapping("/api/admin/users")
 @CrossOrigin(origins = "*")
@@ -20,6 +24,11 @@ public class AdminUserController {
     public ResponseUtil.Result<List<User>> list() {
         List<User> users = adminUserService.list();
         users.forEach(user -> user.setPassword(null));
+        //解码身份证号，仅返回前6位
+        users.forEach(user -> {
+            String decrypt = CryptoUtil.decrypt(user.getIdCard());
+            user.setIdCard(decrypt.substring(0, 6) + "********");
+        });
         return ResponseUtil.success(users);
     }
 

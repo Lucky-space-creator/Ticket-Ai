@@ -88,7 +88,7 @@ public class CryptoUtil {
     // ... existing code ...
 
     public static void main(String[] args) {
-        String password = "110101199002022346";
+        String password = "110101198405055699";
 
         // 生成新的哈希
         String hashed = CryptoUtil.encrypt(password);

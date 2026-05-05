@@ -3,9 +3,11 @@ package com.ticket.aichat.controller;
 import com.ticket.dto.ChatRequest;
 import com.ticket.dto.ChatResponse;
 import com.ticket.aichat.service.AIChatService;
-import com.ticket.aichat.service.KnowledgeBaseService;
-import com.ticket.aichat.service.impl.KnowledgeBaseServiceImpl;
-import com.ticket.util.*;
+import com.ticket.util.AiChatStopWatch;
+import com.ticket.util.MQIdempotentUtil;
+import com.ticket.util.ResponseUtil;
+import com.ticket.util.TraceContext;
+import com.ticket.util.TraceMdcHelper;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -13,9 +15,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.http.MediaType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import reactor.core.publisher.Flux;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 
 /**
@@ -32,8 +34,12 @@ public class AIChatController {
     @Resource
     private AIChatService aiChatService;  // 注入AI聊天服务
 
+    @Resource
+    private MQIdempotentUtil mqIdempotentUtil;
+
     @PostMapping("/ask")
     public ResponseUtil.Result<ChatResponse> ask(@Valid @RequestBody ChatRequest request) {
+        ensureChatTraceForRequest();
         AiChatStopWatch stopWatch = new AiChatStopWatch("ai-chat-sync").start();
         String question = request.getQuestion();
         log.info("[{}] 用户提问：{}", TraceContext.getTraceId(), question);
@@ -46,6 +52,7 @@ public class AIChatController {
 
     @PostMapping(value = "/ask/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter askStream(@Valid @RequestBody ChatRequest request) {
+        ensureChatTraceForRequest();
         AiChatStopWatch stopWatch = new AiChatStopWatch("ai-chat-stream").start();
         String question = request.getQuestion();
         log.info("[{}] 收到流式聊天请求，问题：{}", TraceContext.getTraceId(), question);
@@ -71,9 +78,16 @@ public class AIChatController {
                 emitter.completeWithError(error);
             },
             () -> {
-                stopWatch.checkpoint("stream_complete");
-                log.info("[{}] 流式传输完成", TraceContext.getTraceId());
-                stopWatch.stopAndLog();
+                TraceContext.setTraceId(traceIdForReactor);
+                MDC.put(TraceContext.TRACE_ID_KEY, traceIdForReactor);
+                try {
+                    stopWatch.checkpoint("stream_complete");
+                    log.info("[{}] 流式传输完成", traceIdForReactor);
+                    stopWatch.stopAndLog();
+                } finally {
+                    TraceContext.clear();
+                    MDC.remove(TraceContext.TRACE_ID_KEY);
+                }
                 emitter.complete();
             }
         );
@@ -84,6 +98,20 @@ public class AIChatController {
         emitter.onError(error -> log.error("SSE连接错误", error));
         
         return emitter;
+    }
+
+    /**
+     * 在进入 Service 之前生成 TraceId，与 MQ/ChatRecord 使用同一套 messageId；
+     * 同步 MDC，与 Logback 中 %X{traceId} 一致。
+     */
+    private void ensureChatTraceForRequest() {
+        if (!TraceContext.hasTraceId()) {
+            TraceContext.setTraceId(mqIdempotentUtil.generateMessageId());
+        }
+        String tid = TraceContext.getTraceId();
+        if (tid != null) {
+            MDC.put(TraceContext.TRACE_ID_KEY, tid);
+        }
     }
 
     @PostMapping("/clear")

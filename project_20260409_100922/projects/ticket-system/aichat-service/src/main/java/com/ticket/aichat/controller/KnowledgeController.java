@@ -1,17 +1,19 @@
 package com.ticket.aichat.controller;
 
-import com.fasterxml.jackson.annotation.JsonAnyGetter;
-import com.ticket.entity.KnowledgeBase;
+import com.ticket.aichat.manual.ManualKbGovernance;
 import com.ticket.aichat.service.DocumentIngestionService;
 import com.ticket.aichat.service.KnowledgeBaseService;
+import com.ticket.entity.KnowledgeBase;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.util.Collection;
 
 /**
- * 知识库管理（与单体 backend 路径一致，由网关路由至 aichat-service）
+ * FAQ（knowledge_base）与手册（MD/Chroma）治理接口。
  */
 @RestController
 @RequestMapping("/api/knowledge")
@@ -24,16 +26,17 @@ public class KnowledgeController {
     @Resource
     private DocumentIngestionService documentIngestionService;
 
+    @Resource
+    private ManualKbGovernance manualKbGovernance;
+
     @GetMapping("/list")
-    public ResponseUtil.Result<List<KnowledgeBase>> list() {
-        List<KnowledgeBase> list = knowledgeBaseService.list();
-        return ResponseUtil.success(list);
+    public ResponseUtil.Result<java.util.List<KnowledgeBase>> list() {
+        return ResponseUtil.success(knowledgeBaseService.list());
     }
 
     @GetMapping("/enabled")
-    public ResponseUtil.Result<List<KnowledgeBase>> getEnabled() {
-        List<KnowledgeBase> list = knowledgeBaseService.getEnabledKnowledge();
-        return ResponseUtil.success(list);
+    public ResponseUtil.Result<java.util.List<KnowledgeBase>> getEnabled() {
+        return ResponseUtil.success(knowledgeBaseService.getEnabledKnowledge());
     }
 
     @PostMapping("/add")
@@ -43,8 +46,7 @@ public class KnowledgeController {
                     request.getCategory(),
                     request.getQuestion(),
                     request.getAnswer(),
-                    request.getKeywords()
-            );
+                    request.getKeywords());
             return ResponseUtil.success("添加成功", kb);
         } catch (Exception e) {
             return ResponseUtil.error("添加失败: " + e.getMessage());
@@ -58,8 +60,7 @@ public class KnowledgeController {
                     request.getCategory(),
                     request.getQuestion(),
                     request.getAnswer(),
-                    request.getKeywords()
-            );
+                    request.getKeywords());
             return ResponseUtil.success("更新成功", kb);
         } catch (Exception e) {
             return ResponseUtil.error("更新失败: " + e.getMessage());
@@ -70,71 +71,82 @@ public class KnowledgeController {
     public ResponseUtil.Result<?> delete(@PathVariable Long id) {
         try {
             boolean result = knowledgeBaseService.deleteKnowledge(id);
-            if (result) {
-                return ResponseUtil.success("删除成功");
-            }
-            return ResponseUtil.error("删除失败");
+            return result ? ResponseUtil.success("删除成功") : ResponseUtil.error("删除失败");
         } catch (Exception e) {
             return ResponseUtil.error("删除失败: " + e.getMessage());
         }
     }
 
+    /**
+     * 手册增量对账（按文件 checksum）。
+     */
     @PostMapping("/sync")
-    public ResponseUtil.Result<?> sync() {
+    public ResponseUtil.Result<?> syncManualIncremental() {
         try {
-            knowledgeBaseService.syncToVectorStore();
-            return ResponseUtil.success("同步成功");
+            documentIngestionService.reconcileManualDocuments();
+            return ResponseUtil.success("手册对账任务已触发");
         } catch (Exception e) {
-            return ResponseUtil.error("同步失败: " + e.getMessage());
+            return ResponseUtil.error("手册对账失败: " + e.getMessage());
         }
     }
 
+    @PostMapping("/manual/reconcile")
+    public ResponseUtil.Result<?> manualReconcileExplicit() {
+        return syncManualIncremental();
+    }
+
+    /**
+     * 全量清空向量集合与治理表后重灌磁盘手册（慎用）。
+     */
     @PostMapping("/load-files")
-    public ResponseUtil.Result<?> loadFiles() {
+    public ResponseUtil.Result<?> loadFilesFullRebuild() {
         try {
-            documentIngestionService.loadDocuments();
-            return ResponseUtil.success("文件加载完成");
+            documentIngestionService.fullRebuildManualDocuments();
+            return ResponseUtil.success("手册全量重建已触发");
         } catch (Exception e) {
             return ResponseUtil.error("文件加载失败: " + e.getMessage());
         }
     }
 
+    @GetMapping("/manual-docs")
+    public ResponseUtil.Result<Collection<DocumentIngestionService.ManualKbItemVo>> manualDocs() {
+        try {
+            return ResponseUtil.success(documentIngestionService.mergedManualKbView());
+        } catch (Exception e) {
+            return ResponseUtil.error("获取手册清单失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 手册治理开关。
+     * @param docId 手册文件名
+     * @param body enabled 是否启用
+     * @return 更新结果
+     */
+    @PutMapping("/manual-docs/{docId}/enabled")
+    public ResponseUtil.Result<?> manualDocToggle(
+            @PathVariable("docId") String docId,
+            @RequestBody EnabledToggle body) {
+        if (body == null || body.enabled == null) {
+            return ResponseUtil.error("请求体缺少 enabled");
+        }
+        boolean ok = manualKbGovernance.setManualDocEnabled(docId, Boolean.TRUE.equals(body.enabled));
+        return ok ? ResponseUtil.success("更新成功") : ResponseUtil.error("未见该手册治理记录（请先完成对账入库）");
+    }
+
+    @Getter
+    @Setter
     public static class KnowledgeRequest {
         private String category;
         private String question;
         private String answer;
         private String keywords;
 
-        public String getCategory() {
-            return category;
-        }
+    }
 
-        public void setCategory(String category) {
-            this.category = category;
-        }
-
-        public String getQuestion() {
-            return question;
-        }
-
-        public void setQuestion(String question) {
-            this.question = question;
-        }
-
-        public String getAnswer() {
-            return answer;
-        }
-
-        public void setAnswer(String answer) {
-            this.answer = answer;
-        }
-
-        public String getKeywords() {
-            return keywords;
-        }
-
-        public void setKeywords(String keywords) {
-            this.keywords = keywords;
-        }
+    @Getter
+    @Setter
+    public static class EnabledToggle {
+        private Boolean enabled;
     }
 }

@@ -4,12 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.ticket.dto.mq.ChatRecordEvent;
 import com.ticket.entity.ChatRecord;
 import com.ticket.entity.ChatSession;
+import com.ticket.entity.KnowledgeBase;
 import com.ticket.aichat.mapper.ChatRecordMapper;
 import com.ticket.aichat.service.AIChatService;
 import com.ticket.aichat.service.KnowledgeAssistant;
 import com.ticket.service.RocketMQProducerService;
 import com.ticket.aichat.service.ChatSessionService;
 import com.ticket.aichat.service.HumanTransferPublisher;
+import com.ticket.aichat.service.QuickFaqMatchService;
 import com.ticket.util.MQIdempotentUtil;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.service.Result;
@@ -23,6 +25,7 @@ import reactor.core.publisher.Flux;
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +33,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 智能客服服务实现
@@ -65,13 +69,21 @@ public class AIChatServiceImpl implements AIChatService {
 
     @Resource
     private HumanTransferPublisher humanTransferPublisher;
+
+    @Resource
+    private QuickFaqMatchService quickFaqMatchService;
     @Override
     @Transactional
     public String chat(@UserMessage String question) {
         AiChatStopWatch stopWatch = new AiChatStopWatch("ai-chat-service").start();
-        //设置traceId
-        TraceContext.setTraceId(idempotentUtil.generateMessageId());
-        log.info("[{}] 开始处理问题：{}", TraceContext.getTraceId(), question);
+        if (!TraceContext.hasTraceId()) {
+            TraceContext.setTraceId(idempotentUtil.generateMessageId());
+        }
+        String tid = TraceContext.getTraceId();
+        if (tid != null) {
+            MDC.put(TraceContext.TRACE_ID_KEY, tid);
+        }
+        log.info("[{}] 开始处理问题：{}", tid, question);
 
         Long userId = UserContext.getCurrentUserId();
 
@@ -100,6 +112,16 @@ public class AIChatServiceImpl implements AIChatService {
         }
         saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0, 0, 0);
         stopWatch.checkpoint("db_save_user");
+
+        Optional<KnowledgeBase> faqHit = quickFaqMatchService.tryHit(question);
+        if (faqHit.isPresent()) {
+            String ans = faqHit.get().getAnswer();
+            int estimated = TokenCountUtil.estimate(ans);
+            log.info("[{}] FAQ 直通命中，跳过 LLM", TraceContext.getTraceId());
+            saveChatRecord(ans, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, 0, estimated);
+            stopWatch.stopAndLog();
+            return ans;
+        }
 
         // 调用AI（Result<String>获取TokenUsage）
         String answer;

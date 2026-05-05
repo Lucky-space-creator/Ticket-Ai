@@ -17,8 +17,11 @@ public interface KnowledgeBaseService extends IService<KnowledgeBase> {
     List<KnowledgeBase> getEnabledKnowledge();
 
     /**
-     * 同步知识库到向量数据库
+     * 预留：FAQ 不向量化。
+     *
+     * @deprecated 已无操作；手册请使用 DocumentIngestionService 对账接口。
      */
+    @Deprecated
     void syncToVectorStore();
 
     /**

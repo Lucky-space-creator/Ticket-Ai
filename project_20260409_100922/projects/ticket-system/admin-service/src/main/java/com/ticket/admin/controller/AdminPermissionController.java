@@ -4,6 +4,7 @@ import com.ticket.entity.Permission;
 import com.ticket.service.PermissionService;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
+import lombok.Data;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -105,7 +106,7 @@ public class AdminPermissionController {
         return ResponseUtil.success("删除成功");
     }
 
-    @lombok.Data
+    @Data
     public static class CreatePermissionRequest {
         private String permissionName;
         private String permissionDisplayName;
@@ -120,7 +121,7 @@ public class AdminPermissionController {
         private String description;
     }
 
-    @lombok.Data
+    @Data
     public static class UpdatePermissionRequest {
         private String permissionDisplayName;
         private Integer permissionType;
@@ -134,7 +135,7 @@ public class AdminPermissionController {
         private String description;
     }
 
-    @lombok.Data
+    @Data
     public static class UpdateStatusRequest {
         private Integer status;
     }

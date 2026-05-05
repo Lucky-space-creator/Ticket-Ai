@@ -10,12 +10,16 @@ ticket:
   redisson:
     enabled: false
 
+ai:
+  http-api:
+    api-key: test-api-key-placeholder
+
 rocketmq:
   enabled: false
   fail-fast: false
 
 knowledge:
-  init-on-startup: false
+  startup-sync-mode: none
 
 logging:
   level:

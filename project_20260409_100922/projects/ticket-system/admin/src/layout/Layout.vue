@@ -28,9 +28,9 @@
             <el-icon><User /></el-icon>
             <span>用户管理</span>
           </el-menu-item>
-          <el-menu-item index="/knowledge">
+          <el-menu-item index="/faq">
             <el-icon><ChatDotRound /></el-icon>
-            <span>知识库管理</span>
+            <span>FAQ问答管理</span>
           </el-menu-item>
           <el-menu-item index="/roles">
             <el-icon><Setting /></el-icon>

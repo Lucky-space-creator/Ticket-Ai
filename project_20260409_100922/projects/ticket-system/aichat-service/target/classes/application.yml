@@ -55,13 +55,24 @@ ai:
     temperature: 0.7
     timeout: 600
 
-# 知识库配置
+# 知识库：FAQ 仅存 DB；向量仅来自 handbook MD
 knowledge:
-  base-path: knowledge-base     # 知识库文件目录（相对于项目根目录）
-  init-on-startup: true        # 启动时初始化知识库
+  base-path: knowledge-base                 # MD 手册根目录（工作目录相对路径）
+  # none | reconcile_once | full_rebuild（兼容 legacy: init-on-startup=true 等价 reconcile_once）
+  startup-sync-mode: reconcile_once
 
-# chroma配置
+# FAQ 直通匹配（可走 LLM 前短路）
+faq:
+  match:
+    enabled: true
+
+# Chroma（生产可将 allow-in-memory-fallback 设为 false）
 chroma:
   host: 192.168.48.135
   port: 8000
   collection: ticket_knowledge
+  allow-in-memory-fallback: true
+
+rag:
+  retrieval-expand-multiplier: 5   # 先多取再按手册启停过滤
+  filtered-cap: 40

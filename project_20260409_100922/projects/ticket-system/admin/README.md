@@ -66,7 +66,7 @@ proxy: {
 ### 4. 测试各模块
 
 #### 知识库管理
-- 访问 http://localhost:3001/knowledge
+- 访问 FAQ 管理 http://localhost:3001/faq （旧路由 `/knowledge` 会自动重定向到 `/faq`）
 - 列表应显示已有知识条目
 - 可进行添加、编辑、删除操作
 
@@ -120,10 +120,10 @@ proxy: {
 | 订单 | `/api/orders` | GET | 获取当前用户订单 |
 | 订单 | `/api/orders/{orderNo}` | GET | 获取订单详情 |
 | 订单 | `/api/orders/{orderNo}/refund` | POST | 退票 |
-| 知识库 | `/api/knowledge/list` | GET | 获取知识库列表 |
-| 知识库 | `/api/knowledge/add` | POST | 添加知识 |
-| 知识库 | `/api/knowledge/update` | PUT | 更新知识 |
-| 知识库 | `/api/knowledge/{id}` | DELETE | 删除知识 |
+| FAQ 问答（短问答直通） | `/api/knowledge/list` | GET | 获取FAQ列表 |
+| FAQ 问答 | `/api/knowledge/add` | POST | 添加FAQ |
+| FAQ 问答 | `/api/knowledge/update` | PUT | 更新FAQ |
+| FAQ 问答 | `/api/knowledge/{id}` | DELETE | 删除FAQ |
 
 ## 注意事项
 

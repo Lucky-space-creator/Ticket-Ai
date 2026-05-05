@@ -49,7 +49,7 @@
             </div>
             <div class="stat-info">
               <div class="stat-value">{{ stats.knowledgeCount || 0 }}</div>
-              <div class="stat-label">知识库条目</div>
+              <div class="stat-label">FAQ 条目数</div>
             </div>
           </div>
         </el-card>

@@ -5,7 +5,6 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ticket.dto.mq.KnowledgeSyncEvent;
 import com.ticket.entity.KnowledgeBase;
 import com.ticket.aichat.mapper.KnowledgeBaseMapper;
-import com.ticket.aichat.service.AIChatService;
 import com.ticket.aichat.service.KnowledgeBaseService;
 import com.ticket.service.RocketMQProducerService;
 import com.ticket.util.MQIdempotentUtil;
@@ -15,9 +14,9 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import jakarta.annotation.Resource;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,16 +27,13 @@ import java.util.stream.Collectors;
 @Service
 public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, KnowledgeBase> implements KnowledgeBaseService {
     
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(KnowledgeBaseServiceImpl.class);
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(KnowledgeBaseServiceImpl.class);
 
     @Resource
     private EmbeddingStore<TextSegment> embeddingStore;
 
     @Resource
     private EmbeddingModel embeddingModel;
-
-    @Resource
-    private AIChatService aiChatService;
 
     @Resource
     private RocketMQProducerService rocketMQProducerService;
@@ -145,7 +141,6 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
         }
         return result;
     }
-
     /**
      * 发送知识库同步事件到RocketMQ
      */

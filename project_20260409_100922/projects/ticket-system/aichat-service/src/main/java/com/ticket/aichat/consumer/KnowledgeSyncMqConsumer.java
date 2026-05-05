@@ -1,10 +1,11 @@
 package com.ticket.aichat.consumer;
 
-import com.ticket.aichat.service.KnowledgeBaseService;
+import com.ticket.aichat.service.DocumentIngestionService;
 import com.ticket.dto.mq.KnowledgeSyncEvent;
 import com.ticket.enums.MQTopics;
 import com.ticket.util.MQIdempotentUtil;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.MessageModel;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
@@ -14,8 +15,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * 知识库变更后同步向量库（与 backend 同组名，勿与 backend 同时订阅本 Topic）。
+ * 手册向量增量对账（FAQ 不向量化）。
+ * 与 backend 同组 consumer 时注意勿双重订阅冲突。
  */
+@Slf4j
 @Component
 @ConditionalOnProperty(name = "rocketmq.enabled", havingValue = "true", matchIfMissing = true)
 @RocketMQMessageListener(
@@ -25,10 +28,8 @@ import org.springframework.stereotype.Component;
 )
 public class KnowledgeSyncMqConsumer implements RocketMQListener<KnowledgeSyncEvent> {
 
-    private static final Logger log = LoggerFactory.getLogger(KnowledgeSyncMqConsumer.class);
-
     @Resource
-    private KnowledgeBaseService knowledgeBaseService;
+    private DocumentIngestionService documentIngestionService;
 
     @Resource
     private MQIdempotentUtil idempotentUtil;
@@ -36,23 +37,23 @@ public class KnowledgeSyncMqConsumer implements RocketMQListener<KnowledgeSyncEv
     @Override
     public void onMessage(KnowledgeSyncEvent event) {
         if (event == null || event.getMessageId() == null) {
-            log.warn("收到空知识库同步事件，跳过");
+            log.warn("收到空手册同步事件，跳过");
             return;
         }
         if (idempotentUtil.isConsumed(MQTopics.KNOWLEDGE_SYNC, event.getMessageId())) {
             return;
         }
 
-        log.info("开始消费知识库同步事件: type={}, source={}",
+        log.info("开始消费手册向量对账事件: type={}, source={}",
                 event.getSyncType(), event.getTriggerSource());
 
         long startTime = System.currentTimeMillis();
         try {
-            knowledgeBaseService.syncToVectorStore();
-            log.info("知识库同步完成，耗时: {}ms, source={}",
+            documentIngestionService.reconcileManualDocuments();
+            log.info("手册对账完成，耗时: {}ms, source={}",
                     System.currentTimeMillis() - startTime, event.getTriggerSource());
         } catch (Exception e) {
-            log.error("知识库同步失败(将重试): source={}, error={}",
+            log.error("手册对账失败(将重试): source={}, error={}",
                     event.getTriggerSource(), e.getMessage());
             throw e;
         }

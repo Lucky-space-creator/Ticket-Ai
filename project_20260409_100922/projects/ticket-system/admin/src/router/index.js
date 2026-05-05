@@ -38,10 +38,14 @@ const routes = [
         meta: { title: '用户管理' }
       },
       {
-        path: 'knowledge',
-        name: 'KnowledgeList',
+        path: 'faq',
+        name: 'FaqManage',
         component: () => import('@/views/KnowledgeList.vue'),
-        meta: { title: '知识库管理' }
+        meta: { title: 'FAQ问答管理' }
+      },
+      {
+        path: 'knowledge',
+        redirect: { name: 'FaqManage' }
       },
       {
         path: 'roles',

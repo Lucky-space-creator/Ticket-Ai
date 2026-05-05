@@ -57,6 +57,7 @@ com\ticket\dto\CreateOrderRequest.class
 com\ticket\entity\ChatSession.class
 com\ticket\entity\Order.class
 com\ticket\dto\mq\ChatRecordEvent.class
+com\ticket\entity\KbManualDocument.class
 com\ticket\util\ResponseUtil.class
 com\ticket\util\RedisUtil.class
 com\ticket\config\JacksonConfig$LongToStringSerializer.class

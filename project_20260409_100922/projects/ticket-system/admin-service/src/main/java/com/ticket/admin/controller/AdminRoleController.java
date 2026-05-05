@@ -4,6 +4,7 @@ import com.ticket.admin.service.RoleService;
 import com.ticket.entity.Role;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
+import lombok.Data;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -85,25 +86,25 @@ public class AdminRoleController {
         return ResponseUtil.success(roleService.getRolePermissionIds(id));
     }
 
-    @lombok.Data
+    @Data
     public static class CreateRoleRequest {
         private String roleName;
         private String roleDisplayName;
         private String description;
     }
 
-    @lombok.Data
+    @Data
     public static class UpdateRoleRequest {
         private String roleDisplayName;
         private String description;
     }
 
-    @lombok.Data
+    @Data
     public static class UpdateStatusRequest {
         private Integer status;
     }
 
-    @lombok.Data
+    @Data
     public static class AssignPermissionsRequest {
         private Long[] permissionIds;
     }

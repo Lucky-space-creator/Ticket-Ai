@@ -23,7 +23,7 @@ import java.time.LocalDateTime;
 @RocketMQMessageListener(
         topic = MQTopics.OPERATION_LOG,
         consumerGroup = "operation-log-consumer-group",
-        messageModel = MessageModel.CLUSTERING
+        messageModel = MessageModel.CLUSTERING  // 集群模式 作用：避免多个消费者同时处理同一条消息
 )
 public class OperationLogMqConsumer implements RocketMQListener<OperationLogEvent> {
 

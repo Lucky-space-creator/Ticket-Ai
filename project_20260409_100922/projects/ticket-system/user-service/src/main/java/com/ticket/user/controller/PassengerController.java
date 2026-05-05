@@ -9,6 +9,7 @@ import com.ticket.util.CryptoUtil;
 import com.ticket.util.ResponseUtil;
 import com.ticket.util.UserContext;
 import jakarta.annotation.Resource;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -48,7 +49,7 @@ public class PassengerController {
                         if (p.getIdCard() != null && !p.getIdCard().isEmpty()) {
                             String decrypted = CryptoUtil.decrypt(p.getIdCard());
                             if (decrypted == null) {
-                                org.slf4j.LoggerFactory.getLogger(PassengerController.class)
+                                LoggerFactory.getLogger(PassengerController.class)
                                         .warn("联系人身份证解密失败: passengerId={}, idCard(前10位)={}",
                                                 p.getId(), p.getIdCard().length() > 10
                                                         ? p.getIdCard().substring(0, 10) : p.getIdCard());
