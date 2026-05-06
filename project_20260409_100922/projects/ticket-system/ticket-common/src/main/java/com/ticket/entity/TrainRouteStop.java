@@ -17,13 +17,18 @@ public class TrainRouteStop {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /** 车次编号 */
     private String trainNo;
 
+    /** 站名 */
     private String stationName;
 
+    /** 站序 */
     private Integer stationNo;
 
+    /** 到站时间 */
     private LocalTime arriveTime;
 
+    /** 出发时间 */
     private LocalTime departTime;
 }

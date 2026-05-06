@@ -58,6 +58,14 @@ public class RouteSearchPlanner {
     @Value("${train.route-search.timeout-ms:800}")
     private long timeoutMs;
 
+    /**
+     * 搜索联乘/直达的坐车方案，使用bfs算法，不用dfs，避免死循环报栈溢出
+     * @param rawFrom 出发站
+     * @param rawTo 终点站
+     * @param trainDate  日期
+     * @param seatType 座位类型
+     * @return 搜索结果
+     */
     public List<RouteSearchOption> search(String rawFrom, String rawTo, LocalDate trainDate, Integer seatType) {
         String from = StationNameUtil.normalize(rawFrom);
         String to = StationNameUtil.normalize(rawTo);
@@ -66,20 +74,25 @@ public class RouteSearchPlanner {
         }
 
         List<Train> all = trainMapper.selectList(new LambdaQueryWrapper<Train>().eq(Train::getStatus, 1));
+        //获取所有站点的站序索引
         List<TrainRouteStop> routeStops = trainRouteStopMapper.selectList(null);
         Map<String, Integer> stopOrderIndex = TrainSegmentRules.buildStopOrderIndex(routeStops);
-
+        //维护搜索的所有列车
         Map<String, List<Train>> byStart = new HashMap<>();
         for (Train t : all) {
             String k = StationNameUtil.normalize(t.getStartStation());
             byStart.computeIfAbsent(k, x -> new ArrayList<>()).add(t);
         }
 
+        //搜索结果
         List<List<Train>> found = new ArrayList<>();
+        //维护搜索路径的队列
         ArrayDeque<List<Train>> q = new ArrayDeque<>();
+        // 超时时间
         long deadline = System.nanoTime() + timeoutMs * 1_000_000L;
         int expand = 0;
 
+        //通过byStart获取起点出发的所有列车，对每个列车构建一条路径，添加到队列中
         for (Train first : byStart.getOrDefault(from, List.of())) {
             ArrayList<Train> p0 = new ArrayList<>();
             p0.add(first);
@@ -91,19 +104,23 @@ public class RouteSearchPlanner {
                 break;
             }
             expand++;
+            // 当前路径
             List<Train> path = q.poll();
             if (path == null) {
                 break;
             }
             Train last = path.get(path.size() - 1);
             String at = StationNameUtil.normalize(last.getEndStation());
+            // 到达终点，添加结果，继续搜索
             if (at.equals(to)) {
                 found.add(new ArrayList<>(path));
                 continue;
             }
+            //超出最大深度限制，跳过
             if (path.size() >= maxLegs) {
                 continue;
             }
+            // 循环byStart的所有列车，判断是否可以继续扩展到当前路径中，满足条件则加入队列
             for (Train next : byStart.getOrDefault(at, List.of())) {
                 if (!canExtend(path, next, trainDate, stopOrderIndex)) {
                     continue;
@@ -138,6 +155,14 @@ public class RouteSearchPlanner {
         return 2;
     }
 
+    /**
+     * 判断是否可继续扩展
+     * @param path  当前存的线路
+     * @param next 下一站
+     * @param trainDate 日期
+     * @param stopOrderIndex 站序索引
+     * @return 是否可继续扩展
+     */
     private boolean canExtend(List<Train> path, Train next, LocalDate trainDate, Map<String, Integer> stopOrderIndex) {
         if (path.isEmpty()) {
             return true;
@@ -149,6 +174,13 @@ public class RouteSearchPlanner {
         return TrainSegmentRules.transferOk(prev, next, trainDate, minTransferMinutes);
     }
 
+    /**
+     * 构建搜索结果成对象
+     * @param path 线路
+     * @param trainDate  日期
+     * @param seatType 座位类型
+     * @return 搜索结果对象
+     */
     private RouteSearchOption buildOption(List<Train> path, LocalDate trainDate, Integer seatType) {
         if (path.isEmpty()) {
             return null;
