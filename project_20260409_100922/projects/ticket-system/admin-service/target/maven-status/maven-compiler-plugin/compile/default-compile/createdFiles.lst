@@ -47,3 +47,4 @@ com\ticket\admin\controller\AdminPermissionController.class
 com\ticket\admin\service\AdminTrainService.class
 com\ticket\admin\controller\AdminUserController$UpdateStatusRequest.class
 com\ticket\admin\mapper\TrainMapper.class
+com\ticket\admin\mapper\TicketStockMapper.class

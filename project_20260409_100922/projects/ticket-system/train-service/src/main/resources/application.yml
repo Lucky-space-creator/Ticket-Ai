@@ -2,6 +2,15 @@
 server:
   port: 8082
 
+# 联程路径搜索（写死为可配置，便于压测与联调）
+train:
+  route-search:
+    min-transfer-minutes: 20
+    max-legs: 4
+    max-results: 25
+    max-bfs-expand: 8000
+    timeout-ms: 800
+
 rocketmq:
   name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
   producer:

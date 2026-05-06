@@ -130,14 +130,14 @@ public class RAGConfig {
 
         log.info("RAG检索(混合): denseMax={}, lexicalTopK={}, finalMax={}", expanded, lexicalK, saneMax);
 
-        //稠密
+        //稠密：向量检索
         ContentRetriever dense = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore(embeddingStore)
                 .embeddingModel(embeddingModel)
                 .maxResults(expanded)
                 .minScore(saneMin)
                 .build();
-        //稀疏
+        //稀疏：使用BM25检索
         ContentRetriever lexical = new BM25ContentRetriever(calculateBM25, lexicalK);
 
         //fused用来聚合向量检索结果和lexical检索结果

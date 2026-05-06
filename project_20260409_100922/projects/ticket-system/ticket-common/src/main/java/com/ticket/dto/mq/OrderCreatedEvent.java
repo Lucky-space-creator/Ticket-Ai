@@ -55,6 +55,9 @@ public class OrderCreatedEvent implements Serializable {
     /** 总金额 */
     private BigDecimal totalAmount;
 
+    /** 线路 SKU，便于观测与缓存 */
+    private String routeSku;
+
     /** 购票数量（订单明细数） */
     private Integer itemCount;
 

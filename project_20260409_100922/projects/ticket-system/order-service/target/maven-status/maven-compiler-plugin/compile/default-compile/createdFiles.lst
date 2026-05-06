@@ -1,16 +1,12 @@
-com\ticket\order\controller\OrderController.class
 com\ticket\order\integration\TrainOrderGateway.class
 com\ticket\order\controller\InternalOrderRefundController.class
 com\ticket\order\mapper\OrderItemMapper.class
 com\ticket\order\config\OpenApiConfig.class
-com\ticket\order\service\OrderQueueDbWriter.class
 com\ticket\order\service\OrderQueueService.class
 com\ticket\order\client\TrainOrderFeignClient.class
 com\ticket\order\client\UserAdminFeignClient.class
 com\ticket\order\mapper\OrderMapper.class
-com\ticket\order\service\impl\OrderQueueServiceImpl.class
 com\ticket\order\service\OrderService.class
-com\ticket\order\consumer\OrderQueueConsumer.class
 com\ticket\order\controller\InternalOrderStockStatsController.class
 com\ticket\order\OrderServiceApplication.class
 com\ticket\order\service\impl\OrderServiceImpl.class

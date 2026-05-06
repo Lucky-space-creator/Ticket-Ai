@@ -1,0 +1,224 @@
+package com.ticket.train.route;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.ticket.dto.train.RouteSearchOption;
+import com.ticket.entity.TicketStock;
+import com.ticket.entity.Train;
+import com.ticket.entity.TrainRouteStop;
+import com.ticket.enums.RouteType;
+import com.ticket.train.mapper.TicketStockMapper;
+import com.ticket.train.mapper.TrainMapper;
+import com.ticket.train.mapper.TrainRouteStopMapper;
+import com.ticket.util.StationNameUtil;
+import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+/**
+ * 线段图上的联程搜索（BFS + 最大深度/候选数/耗时限制）。
+ */
+@Component
+public class RouteSearchPlanner {
+
+    @Resource
+    private TrainMapper trainMapper;
+
+    @Resource
+    private TrainRouteStopMapper trainRouteStopMapper;
+
+    @Resource
+    private TicketStockMapper ticketStockMapper;
+
+    @Value("${train.route-search.min-transfer-minutes:20}")
+    private int minTransferMinutes;
+
+    @Value("${train.route-search.max-legs:4}")
+    private int maxLegs;
+
+    @Value("${train.route-search.max-results:25}")
+    private int maxResults;
+
+    @Value("${train.route-search.max-bfs-expand:8000}")
+    private int maxBfsExpand;
+
+    @Value("${train.route-search.timeout-ms:800}")
+    private long timeoutMs;
+
+    public List<RouteSearchOption> search(String rawFrom, String rawTo, LocalDate trainDate, Integer seatType) {
+        String from = StationNameUtil.normalize(rawFrom);
+        String to = StationNameUtil.normalize(rawTo);
+        if (from.isEmpty() || to.isEmpty() || from.equals(to)) {
+            return List.of();
+        }
+
+        List<Train> all = trainMapper.selectList(new LambdaQueryWrapper<Train>().eq(Train::getStatus, 1));
+        List<TrainRouteStop> routeStops = trainRouteStopMapper.selectList(null);
+        Map<String, Integer> stopOrderIndex = TrainSegmentRules.buildStopOrderIndex(routeStops);
+
+        Map<String, List<Train>> byStart = new HashMap<>();
+        for (Train t : all) {
+            String k = StationNameUtil.normalize(t.getStartStation());
+            byStart.computeIfAbsent(k, x -> new ArrayList<>()).add(t);
+        }
+
+        List<List<Train>> found = new ArrayList<>();
+        ArrayDeque<List<Train>> q = new ArrayDeque<>();
+        long deadline = System.nanoTime() + timeoutMs * 1_000_000L;
+        int expand = 0;
+
+        for (Train first : byStart.getOrDefault(from, List.of())) {
+            ArrayList<Train> p0 = new ArrayList<>();
+            p0.add(first);
+            q.add(p0);
+        }
+
+        while (!q.isEmpty() && found.size() < maxResults && expand < maxBfsExpand) {
+            if (System.nanoTime() > deadline) {
+                break;
+            }
+            expand++;
+            List<Train> path = q.poll();
+            if (path == null) {
+                break;
+            }
+            Train last = path.get(path.size() - 1);
+            String at = StationNameUtil.normalize(last.getEndStation());
+            if (at.equals(to)) {
+                found.add(new ArrayList<>(path));
+                continue;
+            }
+            if (path.size() >= maxLegs) {
+                continue;
+            }
+            for (Train next : byStart.getOrDefault(at, List.of())) {
+                if (!canExtend(path, next, trainDate, stopOrderIndex)) {
+                    continue;
+                }
+                List<Train> np = new ArrayList<>(path);
+                np.add(next);
+                q.add(np);
+            }
+        }
+
+        List<RouteSearchOption> options = new ArrayList<>();
+        for (List<Train> path : found) {
+            RouteSearchOption opt = buildOption(path, trainDate, seatType);
+            if (opt != null && opt.getMinAvailableSeats() != null && opt.getMinAvailableSeats() > 0) {
+                options.add(opt);
+            }
+        }
+        options.sort(Comparator
+                .comparing((RouteSearchOption o) -> typeRank(o.getRouteType()))
+                .thenComparing(o -> o.getTotalDurationMinutes() == null ? Long.MAX_VALUE : o.getTotalDurationMinutes())
+                .thenComparing(o -> o.getTotalPrice() == null ? BigDecimal.ZERO : o.getTotalPrice()));
+        return options.stream().limit(maxResults).collect(Collectors.toList());
+    }
+
+    private static int typeRank(String t) {
+        if (RouteType.SINGLE.equals(t)) {
+            return 0;
+        }
+        if (RouteType.DIRECT.equals(t)) {
+            return 1;
+        }
+        return 2;
+    }
+
+    private boolean canExtend(List<Train> path, Train next, LocalDate trainDate, Map<String, Integer> stopOrderIndex) {
+        if (path.isEmpty()) {
+            return true;
+        }
+        Train prev = path.get(path.size() - 1);
+        if (Objects.equals(prev.getTrainNo(), next.getTrainNo())) {
+            return TrainSegmentRules.sameTrainOrderOk(prev, next, stopOrderIndex);
+        }
+        return TrainSegmentRules.transferOk(prev, next, trainDate, minTransferMinutes);
+    }
+
+    private RouteSearchOption buildOption(List<Train> path, LocalDate trainDate, Integer seatType) {
+        if (path.isEmpty()) {
+            return null;
+        }
+        String sku = path.stream().map(Train::getId).map(String::valueOf).collect(Collectors.joining("-"));
+        String routeType;
+        if (path.size() == 1) {
+            routeType = RouteType.SINGLE;
+        } else {
+            String tn0 = path.get(0).getTrainNo();
+            boolean same = path.stream().allMatch(t -> Objects.equals(tn0, t.getTrainNo()));
+            routeType = same ? RouteType.DIRECT : RouteType.TRANSFER;
+        }
+
+        List<RouteSearchOption.RouteSearchLeg> legs = new ArrayList<>();
+        int minAvail = Integer.MAX_VALUE;
+        BigDecimal total = BigDecimal.ZERO;
+
+        LocalDateTime firstDepart = null;
+        LocalDateTime lastArrive = null;
+
+        for (Train t : path) {
+            LambdaQueryWrapper<TicketStock> w = new LambdaQueryWrapper<>();
+            w.eq(TicketStock::getTrainId, t.getId())
+                    .eq(TicketStock::getTrainDate, trainDate)
+                    .eq(TicketStock::getStartStation, StationNameUtil.normalize(t.getStartStation()))
+                    .eq(TicketStock::getEndStation, StationNameUtil.normalize(t.getEndStation()))
+                    .eq(TicketStock::getSeatType, seatType);
+            TicketStock stock = ticketStockMapper.selectOne(w);
+            if (stock == null || stock.getAvailableSeats() == null) {
+                return null;
+            }
+            if (stock.getSaleEnabled() != null && stock.getSaleEnabled() == 0) {
+                return null;
+            }
+            minAvail = Math.min(minAvail, stock.getAvailableSeats());
+            total = total.add(stock.getPrice());
+
+            legs.add(new RouteSearchOption.RouteSearchLeg(
+                    t.getId(), t.getTrainNo(), t.getStartStation(), t.getEndStation(),
+                    formatTime(t.getStartTime()), formatTime(t.getEndTime()),
+                    stock.getPrice(), stock.getAvailableSeats()));
+
+            LocalDateTime dep = LocalDateTime.of(trainDate, t.getStartTime());
+            LocalDateTime arr = LocalDateTime.of(trainDate, t.getEndTime());
+            if (firstDepart == null) {
+                firstDepart = dep;
+            }
+            lastArrive = arr;
+        }
+
+        Long durMin = null;
+        if (firstDepart != null && lastArrive != null) {
+            durMin = Duration.between(firstDepart, lastArrive).toMinutes();
+            if (durMin < 0) {
+                durMin = 0L;
+            }
+        }
+
+        RouteSearchOption opt = new RouteSearchOption();
+        opt.setRouteType(routeType);
+        opt.setRouteSku(sku);
+        opt.setLegs(legs);
+        opt.setMinAvailableSeats(minAvail == Integer.MAX_VALUE ? 0 : minAvail);
+        opt.setTotalPrice(total);
+        opt.setTotalDurationMinutes(durMin);
+        return opt;
+    }
+
+    private static String formatTime(LocalTime t) {
+        return t == null ? null : t.toString();
+    }
+}

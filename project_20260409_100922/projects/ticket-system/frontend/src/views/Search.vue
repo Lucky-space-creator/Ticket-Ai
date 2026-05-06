@@ -30,18 +30,26 @@
           <el-card>
             <el-form :model="searchForm" inline>
               <el-form-item label="出发站">
-                <el-input
+                <el-select
                     v-model="searchForm.startStation"
-                    placeholder="请输入出发站"
+                    placeholder="请选择出发站"
+                    filterable
                     clearable
-                />
+                    style="width: 200px"
+                >
+                  <el-option v-for="name in stationOptions" :key="name" :label="name" :value="name"/>
+                </el-select>
               </el-form-item>
               <el-form-item label="到达站">
-                <el-input
+                <el-select
                     v-model="searchForm.endStation"
-                    placeholder="请输入到达站"
+                    placeholder="请选择到达站"
+                    filterable
                     clearable
-                />
+                    style="width: 200px"
+                >
+                  <el-option v-for="name in stationOptions" :key="'e-' + name" :label="name" :value="name"/>
+                </el-select>
               </el-form-item>
               <el-form-item label="乘车日期">
                 <el-date-picker
@@ -55,7 +63,7 @@
               </el-form-item>
               <el-form-item>
                 <el-button type="primary" @click="handleSearch" :loading="loading">
-                  {{ searchForm.startStation || searchForm.endStation ? '查询' : '查询所有车票' }}
+                  查询
                 </el-button>
                 <el-button @click="handleReset">清空</el-button>
               </el-form-item>
@@ -63,57 +71,39 @@
           </el-card>
         </div>
 
-        <!-- 车次列表 -->
-        <div class="train-list" v-if="trains.length > 0">
-          <el-card v-for="train in trains" :key="train.id" class="train-card">
+        <!-- 联程/直达方案（searchRoutes） -->
+        <div class="train-list" v-if="routeOptions.length > 0">
+          <el-card v-for="(opt, idx) in routeOptions" :key="opt.routeSku + '-' + idx" class="train-card">
             <div class="train-info">
               <div class="train-header">
-                <div class="train-no">{{ train.trainNo }}</div>
-                <el-tag :type="getTrainTypeColor(train.trainType)">
-                  {{ train.trainTypeName }}
-                </el-tag>
+                <el-tag type="success">{{ opt.routeType }}</el-tag>
+                <span class="route-sku">行程 SKU：{{ opt.routeSku }}</span>
               </div>
-              <div class="train-route">
-                <div class="station">
-                  <div class="station-name">{{ train.startStation }}</div>
-                  <div class="time">{{ train.startTime }}</div>
-                </div>
-                <div class="arrow">→</div>
-                <div class="station">
-                  <div class="station-name">{{ train.endStation }}</div>
-                  <div class="time">{{ train.endTime }}</div>
-                </div>
+              <div v-for="leg in opt.legs" :key="leg.segmentId" class="leg-line">
+                <strong>{{ leg.trainNo }}</strong>
+                {{ leg.fromStation }} → {{ leg.toStation }}
+                <span class="muted">{{ leg.startTime }} — {{ leg.endTime }}</span>
+                <span>¥{{ leg.price }}</span>
+              </div>
+              <div class="route-summary">
+                <span>合计 <b>¥{{ opt.totalPrice }}</b></span>
+                <span>全程余票（各段最小）<el-tag :type="getSeatsColor(opt.minAvailableSeats)">{{ opt.minAvailableSeats }}</el-tag></span>
+                <span v-if="opt.totalDurationMinutes != null">约 {{ opt.totalDurationMinutes }} 分钟</span>
               </div>
             </div>
             <div class="ticket-info">
-              <el-table :data="train.stocks" style="width: 100%">
-                <el-table-column prop="seatTypeName" label="席别" />
-                <el-table-column prop="price" label="票价" width="100" />
-                <el-table-column prop="availableSeats" label="余票" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="getSeatsColor(row.availableSeats)">
-                      {{ row.availableSeats }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="操作" width="120">
-                  <template #default="{ row }">
-                    <el-button
-                        type="primary"
-                        size="small"
-                        :disabled="row.availableSeats <= 0"
-                        @click="handleBuy(train, row)"
-                    >
-                      购票
-                    </el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
+              <el-button
+                  type="primary"
+                  :disabled="opt.minAvailableSeats <= 0"
+                  @click="handleBuyRoute(opt)"
+              >
+                购买此方案
+              </el-button>
             </div>
           </el-card>
         </div>
 
-        <el-empty v-else-if="!loading && trains.length === 0" :description="searchForm.startStation || searchForm.endStation ? '暂无符合条件的车次' : '请点击查询按钮查询车票'" />
+        <el-empty v-else-if="!loading && routeOptions.length === 0" :description="emptyHint" />
       </el-main>
     </el-container>
 
@@ -218,7 +208,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
@@ -234,8 +224,13 @@ const searchForm = reactive({
   trainDate: dayjs().format('YYYY-MM-DD')
 })
 
-const trains = ref([])
+const routeOptions = ref([])
 const loading = ref(false)
+/** 站点列表（来自 GET /api/trains/stations） */
+const stationOptions = ref([])
+
+const emptyHint = computed(() => '请先填写出发站和到达站，再点击查询；查询后将在下方展示可选方案')
+
 
 // 购票相关
 const orderDialogVisible = ref(false)
@@ -265,37 +260,35 @@ const disabledDate = (time) => {
 }
 
 const handleSearch = async () => {
+  const from = searchForm.startStation?.trim()
+  const to = searchForm.endStation?.trim()
+  if (!from || !to) {
+    ElMessage.warning('请先选择出发站和到达站后再查询')
+    routeOptions.value = []
+    return
+  }
+  if (from === to) {
+    ElMessage.warning('出发站与到达站不能相同')
+    routeOptions.value = []
+    return
+  }
   loading.value = true
+  routeOptions.value = []
   try {
-    const res = await request.get('/trains/search', {
+    const res = await request.get('/trains/searchRoutes', {
       params: {
-        startStation: searchForm.startStation,
-        endStation: searchForm.endStation,
-        trainDate: searchForm.trainDate
+        startStation: from,
+        endStation: to,
+        trainDate: searchForm.trainDate,
+        seatType: 3
       }
     })
-
-    // 处理余票信息，添加席别名称
-    trains.value = res.data.map(train => {
-      const trainData = { ...train }
-      trainData.stocks = train.stocks.map(stock => ({
-        ...stock,
-        seatTypeName: getSeatTypeName(stock.seatType)
-      }))
-      return trainData
-    })
-
-    if (res.data.length === 0) {
-      ElMessage.info({
-        message: '未找到符合条件的车次',
-        duration: 1000
-      })
+    routeOptions.value = Array.isArray(res.data) ? res.data : []
+    if (routeOptions.value.length === 0) {
+      ElMessage.info({ message: '未找到联程/直达方案，可尝试更换站点或日期', duration: 1500 })
     } else {
-      const conditionText = searchForm.startStation && searchForm.endStation
-          ? `${searchForm.startStation} 至 ${searchForm.endStation}`
-          : '所有车次'
       ElMessage.success({
-        message: `查询成功，共找到 ${res.data.length} 个${conditionText}`,
+        message: `找到 ${routeOptions.value.length} 条出行方案`,
         duration: 1000
       })
     }
@@ -314,7 +307,7 @@ const handleReset = () => {
   searchForm.startStation = ''
   searchForm.endStation = ''
   searchForm.trainDate = dayjs().format('YYYY-MM-DD')
-  trains.value = []
+  routeOptions.value = []
 }
 
 // 获取乘客列表（排除本人，避免重复显示）
@@ -401,15 +394,34 @@ const formatIdCard = (idCard) => {
   return '******'
 }
 
-// 点击购票
-const handleBuy = async (train, stock) => {
-  selectedTrain.value = { ...train, trainDate: searchForm.trainDate }
-  selectedStock.value = stock
+// 联程方案购票
+const handleBuyRoute = async (opt) => {
+  const first = opt.legs[0]
+  selectedTrain.value = {
+    id: first.segmentId,
+    trainNo: opt.legs.map(l => l.trainNo).join(' / '),
+    startStation: searchForm.startStation,
+    endStation: searchForm.endStation,
+    trainDate: searchForm.trainDate,
+    routeSku: opt.routeSku,
+    routeType: opt.routeType,
+    legs: opt.legs.map(l => ({
+      segmentId: l.segmentId,
+      trainNo: l.trainNo,
+      fromStation: l.fromStation,
+      toStation: l.toStation,
+      segmentPrice: l.price
+    })),
+    isRoute: true
+  }
+  selectedStock.value = {
+    seatType: 3,
+    seatTypeName: getSeatTypeName(3),
+    price: opt.totalPrice,
+    availableSeats: opt.minAvailableSeats
+  }
   selectedPassengerIds.value = []
-
-  // 加载乘客列表（会自动获取最新用户信息并过滤）
   await loadPassengers()
-
   orderDialogVisible.value = true
 }
 
@@ -459,14 +471,23 @@ const handleSubmitOrder = async () => {
     }
 
     // Step 1: 提交下单请求（快速入队，<10ms返回）
-    const submitRes = await request.post('/orders', {
-      trainId: selectedTrain.value.id,
+    const orderPayload = {
       trainDate: selectedTrain.value.trainDate,
       startStation: selectedTrain.value.startStation,
       endStation: selectedTrain.value.endStation,
       seatType: selectedStock.value.seatType,
       items: items
-    })
+    }
+    if (selectedTrain.value.isRoute) {
+      orderPayload.trainId = selectedTrain.value.legs[0].segmentId
+      orderPayload.routeSku = selectedTrain.value.routeSku
+      orderPayload.routeType = selectedTrain.value.routeType
+      orderPayload.legs = selectedTrain.value.legs
+    } else {
+      orderPayload.trainId = selectedTrain.value.id
+    }
+
+    const submitRes = await request.post('/orders', orderPayload)
 
     const requestId = submitRes.data.requestId
     const initialStatus = submitRes.data.status
@@ -538,15 +559,6 @@ const getSeatTypeName = (seatType) => {
   return seatTypeNames[seatType] || '未知'
 }
 
-const getTrainTypeColor = (trainType) => {
-  const colors = {
-    1: 'danger',
-    2: 'warning',
-    3: 'info'
-  }
-  return colors[trainType] || 'info'
-}
-
 const getSeatsColor = (seats) => {
   if (seats <= 0) return 'info'
   if (seats < 10) return 'warning'
@@ -558,8 +570,20 @@ const handleLogout = () => {
   router.push('/login')
 }
 
+const loadStations = async () => {
+  try {
+    const res = await request.get('/trains/stations')
+    stationOptions.value = Array.isArray(res.data) ? res.data : []
+    if (stationOptions.value.length === 0) {
+      ElMessage.warning({ message: '暂无站点数据，请在数据库 station 表中维护站点后再试', duration: 2500 })
+    }
+  } catch {
+    stationOptions.value = []
+  }
+}
+
 onMounted(() => {
-  handleSearch()
+  loadStations()
 })
 </script>
 
@@ -781,5 +805,31 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.route-sku {
+  margin-left: 12px;
+  color: #666;
+  font-size: 13px;
+}
+
+.leg-line {
+  margin: 10px 0;
+  line-height: 1.6;
+
+  .muted {
+    color: #888;
+    margin: 0 10px;
+    font-size: 13px;
+  }
+}
+
+.route-summary {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  font-size: 14px;
 }
 </style>

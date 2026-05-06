@@ -1,5 +1,6 @@
 package com.ticket.train.controller;
 
+import com.ticket.dto.train.RouteSearchOption;
 import com.ticket.entity.TicketStock;
 import com.ticket.enums.BusinessStatus;
 import com.ticket.entity.Train;
@@ -25,12 +26,36 @@ public class TrainController {
     private TrainService trainService;
 
     /**
-     * 查询车次
-     * @param startStation 出发站
-     * @param endStation 终点站
-     * @param trainDate 日期
-     * @return 车次列表
+     * 站点下拉列表（station 表）。
      */
+    @GetMapping("/stations")
+    public ResponseUtil.Result<List<String>> listStations() {
+        return ResponseUtil.success(trainService.listStationNames());
+    }
+
+    /**
+     * 联程/直达方案（同车多段 + 换乘）。C 端购票应优先使用本接口。
+     */
+    @GetMapping("/searchRoutes")
+    public ResponseUtil.Result<?> searchRoutes(
+            @RequestParam(name = "startStation") String startStation,
+            @RequestParam(name = "endStation") String endStation,
+            @RequestParam(name = "trainDate") String trainDate,
+            @RequestParam(name = "seatType") Integer seatType
+    ) {
+        try {
+            List<RouteSearchOption> routes = trainService.searchRoutes(startStation, endStation, trainDate, seatType);
+            return ResponseUtil.success(routes);
+        } catch (Exception e) {
+            return ResponseUtil.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 查询车次（直筒 LIKE，兼容性保留）
+     * @deprecated 请改用 {@link #searchRoutes}
+     */
+    @Deprecated
     @GetMapping("/search")
     public ResponseUtil.Result<?> searchTrains(
             @RequestParam(name = "startStation") String startStation,

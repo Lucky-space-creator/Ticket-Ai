@@ -3,22 +3,28 @@ package com.ticket.order.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.ticket.dto.TrainStockCommands;
 import com.ticket.dto.mq.OrderCreatedEvent;
 import com.ticket.dto.mq.PaymentConfirmedEvent;
+import com.ticket.dto.internal.TrainStockCommand;
 import com.ticket.entity.Order;
 import com.ticket.entity.OrderItem;
+import com.ticket.entity.OrderRouteLeg;
 import com.ticket.entity.Train;
 import com.ticket.enums.BusinessStatus;
 import com.ticket.enums.CacheKey;
 import com.ticket.enums.ResponseCode;
+import com.ticket.enums.RouteType;
 import com.ticket.order.client.UserAdminFeignClient;
 import com.ticket.order.integration.TrainOrderGateway;
 import com.ticket.order.mapper.OrderItemMapper;
 import com.ticket.order.mapper.OrderMapper;
+import com.ticket.order.mapper.OrderRouteLegMapper;
 import com.ticket.order.service.OrderService;
 import com.ticket.service.RocketMQProducerService;
 import com.ticket.util.MQIdempotentUtil;
 import com.ticket.util.RedisUtil;
+import com.ticket.util.StationNameUtil;
 import com.ticket.util.SnowflakeIdUtil;
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;
@@ -45,6 +51,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Resource
     private OrderItemMapper orderItemMapper;
+
+    @Resource
+    private OrderRouteLegMapper orderRouteLegMapper;
 
     @Resource
     private TrainOrderGateway trainOrderGateway;
@@ -87,6 +96,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             order.setUserId(userId);
             order.setTrainId(trainId);
             order.setTrainNo(train.getTrainNo());
+            order.setRouteSku(String.valueOf(trainId));
+            order.setRouteType(RouteType.SINGLE);
             order.setTrainDate(LocalDate.parse(trainDate));
             order.setStartStation(startStation);
             order.setEndStation(endStation);
@@ -103,6 +114,20 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 orderItemMapper.insert(item);
             }
 
+            // 直筒同步下单：单行 order_route_leg
+            OrderRouteLeg orl = new OrderRouteLeg();
+            orl.setOrderId(order.getId());
+            orl.setLegSeq(1);
+            orl.setSegmentTrainId(trainId);
+            orl.setTrainNo(train.getTrainNo());
+            orl.setFromStation(StationNameUtil.normalize(startStation));
+            orl.setToStation(StationNameUtil.normalize(endStation));
+            BigDecimal pp = items.get(0).getPrice();
+            orl.setSegmentPrice(pp != null ? pp : BigDecimal.ZERO);
+            orl.setPlannedDepartAt(order.getDepartTime());
+            orl.setPlannedArriveAt(LocalDateTime.of(LocalDate.parse(trainDate), train.getEndTime()));
+            orderRouteLegMapper.insert(orl);
+
             // 6. 异步：发送订单创建事件（缓存清理等由消费者处理）
             OrderCreatedEvent event = new OrderCreatedEvent();
             event.setMessageId(idempotentUtil.generateMessageId());
@@ -116,6 +141,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             event.setEndStation(endStation);
             event.setSeatType(seatType);
             event.setTotalAmount(totalAmount);
+            event.setRouteSku(order.getRouteSku());
             event.setItemCount(items.size());
             event.setCreatedAt(LocalDateTime.now());
             rocketMQProducerService.sendOrderCreatedEvent(event);
@@ -176,6 +202,23 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             paymentEvent.setSeatType(order.getSeatType());
             paymentEvent.setCount(count);
             paymentEvent.setPayTimestamp(System.currentTimeMillis());
+
+            LambdaQueryWrapper<OrderRouteLeg> legW = new LambdaQueryWrapper<>();
+            legW.eq(OrderRouteLeg::getOrderId, order.getId()).orderByAsc(OrderRouteLeg::getLegSeq);
+            List<OrderRouteLeg> legRows = orderRouteLegMapper.selectList(legW);
+            if (!legRows.isEmpty()) {
+                paymentEvent.setStockLegs(TrainStockCommands.fromOrderRouteLegs(
+                        legRows, order.getTrainDate().toString(), order.getSeatType(), count));
+            } else if (order.getTrainId() != null) {
+                paymentEvent.setStockLegs(List.of(new TrainStockCommand(
+                        order.getTrainId(),
+                        order.getTrainDate().toString(),
+                        StationNameUtil.normalize(order.getStartStation()),
+                        StationNameUtil.normalize(order.getEndStation()),
+                        order.getSeatType(),
+                        count)));
+            }
+
             rocketMQProducerService.sendPaymentConfirmedEvent(paymentEvent);
 
             logger.info("支付成功，已发送异步确认事件: orderNo={}, itemCount={}", orderNo, count);
@@ -207,9 +250,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         itemWrapper.eq(OrderItem::getOrderId, order.getId());
         int count = Math.toIntExact(orderItemMapper.selectCount(itemWrapper));
 
-        // 回滚库存（退票必须同步执行，保证数据一致性）
-        trainOrderGateway.rollbackStock(order.getTrainId(), order.getTrainDate().toString(),
-                order.getStartStation(), order.getEndStation(), order.getSeatType(), count);
+        LambdaQueryWrapper<OrderRouteLeg> legW = new LambdaQueryWrapper<>();
+        legW.eq(OrderRouteLeg::getOrderId, order.getId()).orderByAsc(OrderRouteLeg::getLegSeq);
+        List<OrderRouteLeg> legRows = orderRouteLegMapper.selectList(legW);
+
+        if (!legRows.isEmpty()) {
+            trainOrderGateway.rollbackStocksBatch(TrainStockCommands.fromOrderRouteLegs(
+                    legRows, order.getTrainDate().toString(), order.getSeatType(), count));
+        } else {
+            trainOrderGateway.rollbackStock(order.getTrainId(), order.getTrainDate().toString(),
+                    StationNameUtil.normalize(order.getStartStation()),
+                    StationNameUtil.normalize(order.getEndStation()), order.getSeatType(), count);
+        }
 
         // 更新订单状态
         order.setStatus(BusinessStatus.ORDER_STATUS_REFUNDED);
@@ -259,6 +311,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         Order order = getOne(wrapper);
 
         if (order != null) {
+            LambdaQueryWrapper<OrderRouteLeg> lw = new LambdaQueryWrapper<>();
+            lw.eq(OrderRouteLeg::getOrderId, order.getId()).orderByAsc(OrderRouteLeg::getLegSeq);
+            order.setLegs(orderRouteLegMapper.selectList(lw));
+
             redisUtil.set(cacheKey, order, 30, TimeUnit.MINUTES);
         }
 

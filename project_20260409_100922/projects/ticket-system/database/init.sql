@@ -41,41 +41,52 @@ CREATE TABLE `passenger` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='常用联系人表';
 
 -- ========================================
--- 2. 车次模块
+-- 2. 车次模块（线段化 + 站点主数据 + 停靠序）
 -- ========================================
 
--- 车次表（简化：移除运行天数等次要字段）
-DROP TABLE IF EXISTS `train`;
-CREATE TABLE `train` (
-    `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
-    `train_no` VARCHAR(20) NOT NULL COMMENT '车次号 如G1234',
-    `train_type` TINYINT NOT NULL COMMENT '类型 1-高铁 2-动车 3-普快',
-    `start_station` VARCHAR(50) NOT NULL COMMENT '始发站',
-    `end_station` VARCHAR(50) NOT NULL COMMENT '终到站',
-    `start_time` TIME NOT NULL COMMENT '发车时间',
-    `end_time` TIME NOT NULL COMMENT '到达时间',
-    `status` TINYINT DEFAULT 1 COMMENT '状态 0-停运 1-正常',
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY `uk_train_no` (`train_no`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='车次基础信息表';
-
--- 车次停靠站表（保留核心字段）
 DROP TABLE IF EXISTS `train_station`;
-CREATE TABLE `train_station` (
+DROP TABLE IF EXISTS `train_route_stop`;
+DROP TABLE IF EXISTS `station`;
+CREATE TABLE `station` (
     `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
-    `train_id` BIGINT NOT NULL COMMENT '车次ID',
+    `name` VARCHAR(50) NOT NULL COMMENT '站名（与线段/停靠表一致）',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_station_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='站点主数据';
+
+-- 按车次号的全程停靠模板（与同车线段校验共用）
+CREATE TABLE `train_route_stop` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `train_no` VARCHAR(20) NOT NULL COMMENT '车次号',
     `station_name` VARCHAR(50) NOT NULL COMMENT '站点名称',
     `station_no` INT NOT NULL COMMENT '站序(第几站)',
-    `arrive_time` TIME COMMENT '到达时间',
-    `depart_time` TIME COMMENT '出发时间',
-    INDEX `idx_train_id` (`train_id`)
+    `arrive_time` TIME NULL COMMENT '到达时间',
+    `depart_time` TIME NULL COMMENT '出发时间',
+    UNIQUE KEY `uk_train_stop` (`train_no`, `station_no`),
+    INDEX `idx_train_no` (`train_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='车次停靠站时刻表';
 
--- 余票库存表（添加乐观锁版本号，支持Redis+Lua防超卖）
+-- 一行 = 一段可售卖 OD；id 为线段主键，用于 SKU / ticket_stock.train_id / Redis
+DROP TABLE IF EXISTS `train`;
+CREATE TABLE `train` (
+    `id` BIGINT PRIMARY KEY COMMENT '线段ID（种子手写，与运行态 ASSIGN_ID 并存）',
+    `train_no` VARCHAR(20) NOT NULL COMMENT '车次号 如G101',
+    `train_type` TINYINT NOT NULL COMMENT '类型 1-高铁 2-动车 3-普快',
+    `start_station` VARCHAR(50) NOT NULL COMMENT '本段起点站',
+    `end_station` VARCHAR(50) NOT NULL COMMENT '本段终点站',
+    `start_time` TIME NOT NULL COMMENT '本段发车时间',
+    `end_time` TIME NOT NULL COMMENT '本段到达时间',
+    `status` TINYINT DEFAULT 1 COMMENT '状态 0-停运 1-正常',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_train_segment` (`train_no`, `start_station`, `end_station`),
+    INDEX `idx_train_no` (`train_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='车次线段表（可售OD）';
+
+-- 余票库存表：train_id = 线段 id；sale_enabled 管理端停售开关（非 deduct）
 DROP TABLE IF EXISTS `ticket_stock`;
 CREATE TABLE `ticket_stock` (
     `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
-    `train_id` BIGINT NOT NULL COMMENT '车次ID',
+    `train_id` BIGINT NOT NULL COMMENT '线段ID',
     `train_date` DATE NOT NULL COMMENT '乘车日期',
     `start_station` VARCHAR(50) NOT NULL COMMENT '出发站',
     `end_station` VARCHAR(50) NOT NULL COMMENT '到达站',
@@ -83,6 +94,7 @@ CREATE TABLE `ticket_stock` (
     `price` DECIMAL(10,2) NOT NULL COMMENT '票价',
     `total_seats` INT NOT NULL DEFAULT 0 COMMENT '总座位数',
     `available_seats` INT NOT NULL DEFAULT 0 COMMENT '剩余座位数',
+    `sale_enabled` TINYINT NOT NULL DEFAULT 1 COMMENT '是否允许售票 0-停售 1-开售',
     `version` INT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY `uk_stock` (`train_id`, `train_date`, `start_station`, `end_station`, `seat_type`),
@@ -93,18 +105,20 @@ CREATE TABLE `ticket_stock` (
 -- 3. 订单模块
 -- ========================================
 
--- 订单主表（合并状态，简化支付相关字段）
+DROP TABLE IF EXISTS `order_route_leg`;
 DROP TABLE IF EXISTS `order`;
 CREATE TABLE `order` (
     `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `order_no` VARCHAR(32) NOT NULL COMMENT '订单号',
     `user_id` BIGINT NOT NULL COMMENT '用户ID',
-    `train_id` BIGINT NOT NULL COMMENT '车次ID',
-    `train_no` VARCHAR(20) NOT NULL COMMENT '车次号',
+    `train_id` BIGINT NULL COMMENT '兼容/展示：首段线段ID，非业务真源',
+    `train_no` VARCHAR(20) NULL COMMENT '兼容/展示：首段车次号',
+    `route_sku` VARCHAR(256) NULL COMMENT '线段id按序拼接 如 9000001-9000002',
+    `route_type` VARCHAR(20) NULL COMMENT 'DIRECT 同车联程 / TRANSFER 换乘 / SINGLE 单段',
     `train_date` DATE NOT NULL COMMENT '乘车日期',
-    `start_station` VARCHAR(50) NOT NULL COMMENT '出发站',
-    `end_station` VARCHAR(50) NOT NULL COMMENT '到达站',
-    `depart_time` DATETIME NOT NULL COMMENT '发车时间',
+    `start_station` VARCHAR(50) NOT NULL COMMENT '外层出发站',
+    `end_station` VARCHAR(50) NOT NULL COMMENT '外层到达站',
+    `depart_time` DATETIME NOT NULL COMMENT '首段发车时间（展示）',
     `seat_type` TINYINT NOT NULL COMMENT '席别',
     `total_amount` DECIMAL(10,2) NOT NULL COMMENT '订单总金额',
     `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态 0-待支付 1-已支付 2-已退票 3-已取消',
@@ -115,8 +129,22 @@ CREATE TABLE `order` (
     INDEX `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单主表';
 
--- 订单乘客明细表（简化：移除座位号、电子客票号）
-DROP TABLE IF EXISTS `order_item`;
+CREATE TABLE `order_route_leg` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `order_id` BIGINT NOT NULL COMMENT '订单ID',
+    `leg_seq` INT NOT NULL COMMENT '段序号 从1起',
+    `segment_train_id` BIGINT NOT NULL COMMENT '线段表主键',
+    `train_no` VARCHAR(20) NOT NULL COMMENT '车次号冗余',
+    `from_station` VARCHAR(50) NOT NULL COMMENT '本段起点',
+    `to_station` VARCHAR(50) NOT NULL COMMENT '本段终点',
+    `segment_price` DECIMAL(10,2) NOT NULL COMMENT '本段票价',
+    `planned_depart_at` DATETIME NULL COMMENT '计划发车',
+    `planned_arrive_at` DATETIME NULL COMMENT '计划到达',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_order_id` (`order_id`),
+    INDEX `idx_segment_train` (`segment_train_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单行程段（业务真源）';
+
 CREATE TABLE `order_item` (
     `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `order_id` BIGINT NOT NULL COMMENT '订单ID',
@@ -171,14 +199,32 @@ INSERT INTO `user` (`phone`, `password`, `real_name`, `id_card`, `status`) VALUE
 ('13800138000', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', '张三', '110101199001011234', 1),
 ('13800138001', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', '李四', '110101199002022345', 1);
 
--- 插入测试车次
-INSERT INTO `train` (`train_no`, `train_type`, `start_station`, `end_station`, `start_time`, `end_time`, `status`) VALUES
-('G101', 1, '北京南', '上海虹桥', '08:00:00', '13:00:00', 1),
-('G102', 1, '上海虹桥', '北京南', '14:00:00', '19:00:00', 1),
-('G103', 1, '北京南', '广州南', '09:00:00', '15:30:00', 1);
+INSERT INTO `station` (`name`) VALUES
+('北京南'), ('济南西'), ('上海虹桥'), ('南京南'), ('广州南');
 
--- 插入测试余票库存（未来7天）
-INSERT INTO `ticket_stock` (`train_id`, `train_date`, `start_station`, `end_station`, `seat_type`, `price`, `total_seats`, `available_seats`, `version`)
+INSERT INTO `train_route_stop` (`train_no`, `station_name`, `station_no`, `arrive_time`, `depart_time`) VALUES
+('G101', '北京南', 1, NULL, '08:00:00'),
+('G101', '济南西', 2, '10:30:00', '10:35:00'),
+('G101', '上海虹桥', 3, '13:00:00', NULL),
+('G102', '上海虹桥', 1, NULL, '14:00:00'),
+('G102', '济南西', 2, '16:25:00', '16:30:00'),
+('G102', '北京南', 3, '19:00:00', NULL),
+('G103', '北京南', 1, NULL, '09:00:00'),
+('G103', '广州南', 2, '15:30:00', NULL),
+('K202', '济南西', 1, NULL, '11:20:00'),
+('K202', '南京南', 2, '14:05:00', '14:15:00'),
+('K202', '上海虹桥', 3, '16:45:00', NULL);
+
+INSERT INTO `train` (`id`, `train_no`, `train_type`, `start_station`, `end_station`, `start_time`, `end_time`, `status`) VALUES
+(9000001, 'G101', 1, '北京南', '济南西', '08:00:00', '10:30:00', 1),
+(9000002, 'G101', 1, '济南西', '上海虹桥', '10:35:00', '13:00:00', 1),
+(9000101, 'G102', 1, '上海虹桥', '济南西', '14:00:00', '16:25:00', 1),
+(9000102, 'G102', 1, '济南西', '北京南', '16:30:00', '19:00:00', 1),
+(9000201, 'G103', 1, '北京南', '广州南', '09:00:00', '15:30:00', 1),
+(9000301, 'K202', 3, '济南西', '南京南', '11:20:00', '14:05:00', 1),
+(9000302, 'K202', 3, '南京南', '上海虹桥', '14:15:00', '16:45:00', 1);
+
+INSERT INTO `ticket_stock` (`train_id`, `train_date`, `start_station`, `end_station`, `seat_type`, `price`, `total_seats`, `available_seats`, `sale_enabled`, `version`)
 SELECT
     t.id,
     DATE_ADD(CURDATE(), INTERVAL n DAY) AS train_date,
@@ -186,13 +232,14 @@ SELECT
     t.end_station,
     s.seat_type,
     s.price,
-    s.available_seats AS total_seats,
+    s.total_seats,
     s.available_seats,
+    1,
     0 AS version
 FROM `train` t
-CROSS JOIN (SELECT 2 AS seat_type, 500.00 AS price, 100 AS available_seats UNION ALL
-             SELECT 3, 350.00, 200 UNION ALL
-             SELECT 6, 150.00, 500) s
+CROSS JOIN (SELECT 2 AS seat_type, 500.00 AS price, 100 AS total_seats, 100 AS available_seats UNION ALL
+             SELECT 3, 350.00, 200, 200 UNION ALL
+             SELECT 6, 150.00, 500, 500) s
 CROSS JOIN (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL
              SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6) days;
 
@@ -299,6 +346,7 @@ INSERT INTO `permission` (`permission_name`, `permission_display_name`, `permiss
 ('train:edit', '编辑车次', 2, 17, NULL, NULL, NULL, 0, 'PUT', '/api/admin/trains/{id}', '编辑车次接口', 1),
 ('train:status', '更新车次状态', 2, 17, NULL, NULL, NULL, 0, 'PUT', '/api/admin/trains/{id}/status', '更新车次状态接口', 1),
 ('train:stock', '设置余票', 2, 17, NULL, NULL, NULL, 0, 'POST', '/api/admin/trains/{id}/stock', '设置余票接口', 1),
+('ticket:stock:sale', '线段库存开售/停售', 3, 0, NULL, NULL, NULL, 0, 'PUT', '/api/admin/ticket-stocks/{id}/sale-enabled', '更新线段席位开售状态', 1),
 
 -- 订单管理模块
 ('order', '订单管理', 1, 0, '/order', 'Layout', 'order', 300, NULL, NULL, '订单管理菜单', 1),
@@ -322,6 +370,8 @@ INSERT INTO `permission` (`permission_name`, `permission_display_name`, `permiss
 -- 用户端模块（普通用户权限）
 INSERT INTO `permission` (`permission_name`, `permission_display_name`, `permission_type`, `parent_id`, `path`, `component`, `icon`, `sort`, `api_method`, `api_path`, `description`, `status`) VALUES
 ('user:train:search', '车次查询', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/trains/search', '查询车次接口', 1),
+('user:train:searchRoutes', '联程车次方案', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/trains/searchRoutes', '联程/直达检索接口', 1),
+('user:train:stations', '站点下拉', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/trains/stations', '站点列表接口', 1),
 ('user:train:detail', '车次详情', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/trains/{id}', '获取车次详情接口', 1),
 ('user:order:list', '订单列表', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/orders', '获取用户订单列表接口', 1),
 ('user:order:detail', '订单详情', 3, 0, NULL, NULL, NULL, 0, 'GET', '/api/orders/{orderNo}', '获取订单详情接口', 1),
@@ -373,6 +423,8 @@ SELECT r.id, p.id FROM `role` r, `permission` p
 WHERE r.role_name = 'user' 
   AND p.permission_name IN (
     'user:train:search',
+    'user:train:searchRoutes',
+    'user:train:stations',
     'user:train:detail',
     'user:order:list',
     'user:order:detail',

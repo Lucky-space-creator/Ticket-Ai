@@ -3,8 +3,10 @@ package com.ticket.order.service.impl;
 import cn.hutool.core.util.IdUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticket.dto.RouteLeg;
 import com.ticket.dto.mq.OrderQueueRequest;
 import com.ticket.order.integration.TrainOrderGateway;
+import com.ticket.dto.TrainStockCommands;
 import com.ticket.order.service.OrderQueueService;
 import com.ticket.service.RocketMQProducerService;
 import com.ticket.util.RedisUtil;
@@ -14,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static java.lang.Boolean.TRUE;
@@ -66,15 +69,21 @@ public class OrderQueueServiceImpl implements OrderQueueService {
         redisUtil.set(idempotentKey, buildResultJson(STATUS_PROCESSING, null, null), RESULT_TTL_MINUTES, TimeUnit.MINUTES);
 
         // 4. Redis预扣库存（唯一的同步重量级操作）
+        int pax = request.getItems().size();
         try {
-            trainOrderGateway.deductStock(
-                    request.getTrainId(),
-                    request.getTrainDate(),
-                    request.getStartStation(),
-                    request.getEndStation(),
-                    request.getSeatType(),
-                    request.getItems().size()
-            );
+            List<RouteLeg> legs = request.getLegs();
+            if (legs != null && !legs.isEmpty()) {
+                trainOrderGateway.deductStocksBatch(TrainStockCommands.fromRouteLegs(
+                        legs, request.getTrainDate(), request.getSeatType(), pax));
+            } else {
+                trainOrderGateway.deductStock(
+                        request.getTrainId(),
+                        request.getTrainDate(),
+                        request.getStartStation(),
+                        request.getEndStation(),
+                        request.getSeatType(),
+                        pax);
+            }
         } catch (Exception e) {
             // 库存扣减失败，直接更新为失败状态
             logger.error("预扣库存失败，标记请求失败: requestId={}, error={}", requestId, e.getMessage());
@@ -92,11 +101,16 @@ public class OrderQueueServiceImpl implements OrderQueueService {
             // MQ 发送失败：仅释放 Redis 预占，不降级同步下单
             logger.error("MQ发送失败，释放预占: requestId={}, error={}", requestId, mqEx.getMessage());
             try {
-                trainOrderGateway.rollbackReservation(
-                        request.getTrainId(), request.getTrainDate(),
-                        request.getStartStation(), request.getEndStation(),
-                        request.getSeatType(), request.getItems().size()
-                );
+                List<RouteLeg> legs = request.getLegs();
+                if (legs != null && !legs.isEmpty()) {
+                    trainOrderGateway.reservationRollbackBatch(TrainStockCommands.fromRouteLegs(
+                            legs, request.getTrainDate(), request.getSeatType(), pax));
+                } else {
+                    trainOrderGateway.rollbackReservation(
+                            request.getTrainId(), request.getTrainDate(),
+                            request.getStartStation(), request.getEndStation(),
+                            request.getSeatType(), pax);
+                }
             } catch (Exception rollbackEx) {
                 logger.error("释放预占失败: requestId={}, error={}", requestId, rollbackEx.getMessage());
             }
@@ -105,8 +119,10 @@ public class OrderQueueServiceImpl implements OrderQueueService {
             throw mqEx;
         }
 
-        logger.info("下单请求已入队: requestId={}, userId={}, trainId={}, itemCount={}",
-                requestId, request.getUserId(), request.getTrainId(), request.getItems().size());
+        logger.info("下单请求已入队: requestId={}, userId={}, trainId={}, legs={}, itemCount={}",
+                requestId, request.getUserId(), request.getTrainId(),
+                request.getLegs() != null ? request.getLegs().size() : 0,
+                request.getItems().size());
 
         return requestId;
     }

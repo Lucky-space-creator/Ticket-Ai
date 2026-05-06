@@ -39,15 +39,23 @@ public class PaymentConfirmedConsumer implements RocketMQListener<PaymentConfirm
             return;
         }
 
-        log.info("消费支付确认事件: orderNo={}, trainId={}, count={}",
-                event.getOrderNo(), event.getTrainId(), event.getCount());
+        log.info("消费支付确认事件: orderNo={}, legs={}, count={}",
+                event.getOrderNo(),
+                event.getStockLegs() != null ? event.getStockLegs().size() : 0,
+                event.getCount());
 
         try {
-            String trainDateStr = event.getTrainDate() != null ? event.getTrainDate().toString() : null;
-            stockLockService.confirm(
-                    event.getTrainId(), trainDateStr,
-                    event.getSeatType(), event.getStartStation(),
-                    event.getEndStation(), event.getCount());
+            if (event.getStockLegs() != null && !event.getStockLegs().isEmpty()) {
+                stockLockService.confirmBatch(event.getStockLegs());
+            } else if (event.getTrainId() != null) {
+                String trainDateStr = event.getTrainDate() != null ? event.getTrainDate().toString() : null;
+                stockLockService.confirm(
+                        event.getTrainId(), trainDateStr,
+                        event.getSeatType(), event.getStartStation(),
+                        event.getEndStation(), event.getCount());
+            } else {
+                log.warn("支付确认事件无可执行库存段落: orderNo={}", event.getOrderNo());
+            }
             log.info("支付库存确认完成: orderNo={}, count={}", event.getOrderNo(), event.getCount());
         } catch (Exception e) {
             log.error("处理支付确认事件失败(将重试): orderNo={}, error={}",

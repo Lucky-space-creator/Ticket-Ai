@@ -32,14 +32,24 @@ public class Order {
     private Long userId;
 
     /**
-     * 车次ID
+     * 首段线段 ID / 兼容直筒；业务真源见 order_route_leg
      */
     private Long trainId;
 
     /**
-     * 车次号
+     * 首段车次号，展示用
      */
     private String trainNo;
+
+    /**
+     * SKU：线段 id 按行程顺序用 '-' 拼接
+     */
+    private String routeSku;
+
+    /**
+     * {@link com.ticket.enums.RouteType}
+     */
+    private String routeType;
 
     /**
      * 乘车日期
@@ -98,4 +108,8 @@ public class Order {
      */
     @TableField(exist = false)
     private String userPhone;
+
+    /** 行程段（查询时填充） */
+    @TableField(exist = false)
+    private List<OrderRouteLeg> legs;
 }

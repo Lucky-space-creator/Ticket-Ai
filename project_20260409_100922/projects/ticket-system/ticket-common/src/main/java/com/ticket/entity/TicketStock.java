@@ -61,6 +61,11 @@ public class TicketStock {
     private Integer availableSeats;
 
     /**
+     * 是否开售（停售≠预扣）
+     */
+    private Integer saleEnabled;
+
+    /**
      * 版本号（乐观锁）
      */
     @Version

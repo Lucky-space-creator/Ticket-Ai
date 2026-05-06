@@ -6,7 +6,13 @@
 |------|----------------------|-------------------------|
 | 跨域车次/库存 | `TrainService` Bean | `TrainOrderGateway` → `TrainOrderFeignClient` → train-service |
 | 下单写库 | `OrderServiceImpl` 本地事务 | HTTP 预扣（train）+ MQ 异步写库（order） |
-| 补偿回滚 | 同进程 `rollbackStock` | `TrainOrderGateway.rollbackStock` |
+| 补偿回滚 | 同进程 `rollbackStock` | 单段：`TrainOrderGateway.rollbackStock` / `rollbackReservation`；**联程**：`deductStocksBatch` / **`reservationRollbackBatch`** / **`rollbackStocksBatch`** / **`confirmStocksBatch`**（单笔 batch Lua，见 `train-service`） |
+
+## 联程与 `stockLegs`（线段化 SKU）
+
+- **下单**：`POST /api/orders` 可带 `routeSku`、`routeType`、`legs[]`（每段 `segmentId`）；服务端经 `train-service` **`/api/trains/internal/routes/validate`** 校验后再入队。
+- **支付**：`PaymentConfirmedEvent` 若含 **`stockLegs`**，`train-service` 的 `PaymentConfirmedConsumer` 必须 **`confirmBatch`**，禁止仅按主表 OD 单段 `confirm`。
+- **退票**：多段走 **`rollbackStocksBatch`**；写单/MQ 失败释占走 **`reservationRollbackBatch`**（仅 Redis，不误增 MySQL）。
 
 详见 `order-service` 中 `OrderController`、`TrainOrderGateway`、`order/client/TrainOrderFeignClient`。
 

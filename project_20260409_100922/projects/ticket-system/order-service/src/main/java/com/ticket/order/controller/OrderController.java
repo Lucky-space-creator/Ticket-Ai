@@ -1,9 +1,14 @@
 package com.ticket.order.controller;
 
 import com.ticket.dto.CreateOrderRequest;
+import com.ticket.dto.RouteLeg;
 import com.ticket.dto.mq.OrderQueueRequest;
+import com.ticket.dto.train.RouteValidationRequest;
+import com.ticket.dto.train.RouteValidationResult;
 import com.ticket.entity.Order;
 import com.ticket.enums.ResponseCode;
+import com.ticket.enums.RouteType;
+import com.ticket.order.client.TrainRouteValidationFeignClient;
 import com.ticket.order.integration.TrainOrderGateway;
 import com.ticket.order.service.OrderQueueService;
 import com.ticket.order.service.OrderService;
@@ -42,6 +47,9 @@ public class OrderController {
     @Resource
     private TrainOrderGateway trainOrderGateway;
 
+    @Resource
+    private TrainRouteValidationFeignClient trainRouteValidationFeignClient;
+
     /**
      * 创建订单（快速入队模式 — MQ削峰核心改造）
      *
@@ -65,12 +73,35 @@ public class OrderController {
             // 1. 参数校验
             validateCreateOrderRequest(request);
 
-            // 2. 查询真实票价
-            BigDecimal seatPrice = trainOrderGateway.getSeatPrice(
-                    request.getTrainId(), request.getTrainDate(),
-                    request.getStartStation(), request.getEndStation(),
-                    request.getSeatType()
-            );
+            boolean multi = request.getLegs() != null && !request.getLegs().isEmpty();
+
+            BigDecimal seatPrice;
+            List<RouteLeg> validatedLegs = null;
+
+            if (multi) {
+                RouteValidationRequest vr = new RouteValidationRequest();
+                vr.setTrainDate(request.getTrainDate());
+                vr.setSeatType(request.getSeatType());
+                vr.setStartStation(request.getStartStation());
+                vr.setEndStation(request.getEndStation());
+                vr.setRouteSku(request.getRouteSku());
+                vr.setRouteType(request.getRouteType());
+                vr.setLegs(request.getLegs());
+                com.ticket.util.ResponseUtil.Result<RouteValidationResult> res = trainRouteValidationFeignClient.validate(vr);
+                if (res == null || res.getCode() == null
+                        || !res.getCode().equals(ResponseCode.SUCCESS.getCode())
+                        || res.getData() == null) {
+                    return ResponseUtil.error(res != null ? res.getMessage() : "行程校验失败");
+                }
+                RouteValidationResult data = res.getData();
+                validatedLegs = data.getLegs();
+                seatPrice = data.getTotalPricePerPassenger();
+            } else {
+                seatPrice = trainOrderGateway.getSeatPrice(
+                        request.getTrainId(), request.getTrainDate(),
+                        request.getStartStation(), request.getEndStation(),
+                        request.getSeatType());
+            }
 
             // 3. 构造乘客列表（含加密身份证和票价）
             List<OrderQueueRequest.PassengerItem> items = buildPassengerItems(request.getItems(), seatPrice);
@@ -78,11 +109,24 @@ public class OrderController {
             // 4. 构造排队请求体
             OrderQueueRequest queueRequest = new OrderQueueRequest();
             queueRequest.setUserId(userId);
-            queueRequest.setTrainId(request.getTrainId());
+            queueRequest.setTrainId(multi ? validatedLegs.get(0).getSegmentId() : request.getTrainId());
             queueRequest.setTrainDate(request.getTrainDate());
             queueRequest.setStartStation(request.getStartStation());
             queueRequest.setEndStation(request.getEndStation());
             queueRequest.setSeatType(request.getSeatType());
+            if (multi) {
+                queueRequest.setLegs(validatedLegs);
+                String canonicalSku = validatedLegs.stream()
+                        .map(l -> String.valueOf(l.getSegmentId()))
+                        .collect(java.util.stream.Collectors.joining("-"));
+                if (request.getRouteSku() != null && !request.getRouteSku().isBlank()
+                        && !canonicalSku.equals(request.getRouteSku().trim())) {
+                    throw new RuntimeException("route_sku 与线段序列不一致");
+                }
+                queueRequest.setRouteSku(canonicalSku);
+                queueRequest.setRouteType(request.getRouteType() != null && !request.getRouteType().isBlank()
+                        ? request.getRouteType() : inferRouteType(validatedLegs));
+            }
             queueRequest.setItems(items);
             queueRequest.setClientIp(getClientIp(httpRequest));
             queueRequest.setEnqueueTime(System.currentTimeMillis());
@@ -208,7 +252,12 @@ public class OrderController {
     // ==================== 私有工具方法 ====================
 
     private void validateCreateOrderRequest(CreateOrderRequest request) {
-        if (request.getTrainId() == null) {
+        boolean multi = request.getLegs() != null && !request.getLegs().isEmpty();
+        if (multi) {
+            if (request.getRouteSku() == null || request.getRouteSku().isBlank()) {
+                throw new RuntimeException("route_sku 不能为空");
+            }
+        } else if (request.getTrainId() == null) {
             throw new RuntimeException("车次ID不能为空");
         }
         if (request.getTrainDate() == null || request.getTrainDate().isEmpty()) {
@@ -229,6 +278,24 @@ public class OrderController {
         if (request.getItems().size() > 5) {
             throw new RuntimeException("单次最多购买5张车票");
         }
+    }
+
+    private static String inferRouteType(List<RouteLeg> legs) {
+        if (legs == null || legs.isEmpty()) {
+            return RouteType.SINGLE;
+        }
+        if (legs.size() == 1) {
+            return RouteType.SINGLE;
+        }
+        String tn0 = legs.get(0).getTrainNo();
+        boolean allSame = true;
+        for (RouteLeg l : legs) {
+            if (l.getTrainNo() == null || !l.getTrainNo().equals(tn0)) {
+                allSame = false;
+                break;
+            }
+        }
+        return allSame ? RouteType.DIRECT : RouteType.TRANSFER;
     }
 
     private List<OrderQueueRequest.PassengerItem> buildPassengerItems(List<CreateOrderRequest.OrderItemRequest> itemRequests, BigDecimal price) {

@@ -5,6 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serial;
+import com.ticket.dto.RouteLeg;
+
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.List;
@@ -27,8 +29,20 @@ public class OrderQueueRequest implements Serializable {
     /** 用户ID */
     private Long userId;
 
-    /** 车次ID */
+    /**
+     * 兼容直筒：等价于首节 segmentId；业务真源为 {@link #legs}。
+     */
+    @Deprecated
     private Long trainId;
+
+    /** 线路 SKU，与 legs 同源 */
+    private String routeSku;
+
+    /** SINGLE / DIRECT / TRANSFER */
+    private String routeType;
+
+    /** 服务端校验通过的行程（含线段 id）；非空时使用批量 Lua 预扣 */
+    private List<RouteLeg> legs;
 
     /** 乘车日期 */
     private String trainDate;

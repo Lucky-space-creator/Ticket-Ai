@@ -6,7 +6,10 @@ import lombok.NoArgsConstructor;
 
 import java.io.Serial;
 import java.io.Serializable;
+import com.ticket.dto.internal.TrainStockCommand;
+
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * 支付确认事件消息
@@ -32,8 +35,12 @@ public class PaymentConfirmedEvent implements Serializable {
     /** 用户ID */
     private Long userId;
 
-    /** 车次ID */
+    /** 兼容旧单（无 legs） */
+    @Deprecated
     private Long trainId;
+
+    /** 与各段 Redis locked key 对齐；若非空则由消费者单笔 confirm batch */
+    private List<TrainStockCommand> stockLegs;
 
     /** 乘车日期 */
     private LocalDate trainDate;

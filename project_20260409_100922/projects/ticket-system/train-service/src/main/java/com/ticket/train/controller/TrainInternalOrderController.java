@@ -1,13 +1,17 @@
 package com.ticket.train.controller;
 
+import com.ticket.dto.ValidateRouteSkuRequest;
+import com.ticket.dto.ValidatedRouteSkuResponse;
 import com.ticket.dto.internal.TrainStockCommand;
 import com.ticket.entity.Train;
 import com.ticket.service.StockLockService;
+import com.ticket.train.service.TrainRouteSkuService;
 import com.ticket.train.service.TrainService;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * 供订单服务调用的车次/库存内部 API（与 backend 中 TrainServiceImpl + StockLockService 协作方式一致）
@@ -22,6 +26,14 @@ public class TrainInternalOrderController {
 
     @Resource
     private StockLockService stockLockService;
+
+    @Resource
+    private TrainRouteSkuService trainRouteSkuService;
+
+    @PostMapping("/validate-route")
+    public ValidatedRouteSkuResponse validateRoute(@RequestBody ValidateRouteSkuRequest request) {
+        return trainRouteSkuService.validateSku(request);
+    }
 
     @GetMapping("/by-id/{trainId}")
     public Train getById(@PathVariable("trainId") Long trainId) {
@@ -47,6 +59,26 @@ public class TrainInternalOrderController {
                 cmd.getEndStation(),
                 cmd.getSeatType(),
                 cmd.getCount());
+    }
+
+    @PostMapping("/deduct-stocks-batch")
+    public void deductStocksBatch(@RequestBody List<TrainStockCommand> commands) {
+        trainService.deductStocksBatch(commands);
+    }
+
+    @PostMapping("/rollback-stocks-batch")
+    public void rollbackStocksBatch(@RequestBody List<TrainStockCommand> commands) {
+        trainService.rollbackStocksBatch(commands);
+    }
+
+    @PostMapping("/confirm-stocks-batch")
+    public void confirmStocksBatch(@RequestBody List<TrainStockCommand> commands) {
+        stockLockService.confirmBatch(commands);
+    }
+
+    @PostMapping("/reservation/rollback-batch")
+    public void reservationRollbackBatch(@RequestBody List<TrainStockCommand> commands) {
+        stockLockService.rollbackBatch(commands);
     }
 
     @PostMapping("/rollback-stock")

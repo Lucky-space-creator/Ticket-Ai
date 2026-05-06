@@ -2,19 +2,26 @@ package com.ticket.train.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.ticket.dto.internal.TrainStockCommand;
+import com.ticket.dto.train.RouteSearchOption;
 import com.ticket.enums.CacheKey;
+import com.ticket.entity.Station;
 import com.ticket.entity.TicketStock;
 import com.ticket.entity.Train;
+import com.ticket.train.mapper.StationMapper;
 import com.ticket.train.mapper.TicketStockMapper;
 import com.ticket.train.mapper.TrainMapper;
-import com.ticket.service.StockLockService;
+import com.ticket.train.route.RouteSearchPlanner;
 import com.ticket.train.service.TrainService;
+import com.ticket.service.StockLockService;
+import com.ticket.util.StationNameUtil;
 import com.ticket.util.RedisUtil;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -29,10 +36,33 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
     private TicketStockMapper ticketStockMapper;
 
     @Resource
+    private StationMapper stationMapper;
+
+    @Resource
     private RedisUtil redisUtil;
 
     @Resource
     private StockLockService stockLockService;
+
+    @Resource
+    private RouteSearchPlanner routeSearchPlanner;
+
+    /**
+     * 直筒搜索缓存 TTL（分钟）；短 TTL 接受短暂脏读（计划：缩短 TRAIN_SEARCH）
+     */
+    private static final long TRAIN_SEARCH_CACHE_TTL_MINUTES = 5L;
+
+    @Override
+    public List<RouteSearchOption> searchRoutes(String startStation, String endStation, String trainDate, Integer seatType) {
+        return routeSearchPlanner.search(startStation, endStation, LocalDate.parse(trainDate), seatType);
+    }
+
+    @Override
+    public List<String> listStationNames() {
+        LambdaQueryWrapper<Station> w = new LambdaQueryWrapper<>();
+        w.orderByAsc(Station::getName);
+        return stationMapper.selectList(w).stream().map(Station::getName).filter(n -> n != null && !n.isBlank()).toList();
+    }
 
     @Override
     public List<Train> searchTrains(String startStation, String endStation, String trainDate) {
@@ -51,12 +81,12 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
 
         // 如果出发站不为空，添加条件
         if (startStation != null && !startStation.trim().isEmpty()) {
-            wrapper.like(Train::getStartStation, startStation);
+            wrapper.like(Train::getStartStation, StationNameUtil.normalize(startStation));
         }
 
         // 如果到达站不为空，添加条件
         if (endStation != null && !endStation.trim().isEmpty()) {
-            wrapper.like(Train::getEndStation, endStation);
+            wrapper.like(Train::getEndStation, StationNameUtil.normalize(endStation));
         }
 
         // 只查询正常状态的车次
@@ -64,12 +94,8 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
 
         List<Train> trains = list(wrapper);
 
-        // 缓存整个查询结果列表（在循环外设置一次）
         if (!trains.isEmpty()) {
-            long expireTime = getExpireTrainTime(trains.get(0));
-            if (expireTime > 0) {
-                redisUtil.set(cacheKey, trains, expireTime, TimeUnit.MINUTES);
-            }
+            redisUtil.set(cacheKey, trains, TRAIN_SEARCH_CACHE_TTL_MINUTES, TimeUnit.MINUTES);
         }
 
         return trains;
@@ -87,8 +113,10 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
         // 按车次号查询
         LambdaQueryWrapper<Train> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Train::getTrainNo, trainNo)
-               .eq(Train::getStatus, 1);
-        Train train = getOne(wrapper);
+               .eq(Train::getStatus, 1)
+               .orderByAsc(Train::getStartTime);
+        List<Train> segments = list(wrapper);
+        Train train = segments.isEmpty() ? null : segments.get(0);
 
         if (train != null) {
             long expireTime = getExpireTrainTime(train);
@@ -167,20 +195,14 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
 
     @Override
     public BigDecimal getSeatPrice(Long trainId, String trainDate, String startStation, String endStation, Integer seatType) {
-        LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(TicketStock::getTrainId, trainId)
-                .eq(TicketStock::getTrainDate, trainDate)
-                .eq(TicketStock::getStartStation, startStation)
-                .eq(TicketStock::getEndStation, endStation)
-                .eq(TicketStock::getSeatType, seatType);
-
-        TicketStock stock = ticketStockMapper.selectOne(wrapper);
+        TicketStock stock = pickTicketStock(trainId, trainDate, startStation, endStation, seatType);
         return stock != null ? stock.getPrice() : BigDecimal.ZERO;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean deductStock(Long trainId, String trainDate, String startStation, String endStation, Integer seatType, Integer count) {
+        assertStockRowOpenForDeduct(trainId, trainDate, startStation, endStation, seatType);
         // 1. 先通过Redis原子操作预扣库存
         boolean deducted = stockLockService.tryDeduct(trainId, trainDate, seatType, startStation, endStation, count);
         if (!deducted) {
@@ -188,14 +210,7 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
         }
 
         // 2. 检查数据库记录是否存在（仅做校验，不扣减数据库库存）
-        LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(TicketStock::getTrainId, trainId)
-                .eq(TicketStock::getTrainDate, trainDate)
-                .eq(TicketStock::getStartStation, startStation)
-                .eq(TicketStock::getEndStation, endStation)
-                .eq(TicketStock::getSeatType, seatType);
-
-        TicketStock stock = ticketStockMapper.selectOne(wrapper);
+        TicketStock stock = pickTicketStock(trainId, trainDate, startStation, endStation, seatType);
 
         if (stock == null) {
             // Redis预扣成功但数据库记录不存在，回滚Redis
@@ -212,19 +227,61 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public boolean deductStocksBatch(List<TrainStockCommand> segments) {
+        if (segments == null || segments.isEmpty()) {
+            throw new IllegalArgumentException("联程段落为空");
+        }
+        for (TrainStockCommand cmd : segments) {
+            assertStockRowOpenForDeduct(
+                    cmd.getTrainId(), cmd.getTrainDate(),
+                    cmd.getStartStation(), cmd.getEndStation(), cmd.getSeatType());
+        }
+        boolean deducted = stockLockService.tryDeductBatch(segments);
+        if (!deducted) {
+            throw new RuntimeException("余票不足");
+        }
+        for (TrainStockCommand cmd : segments) {
+            TicketStock stock = pickTicketStock(
+                    cmd.getTrainId(), cmd.getTrainDate(),
+                    cmd.getStartStation(), cmd.getEndStation(), cmd.getSeatType());
+            if (stock == null) {
+                stockLockService.rollbackBatch(segments);
+                throw new RuntimeException("余票信息不存在");
+            }
+        }
+        return true;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean rollbackStocksBatch(List<TrainStockCommand> segments) {
+        if (segments == null || segments.isEmpty()) {
+            return true;
+        }
+        stockLockService.rollbackBatch(segments);
+        Integer countObj = segments.get(0).getCount();
+        int count = countObj != null ? countObj : 0;
+        for (TrainStockCommand cmd : segments) {
+            TicketStock stock = pickTicketStock(
+                    cmd.getTrainId(), cmd.getTrainDate(),
+                    cmd.getStartStation(), cmd.getEndStation(), cmd.getSeatType());
+            if (stock == null) {
+                continue;
+            }
+            stock.setAvailableSeats(stock.getAvailableSeats() + count);
+            ticketStockMapper.updateById(stock);
+        }
+        return true;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean rollbackStock(Long trainId, String trainDate, String startStation, String endStation, Integer seatType, Integer count) {
         // 1. 先回滚Redis库存
         stockLockService.rollback(trainId, trainDate, seatType, startStation, endStation, count);
 
         // 2. 更新数据库库存
-        LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(TicketStock::getTrainId, trainId)
-                .eq(TicketStock::getTrainDate, trainDate)
-                .eq(TicketStock::getStartStation, startStation)
-                .eq(TicketStock::getEndStation, endStation)
-                .eq(TicketStock::getSeatType, seatType);
-
-        TicketStock stock = ticketStockMapper.selectOne(wrapper);
+        TicketStock stock = pickTicketStock(trainId, trainDate, startStation, endStation, seatType);
 
         if (stock == null) {
             // 数据库记录不存在，但Redis已回滚，返回true
@@ -243,5 +300,29 @@ public class TrainServiceImpl extends ServiceImpl<TrainMapper, Train> implements
     @Override
     public void initStockToRedis(Long trainId, String trainDate, Integer seatType, String startStation, String endStation, int stock) {
         stockLockService.initStock(trainId, trainDate, seatType, startStation, endStation, stock);
+    }
+
+    /** 开售校验：须存在 ticket_stock 行且未停售，站名按库内规范化键匹配 */
+    private void assertStockRowOpenForDeduct(Long trainId, String trainDateStr, String startStation, String endStation, Integer seatType) {
+        TicketStock stock = pickTicketStock(trainId, trainDateStr, startStation, endStation, seatType);
+        if (stock == null) {
+            throw new RuntimeException("余票信息不存在");
+        }
+        if (stock.getSaleEnabled() != null && stock.getSaleEnabled() == 0) {
+            throw new RuntimeException("该席别已停售");
+        }
+    }
+
+    private TicketStock pickTicketStock(Long trainId, String trainDateStr, String startStation, String endStation, Integer seatType) {
+        LocalDate trainDate = LocalDate.parse(trainDateStr);
+        String from = StationNameUtil.normalize(startStation);
+        String to = StationNameUtil.normalize(endStation);
+        LambdaQueryWrapper<TicketStock> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(TicketStock::getTrainId, trainId)
+                .eq(TicketStock::getTrainDate, trainDate)
+                .eq(TicketStock::getStartStation, from)
+                .eq(TicketStock::getEndStation, to)
+                .eq(TicketStock::getSeatType, seatType);
+        return ticketStockMapper.selectOne(wrapper);
     }
 }

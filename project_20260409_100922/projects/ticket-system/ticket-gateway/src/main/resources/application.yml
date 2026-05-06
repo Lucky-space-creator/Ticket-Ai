@@ -32,7 +32,7 @@ spring:
                 redis-rate-limiter.burstCapacity: 20
                 key-resolver: "#{@userKeyResolver}"
 
-        # 车次服务路由
+        # 车次服务路由（含 GET /api/trains/searchRoutes 联程检索）
         - id: train-service
           uri: lb://train-service
           predicates:

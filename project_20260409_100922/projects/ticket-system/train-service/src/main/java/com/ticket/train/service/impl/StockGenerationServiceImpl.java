@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.ticket.entity.TicketStock;
 import com.ticket.entity.Train;
 import com.ticket.enums.BusinessStatus;
+import com.ticket.util.StationNameUtil;
 import com.ticket.train.mapper.TicketStockMapper;
 import com.ticket.train.service.StockGenerationService;
 import com.ticket.service.StockLockService;
@@ -173,11 +174,13 @@ public class StockGenerationServiceImpl implements StockGenerationService {
             TicketStock stock = new TicketStock();
             stock.setTrainId(train.getId());
             stock.setTrainDate(LocalDate.parse(trainDate));
-            stock.setStartStation(train.getStartStation());
-            stock.setEndStation(train.getEndStation());
+            stock.setStartStation(StationNameUtil.normalize(train.getStartStation()));
+            stock.setEndStation(StationNameUtil.normalize(train.getEndStation()));
             stock.setSeatType(seatType);
             stock.setPrice(config.getPrice());
+            stock.setTotalSeats(config.getStock());
             stock.setAvailableSeats(config.getStock());
+            stock.setSaleEnabled(1);
             stock.setVersion(0); // 乐观锁版本号初始为0
 
             stocksToSave.add(stock);

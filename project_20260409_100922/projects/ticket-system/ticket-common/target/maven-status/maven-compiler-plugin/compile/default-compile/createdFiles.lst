@@ -33,6 +33,7 @@ com\ticket\config\FeignConfig.class
 com\ticket\dto\mq\OrderCreatedEvent.class
 com\ticket\dto\ChatRequest.class
 com\ticket\config\PermissionInterceptor.class
+com\ticket\entity\Station.class
 com\ticket\dto\internal\TrainStockCommand.class
 com\ticket\service\RocketMQProducerService$1.class
 com\ticket\entity\Employee.class
@@ -49,7 +50,6 @@ com\ticket\util\UserContext.class
 com\ticket\entity\ChatRecord.class
 com\ticket\entity\Department.class
 com\ticket\util\CacheUtil.class
-com\ticket\entity\TrainStation.class
 com\ticket\service\PermissionService.class
 com\ticket\util\TraceMdcHelper.class
 com\ticket\config\FeignConfig$1.class

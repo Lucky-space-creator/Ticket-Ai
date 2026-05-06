@@ -1,9 +1,11 @@
 package com.ticket.order.consumer;
 
+import com.ticket.dto.RouteLeg;
 import com.ticket.dto.mq.OrderQueueRequest;
 import com.ticket.entity.Order;
 import com.ticket.enums.MQTopics;
 import com.ticket.order.integration.TrainOrderGateway;
+import com.ticket.dto.TrainStockCommands;
 import com.ticket.order.service.OrderQueueDbWriter;
 import com.ticket.order.service.OrderQueueService;
 import com.ticket.order.service.impl.OrderQueueServiceImpl;
@@ -15,6 +17,8 @@ import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * 订单排队队列消费者：微服务运行平面内唯一消费 {@link MQTopics#ORDER_QUEUE} 的组件（勿与 backend 同时订阅同组）。
@@ -73,14 +77,17 @@ public class OrderQueueConsumer implements RocketMQListener<OrderQueueRequest> {
     /** 异步写单失败：仅释放 Redis 预占（与 enqueue 时 deduct 一致，勿调 rollbackStock 以免误增 MySQL 余票） */
     private void releasePrelockedStock(OrderQueueRequest request) {
         try {
-            trainOrderGateway.rollbackReservation(
-                    request.getTrainId(),
-                    request.getTrainDate(),
-                    request.getStartStation(),
-                    request.getEndStation(),
-                    request.getSeatType(),
-                    request.getItems().size()
-            );
+            int pax = request.getItems().size();
+            List<RouteLeg> legs = request.getLegs();
+            if (legs != null && !legs.isEmpty()) {
+                trainOrderGateway.reservationRollbackBatch(TrainStockCommands.fromRouteLegs(
+                        legs, request.getTrainDate(), request.getSeatType(), pax));
+            } else {
+                trainOrderGateway.rollbackReservation(
+                        request.getTrainId(), request.getTrainDate(),
+                        request.getStartStation(), request.getEndStation(),
+                        request.getSeatType(), pax);
+            }
             log.info("已释放Redis预占: requestId={}, trainId={}", request.getRequestId(), request.getTrainId());
         } catch (Exception e) {
             log.error("释放预占失败: requestId={}, error={}", request.getRequestId(), e.getMessage(), e);

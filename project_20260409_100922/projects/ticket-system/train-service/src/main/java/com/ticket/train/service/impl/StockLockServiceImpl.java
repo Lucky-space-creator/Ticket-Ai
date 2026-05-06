@@ -1,5 +1,6 @@
 package com.ticket.train.service.impl;
 
+import com.ticket.dto.internal.TrainStockCommand;
 import com.ticket.enums.CacheKey;
 import com.ticket.service.StockLockService;
 import com.ticket.util.RedisUtil;
@@ -11,8 +12,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -20,8 +23,9 @@ import java.util.concurrent.TimeUnit;
  *
  * <p><b>职责边界（学习与维护要点）</b>：</p>
  * <ul>
- *   <li>{@link #tryDeduct}：仅依赖 <b>Redis Lua</b> 在单次脚本内完成「扣可用 + 加预占」，不在热路径叠加 {@code RLock}。</li>
- *   <li>{@link #rollback} / {@link #confirm}：在 Lua 原子操作之外使用 <b>Redisson 锁</b>，主要与脚本失败后的 Redisson 降级分支协同；
+ *   <li>{@link #tryDeduct} / {@link #tryDeductBatch}：仅依赖 <b>Redis Lua</b>（单段或联程 2N KEYS）完成「扣可用 + 加预占」，热路径 **不配 {@code RLock}**。</li>
+ *   <li>{@link #rollbackBatch} / {@link #confirmBatch}：联程单笔 Lua 释占/确认，不配 {@code RLock}。</li>
+ *   <li>{@link #rollback} / {@link #confirm}（单段）：在 Lua 原子操作之外使用 <b>Redisson 锁</b>，主要与脚本失败后的 Redisson 降级分支协同；
  *   跨服务一致性（订单 ↔ 库存）应靠编排与补偿，而非在调用方再套分布式锁。</li>
  * </ul>
  * 详细说明见 {@code docs/microservices/STOCK-LOCK-STRATEGY.md}。
@@ -41,6 +45,9 @@ public class StockLockServiceImpl implements StockLockService {
     private static final String LUA_DEDUCT_SCRIPT = "lua/deduct_stock.lua";
     private static final String LUA_ROLLBACK_SCRIPT = "lua/rollback_stock.lua";
     private static final String LUA_CONFIRM_SCRIPT = "lua/confirm_stock.lua";
+    private static final String LUA_DEDUCT_BATCH_SCRIPT = "lua/deduct_stocks_batch.lua";
+    private static final String LUA_ROLLBACK_BATCH_SCRIPT = "lua/rollback_stocks_batch.lua";
+    private static final String LUA_CONFIRM_BATCH_SCRIPT = "lua/confirm_stocks_batch.lua";
 
     // 预占库存过期时间（30分钟）
     private static final int LOCKED_EXPIRE_SECONDS = 30 * 60;
@@ -100,6 +107,158 @@ public class StockLockServiceImpl implements StockLockService {
                     trainId, trainDate, seatType, startStation, endStation, count, e);
             return false;
         }
+    }
+
+    @Override
+    public boolean tryDeductBatch(List<TrainStockCommand> segments) {
+        if (!validateSegmentsForBatch(segments)) {
+            return false;
+        }
+        int totalKeys = segments.size() * 2;
+        List<String> keys = new ArrayList<>(totalKeys);
+        for (TrainStockCommand c : segments) {
+            keys.add(CacheKey.formatTrainStockKey(
+                    c.getTrainId(), c.getTrainDate(), c.getSeatType(), c.getStartStation(), c.getEndStation()));
+            keys.add(CacheKey.formatTrainLockedKey(
+                    c.getTrainId(), c.getTrainDate(), c.getSeatType(), c.getStartStation(), c.getEndStation()));
+        }
+        try {
+            int count = Objects.requireNonNull(segments.get(0).getCount());
+            Object[] args = new Object[]{count, LOCKED_EXPIRE_SECONDS, STOCK_EXPIRE_SECONDS};
+            List<Long> result = redisUtil.executeScriptFromResource(LUA_DEDUCT_BATCH_SCRIPT, keys, args);
+            if (result == null || result.size() < 2) {
+                logger.error("批量预扣Lua返回异常, result={}", result);
+                return false;
+            }
+            long status = result.get(0);
+            long aux = result.get(1);
+            if (status == 1L) {
+                logger.info("批量预扣成功（Lua），段数={}, count={}, lastRemainStock={}",
+                        segments.size(), count, aux);
+                return true;
+            }
+            if (status == 0L) {
+                logger.warn("批量预扣库存不足（Lua），段数={}, count={}, insufficientLegAvail={}",
+                        segments.size(), count, aux);
+                return false;
+            }
+            logger.error("批量预扣Lua状态异常, status={}, aux={}", status, aux);
+            return false;
+        } catch (Exception e) {
+            logger.error("批量预扣异常, 段数={}", segments.size(), e);
+            return false;
+        }
+    }
+
+    @Override
+    public void rollbackBatch(List<TrainStockCommand> segments) {
+        if (segments == null || segments.isEmpty()) {
+            return;
+        }
+        if (!validateSegmentsForBatchSilent(segments)) {
+            logger.warn("rollbackBatch 参数非法，跳过: segments={}", segments);
+            return;
+        }
+        int count = Objects.requireNonNull(segments.get(0).getCount());
+        List<String> keys = new ArrayList<>(segments.size() * 2);
+        for (TrainStockCommand c : segments) {
+            keys.add(CacheKey.formatTrainStockKey(
+                    c.getTrainId(), c.getTrainDate(), c.getSeatType(), c.getStartStation(), c.getEndStation()));
+            keys.add(CacheKey.formatTrainLockedKey(
+                    c.getTrainId(), c.getTrainDate(), c.getSeatType(), c.getStartStation(), c.getEndStation()));
+        }
+        try {
+            Object[] args = new Object[]{count, STOCK_EXPIRE_SECONDS};
+            List<Long> result = redisUtil.executeScriptFromResource(LUA_ROLLBACK_BATCH_SCRIPT, keys, args);
+            if (result != null && result.size() >= 2) {
+                long status = result.get(0);
+                if (status == 1L) {
+                    logger.info("批量释占成功（Lua），段数={}, count={}, lastRemainLocked={}",
+                            segments.size(), count, result.get(1));
+                    return;
+                }
+                logger.warn("批量释占未完成（Lua），status={}, legIndex={}, 段数={}, count={}",
+                        status, result.get(1), segments.size(), count);
+            }
+        } catch (Exception e) {
+            logger.error("批量释占异常，段数={}", segments.size(), e);
+        }
+    }
+
+    @Override
+    public void confirmBatch(List<TrainStockCommand> segments) {
+        if (segments == null || segments.isEmpty()) {
+            return;
+        }
+        if (!validateSegmentsForBatchSilent(segments)) {
+            logger.warn("confirmBatch 参数非法，跳过: segments={}", segments);
+            return;
+        }
+        int count = Objects.requireNonNull(segments.get(0).getCount());
+        List<String> keys = new ArrayList<>(segments.size());
+        for (TrainStockCommand c : segments) {
+            keys.add(CacheKey.formatTrainLockedKey(
+                    c.getTrainId(), c.getTrainDate(), c.getSeatType(), c.getStartStation(), c.getEndStation()));
+        }
+        try {
+            Object[] args = new Object[]{count};
+            List<Long> result = redisUtil.executeScriptFromResource(LUA_CONFIRM_BATCH_SCRIPT, keys, args);
+            if (result != null && result.size() >= 2) {
+                long status = result.get(0);
+                if (status == 1L) {
+                    logger.info("批量确认成功（Lua），段数={}, count={}, lastRemainLocked={}",
+                            segments.size(), count, result.get(1));
+                    return;
+                }
+                logger.warn("批量确认未完成（Lua），status={}, legIndex={}, 段数={}, count={}",
+                        status, result.get(1), segments.size(), count);
+                return;
+            }
+            logger.warn("批量确认Lua返回异常, result={}, 段数={}", result, segments.size());
+        } catch (Exception e) {
+            logger.error("批量确认异常，段数={}", segments.size(), e);
+        }
+    }
+
+    /**
+     * 校验批量段落：非空、票数字段一致且合法、日期与席别一致。
+     */
+    private boolean validateSegmentsForBatch(List<TrainStockCommand> segments) {
+        if (segments == null || segments.isEmpty()) {
+            return false;
+        }
+        if (!validateSegmentsForBatchSilent(segments)) {
+            return false;
+        }
+        for (TrainStockCommand c : segments) {
+            if (c.getTrainId() == null
+                    || c.getTrainDate() == null || c.getTrainDate().isEmpty()
+                    || c.getStartStation() == null || c.getEndStation() == null
+                    || c.getSeatType() == null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean validateSegmentsForBatchSilent(List<TrainStockCommand> segments) {
+        if (segments == null || segments.isEmpty()) {
+            return false;
+        }
+        Integer count0 = segments.get(0).getCount();
+        if (count0 == null || count0 <= 0) {
+            return false;
+        }
+        String date0 = segments.get(0).getTrainDate();
+        Integer seat0 = segments.get(0).getSeatType();
+        for (TrainStockCommand c : segments) {
+            if (!Objects.equals(count0, c.getCount())
+                    || !Objects.equals(date0, c.getTrainDate())
+                    || !Objects.equals(seat0, c.getSeatType())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -165,10 +324,10 @@ public class StockLockServiceImpl implements StockLockService {
             // 尝试获取锁（5秒等待，10秒租期）
             if (lock.tryLock(LOCK_WAIT_TIME, LOCK_LEASE_TIME, TimeUnit.SECONDS)) {
                 try {
-                    // 优先使用Lua脚本进行原子确认
-                    String[] keys = new String[]{stockKey, lockedKey};
-                    Object[] args = new Object[]{count, STOCK_EXPIRE_SECONDS};
-                    
+                    // 单段 Lua 仅递减预占 KEYS[1]=locked（与 lua/confirm_stock.lua 对齐）
+                    String[] keys = new String[]{lockedKey};
+                    Object[] args = new Object[]{count};
+
                     List<Long> result = redisUtil.executeScriptFromResource(LUA_CONFIRM_SCRIPT, Arrays.asList(keys), args);
                     
                     if (result != null && result.size() >= 2) {
