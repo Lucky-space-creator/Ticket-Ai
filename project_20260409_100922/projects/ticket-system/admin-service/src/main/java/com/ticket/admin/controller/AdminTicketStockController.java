@@ -1,12 +1,15 @@
 package com.ticket.admin.controller;
 
-import com.ticket.admin.client.TrainStockCacheFeignClient;
-import com.ticket.admin.mapper.TicketStockMapper;
-import com.ticket.entity.TicketStock;
+import com.ticket.admin.dto.TicketStockPageResult;
+import com.ticket.admin.dto.TicketStockSaleEnabledRequest;
+import com.ticket.admin.dto.TicketStockSeatsRequest;
+import com.ticket.admin.service.AdminTicketStockService;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
-import lombok.Data;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/admin/ticket-stocks")
@@ -14,29 +17,36 @@ import org.springframework.web.bind.annotation.*;
 public class AdminTicketStockController {
 
     @Resource
-    private TicketStockMapper ticketStockMapper;
+    private AdminTicketStockService adminTicketStockService;
 
-    @Resource
-    private TrainStockCacheFeignClient trainStockCacheFeignClient;
+    /**
+     * 分页查询 ticket_stock，可按线段车次号、日期、开售状态筛选。
+     */
+    @GetMapping
+    public ResponseUtil.Result<TicketStockPageResult> page(
+            @RequestParam(defaultValue = "1") long current,
+            @RequestParam(defaultValue = "10") long size,
+            @RequestParam(required = false) Long trainId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate trainDate,
+            @RequestParam(required = false) String trainNo,
+            @RequestParam(required = false) Integer saleEnabled
+    ) {
+        TicketStockPageResult data = adminTicketStockService.page(current, size, trainId, trainDate, trainNo, saleEnabled);
+        return ResponseUtil.success(data);
+    }
 
-    @PutMapping("/{id}/sale-enabled")
-    public ResponseUtil.Result<Void> updateSaleEnabled(@PathVariable Long id, @RequestBody SaleEnabledBody body) {
-        if (body == null || (body.getSaleEnabled() != 0 && body.getSaleEnabled() != 1)) {
-            return ResponseUtil.error("saleEnabled 须为 0 或 1");
-        }
-        TicketStock ts = ticketStockMapper.selectById(id);
-        if (ts == null) {
-            return ResponseUtil.error("库存记录不存在");
-        }
-        ts.setSaleEnabled(body.getSaleEnabled());
-        ticketStockMapper.updateById(ts);
-        trainStockCacheFeignClient.invalidateTicketStock(id);
+    /**
+     * 调整总座与余座；变更后刷新 train-service 余票缓存。
+     */
+    @PutMapping("/{id}/seats")
+    public ResponseUtil.Result<Void> updateSeats(@PathVariable Long id, @RequestBody TicketStockSeatsRequest body) {
+        adminTicketStockService.updateSeats(id, body);
         return ResponseUtil.success("更新成功", null);
     }
 
-    @Data
-    public static class SaleEnabledBody {
-        /** 1 开售，0 停售 */
-        private Integer saleEnabled;
+    @PutMapping("/{id}/sale-enabled")
+    public ResponseUtil.Result<Void> updateSaleEnabled(@PathVariable Long id, @RequestBody TicketStockSaleEnabledRequest body) {
+        adminTicketStockService.updateSaleEnabled(id, body);
+        return ResponseUtil.success("更新成功", null);
     }
 }

@@ -20,6 +20,11 @@ public class TrainInternalRouteController {
     @Resource
     private RouteBookingValidationService routeBookingValidationService;
 
+    /**
+     * 校验行程
+     * @param body 行程校验请求
+     * @return  行程校验响应
+     */
     @PostMapping("/validate")
     public ResponseUtil.Result<RouteValidationResult> validate(@RequestBody RouteValidationRequest body) {
         try {

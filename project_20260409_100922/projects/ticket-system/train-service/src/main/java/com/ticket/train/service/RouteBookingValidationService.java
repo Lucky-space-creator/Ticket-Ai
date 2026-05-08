@@ -44,6 +44,11 @@ public class RouteBookingValidationService {
     @Value("${train.route-search.min-transfer-minutes:20}")
     private int minTransferMinutes;
 
+    /**
+     * 校验行程是否可行
+     * @param req 行程校验请求
+     * @return 行程校验结果
+     */
     public RouteValidationResult validate(RouteValidationRequest req) {
         if (req == null || req.getLegs() == null || req.getLegs().isEmpty()) {
             throw new IllegalArgumentException("行程段不能为空");

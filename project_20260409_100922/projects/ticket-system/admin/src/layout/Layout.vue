@@ -20,6 +20,10 @@
             <el-icon><Box /></el-icon>
             <span>车次管理</span>
           </el-menu-item>
+          <el-menu-item index="/ticket-stocks">
+            <el-icon><Goods /></el-icon>
+            <span>余票管理</span>
+          </el-menu-item>
           <el-menu-item index="/orders">
             <el-icon><List /></el-icon>
             <span>订单管理</span>
@@ -77,7 +81,7 @@
 <script setup>
 import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
-import { PieChart, Box, List, User, ChatDotRound, ArrowDown, Setting, Key, Headset } from '@element-plus/icons-vue'
+import { PieChart, Box, Goods, List, User, ChatDotRound, ArrowDown, Setting, Key, Headset } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const router = useRouter()

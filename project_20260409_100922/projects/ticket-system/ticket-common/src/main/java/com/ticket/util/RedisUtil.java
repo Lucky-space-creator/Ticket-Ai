@@ -54,6 +54,17 @@ public class RedisUtil {
     }
 
     /**
+     * 键不存在时写入并设置过期；存在则返回 false（SETNX + TTL）。
+     */
+    public boolean setIfAbsent(String key, Object value, long ttl, TimeUnit unit) {
+        if (key == null || value == null) {
+            return false;
+        }
+        Boolean ok = redisTemplate.opsForValue().setIfAbsent(key, value, ttl, unit);
+        return Boolean.TRUE.equals(ok);
+    }
+
+    /**
      * 获取缓存
      */
     @SuppressWarnings("unchecked")

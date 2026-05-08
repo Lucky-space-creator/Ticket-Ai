@@ -30,6 +30,11 @@ public class TrainInternalOrderController {
     @Resource
     private TrainRouteSkuService trainRouteSkuService;
 
+    /**
+     * 验证车次库存
+     * @param request 车次库存验证请求
+     * @return 车次库存验证响应
+     */
     @PostMapping("/validate-route")
     public ValidatedRouteSkuResponse validateRoute(@RequestBody ValidateRouteSkuRequest request) {
         return trainRouteSkuService.validateSku(request);

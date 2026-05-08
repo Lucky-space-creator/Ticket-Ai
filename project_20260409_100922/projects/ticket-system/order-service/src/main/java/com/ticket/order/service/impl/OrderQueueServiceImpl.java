@@ -1,12 +1,13 @@
 package com.ticket.order.service.impl;
 
 import cn.hutool.core.util.IdUtil;
+import cn.hutool.crypto.digest.DigestUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticket.dto.RouteLeg;
 import com.ticket.dto.mq.OrderQueueRequest;
-import com.ticket.order.integration.TrainOrderGateway;
 import com.ticket.dto.TrainStockCommands;
+import com.ticket.order.integration.TrainOrderGateway;
 import com.ticket.order.service.OrderQueueService;
 import com.ticket.service.RocketMQProducerService;
 import com.ticket.util.RedisUtil;
@@ -15,24 +16,27 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import static java.lang.Boolean.TRUE;
-
 /**
  * 订单排队服务实现
- * 核心流程：幂等校验 → Redis预扣库存 → MQ入队 → 立即返回requestId
- * 整个过程控制在10ms以内，实现真正的削峰效果
+ * 核心流程：幂等键(可选) → Redis预扣库存 → MQ入队 → 立即返回requestId
  */
 @Service
 public class OrderQueueServiceImpl implements OrderQueueService {
 
     private static final Logger logger = LoggerFactory.getLogger(OrderQueueServiceImpl.class);
 
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     /** 排队结果Redis键前缀 */
     private static final String QUEUE_RESULT_PREFIX = "order:queue:result:";
+
+    /** Idempotency-Key → requestId 绑定 */
+    private static final String IDEM_PREFIX = "order:queue:idem:";
 
     /** 排队结果状态 */
     public static final int STATUS_PROCESSING = 0;
@@ -53,22 +57,40 @@ public class OrderQueueServiceImpl implements OrderQueueService {
     private RedisUtil redisUtil;
 
     @Override
-    public String enqueue(OrderQueueRequest request) {
-        // 1. 生成唯一请求ID（幂等键）
-        String requestId = IdUtil.fastSimpleUUID();
+    public String enqueue(OrderQueueRequest request, String idempotencyKey) {
+        ensureQueueInvariant(request);
 
-        // 2. 幂等校验：检查是否已存在相同请求（防止重复入队）
-        String idempotentKey = QUEUE_RESULT_PREFIX + requestId;
-        Boolean exists = redisUtil.exists(idempotentKey);
-        if (TRUE.equals(exists)) {
-            logger.warn("重复的排队请求，已返回已有结果: requestId={}", requestId);
-            return requestId;
+        Long userId = request.getUserId();
+        if (userId == null) {
+            throw new IllegalArgumentException("userId 不能为空");
         }
 
-        // 3. 初始化排队结果为PROCESSING
-        redisUtil.set(idempotentKey, buildResultJson(STATUS_PROCESSING, null, null), RESULT_TTL_MINUTES, TimeUnit.MINUTES);
+        if (StringUtils.hasText(idempotencyKey)) {
+            String idemStoreKey = idempotencyRedisKey(userId, idempotencyKey);
+            String existingRid = redisUtil.get(idemStoreKey);
+            if (StringUtils.hasText(existingRid)) {
+                logger.info("Idempotency-Key 复用已有 requestId={}", existingRid);
+                return existingRid;
+            }
+        }
 
-        // 4. Redis预扣库存（唯一的同步重量级操作）
+        String requestId = IdUtil.fastSimpleUUID();
+
+        if (StringUtils.hasText(idempotencyKey)) {
+            String idemStoreKey = idempotencyRedisKey(userId, idempotencyKey);
+            if (!redisUtil.setIfAbsent(idemStoreKey, requestId, RESULT_TTL_MINUTES, TimeUnit.MINUTES)) {
+                String winner = redisUtil.get(idemStoreKey);
+                if (StringUtils.hasText(winner)) {
+                    return winner;
+                }
+            }
+        }
+
+        request.setRequestId(requestId);
+
+        String resultKey = QUEUE_RESULT_PREFIX + requestId;
+        redisUtil.set(resultKey, buildResultJson(STATUS_PROCESSING, null, null), RESULT_TTL_MINUTES, TimeUnit.MINUTES);
+
         int pax = request.getItems().size();
         try {
             List<RouteLeg> legs = request.getLegs();
@@ -85,20 +107,14 @@ public class OrderQueueServiceImpl implements OrderQueueService {
                         pax);
             }
         } catch (Exception e) {
-            // 库存扣减失败，直接更新为失败状态
             logger.error("预扣库存失败，标记请求失败: requestId={}, error={}", requestId, e.getMessage());
             updateResult(requestId, STATUS_FAILED, null, e.getMessage());
             throw new RuntimeException(e.getMessage());
         }
 
-        // 5. 设置requestId到请求对象
-        request.setRequestId(requestId);
-
-        // 6. 发送MQ消息到订单队列（异步，不阻塞）
         try {
             rocketMQProducerService.sendOrderQueueMessage(request);
         } catch (RuntimeException mqEx) {
-            // MQ 发送失败：仅释放 Redis 预占，不降级同步下单
             logger.error("MQ发送失败，释放预占: requestId={}, error={}", requestId, mqEx.getMessage());
             try {
                 List<RouteLeg> legs = request.getLegs();
@@ -127,6 +143,27 @@ public class OrderQueueServiceImpl implements OrderQueueService {
         return requestId;
     }
 
+    private static void ensureQueueInvariant(OrderQueueRequest r) {
+        List<RouteLeg> legs = r.getLegs();
+        if (legs != null && !legs.isEmpty()) {
+            RouteLeg l0 = legs.get(0);
+            if (l0 == null || l0.getSegmentId() == null) {
+                throw new IllegalArgumentException("行程首节 segmentId 不能为空");
+            }
+            if (r.getTrainId() == null) {
+                r.setTrainId(l0.getSegmentId());
+            }
+        } else {
+            if (r.getTrainId() == null) {
+                throw new IllegalArgumentException("车次ID不能为空");
+            }
+        }
+    }
+
+    private static String idempotencyRedisKey(Long userId, String idempotencyKey) {
+        return IDEM_PREFIX + userId + ":" + DigestUtil.sha256Hex(idempotencyKey.trim());
+    }
+
     @Override
     public int queryStatus(String requestId) {
         if (requestId == null || requestId.isEmpty()) {
@@ -137,7 +174,7 @@ public class OrderQueueServiceImpl implements OrderQueueService {
             return STATUS_EXPIRED;
         }
         try {
-            JsonNode node = new ObjectMapper().readTree(result);
+            JsonNode node = OBJECT_MAPPER.readTree(result);
             return node.get("status").asInt(STATUS_PROCESSING);
         } catch (Exception e) {
             return STATUS_PROCESSING;
@@ -151,7 +188,7 @@ public class OrderQueueServiceImpl implements OrderQueueService {
             return null;
         }
         try {
-            com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(result);
+            JsonNode node = OBJECT_MAPPER.readTree(result);
             return node.has("orderNo") && !node.get("orderNo").isNull() ? node.get("orderNo").asText() : null;
         } catch (Exception e) {
             return null;
@@ -165,7 +202,7 @@ public class OrderQueueServiceImpl implements OrderQueueService {
             return null;
         }
         try {
-            JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(result);
+            JsonNode node = OBJECT_MAPPER.readTree(result);
             return node.has("errorMessage") ? node.get("errorMessage").asText(null) : null;
         } catch (Exception e) {
             return null;
@@ -173,13 +210,37 @@ public class OrderQueueServiceImpl implements OrderQueueService {
     }
 
     /**
-     * 更新排队结果（由Consumer调用）
+     * 更新排队结果（由Consumer调用）；SUCCESS 后不可降级为 FAILED。
      */
     @Override
     public void updateResult(String requestId, int status, String orderNo, String errorMessage) {
         String key = QUEUE_RESULT_PREFIX + requestId;
-        String json = buildResultJson(status, orderNo, errorMessage);
-        redisUtil.set(key, json, RESULT_TTL_MINUTES, TimeUnit.MINUTES);
+        String current = redisUtil.get(key);
+        if (current == null) {
+            logger.warn("updateResult: 无排队记录 requestId={}", requestId);
+            return;
+        }
+        int cur;
+        try {
+            cur = OBJECT_MAPPER.readTree(current).get("status").asInt(STATUS_PROCESSING);
+        } catch (Exception e) {
+            cur = STATUS_PROCESSING;
+        }
+        if (cur == STATUS_SUCCESS) {
+            if (status == STATUS_SUCCESS) {
+                return;
+            }
+            logger.warn("updateResult: 已是 SUCCESS，拒绝变更为 {}", status);
+            return;
+        }
+        if (cur == STATUS_FAILED && status == STATUS_FAILED) {
+            return;
+        }
+        if (cur == STATUS_FAILED && status == STATUS_SUCCESS) {
+            logger.warn("updateResult: 当前 FAILED，忽略变更为 SUCCESS");
+            return;
+        }
+        redisUtil.set(key, buildResultJson(status, orderNo, errorMessage), RESULT_TTL_MINUTES, TimeUnit.MINUTES);
         if (status == STATUS_SUCCESS) {
             logger.info("排队请求处理成功: requestId={}, orderNo={}", requestId, orderNo);
         } else if (status == STATUS_FAILED) {
@@ -187,9 +248,6 @@ public class OrderQueueServiceImpl implements OrderQueueService {
         }
     }
 
-    /**
-     * 构建结果JSON字符串
-     */
     private String buildResultJson(int status, String orderNo, String errorMessage) {
         StringBuilder sb = new StringBuilder("{\"status\":").append(status);
         if (orderNo != null) {
@@ -206,9 +264,6 @@ public class OrderQueueServiceImpl implements OrderQueueService {
         return sb.toString();
     }
 
-    /**
-     * JSON特殊字符转义
-     */
     private String escapeJson(String text) {
         if (text == null) {
             return "";

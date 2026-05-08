@@ -40,7 +40,7 @@ public class KnowledgeSyncMqConsumer implements RocketMQListener<KnowledgeSyncEv
             log.warn("收到空手册同步事件，跳过");
             return;
         }
-        if (idempotentUtil.isConsumed(MQTopics.KNOWLEDGE_SYNC, event.getMessageId())) {
+        if (idempotentUtil.alreadyConsumed(MQTopics.KNOWLEDGE_SYNC, event.getMessageId())) {
             return;
         }
 
@@ -52,6 +52,7 @@ public class KnowledgeSyncMqConsumer implements RocketMQListener<KnowledgeSyncEv
             documentIngestionService.reconcileManualDocuments();
             log.info("手册对账完成，耗时: {}ms, source={}",
                     System.currentTimeMillis() - startTime, event.getTriggerSource());
+            idempotentUtil.markConsumed(MQTopics.KNOWLEDGE_SYNC, event.getMessageId());
         } catch (Exception e) {
             log.error("手册对账失败(将重试): source={}, error={}",
                     event.getTriggerSource(), e.getMessage());

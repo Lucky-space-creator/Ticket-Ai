@@ -9,7 +9,7 @@ train:
     max-legs: 4
     max-results: 25
     max-bfs-expand: 8000
-    timeout-ms: 800
+    timeout-ms: 800   #超时
 
 rocketmq:
   name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}

@@ -47,7 +47,7 @@ public class AiChatTraceConsumer implements RocketMQListener<ChatRecordEvent> {
                 log.warn("收到空聊天记录事件，跳过");
                 return;
             }
-            if (idempotentUtil.isConsumed(MQTopics.AI_CHAT_TRACE, event.getMessageId())) {
+            if (idempotentUtil.alreadyConsumed(MQTopics.AI_CHAT_TRACE, event.getMessageId())) {
                 return;
             }
 
@@ -65,6 +65,7 @@ public class AiChatTraceConsumer implements RocketMQListener<ChatRecordEvent> {
                     event.getCreatedAt() != null ? event.getCreatedAt() : LocalDateTime.now()
             );
             chatRecordMapper.insert(chatRecord);
+            idempotentUtil.markConsumed(MQTopics.AI_CHAT_TRACE, event.getMessageId());
 
             broadcastToWebSocket(event);
             log.debug("聊天记录持久化完成: userId={}, msgType={}",

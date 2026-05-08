@@ -62,8 +62,10 @@ public class OrderController {
      *   → SUCCESS时拿到orderNo → 跳转支付页面
      */
     @PostMapping
-    public ResponseUtil.Result<?> createOrder(@RequestBody CreateOrderRequest request,
-                                              HttpServletRequest httpRequest) {
+    public ResponseUtil.Result<?> createOrder(
+            @RequestBody CreateOrderRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            HttpServletRequest httpRequest) {
         try {
             Long userId = UserContext.getCurrentUserId();
             if (userId == null) {
@@ -132,7 +134,7 @@ public class OrderController {
             queueRequest.setEnqueueTime(System.currentTimeMillis());
 
             // 5. 入队：Redis预扣 + MQ；入队失败时由 OrderQueueServiceImpl 回滚预占，不降级同步写单
-            String requestId = orderQueueService.enqueue(queueRequest);
+            String requestId = orderQueueService.enqueue(queueRequest, idempotencyKey);
 
             // 6. 异步模式：立即返回 PROCESSING 状态（前端开始轮询）
             Map<String, Object> resultData = new HashMap<>(4);
@@ -256,6 +258,9 @@ public class OrderController {
         if (multi) {
             if (request.getRouteSku() == null || request.getRouteSku().isBlank()) {
                 throw new RuntimeException("route_sku 不能为空");
+            }
+            if (request.getLegs().get(0) == null || request.getLegs().get(0).getSegmentId() == null) {
+                throw new RuntimeException("首节线段ID不能为空");
             }
         } else if (request.getTrainId() == null) {
             throw new RuntimeException("车次ID不能为空");

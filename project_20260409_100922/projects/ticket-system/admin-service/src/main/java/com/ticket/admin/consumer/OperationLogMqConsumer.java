@@ -40,7 +40,7 @@ public class OperationLogMqConsumer implements RocketMQListener<OperationLogEven
                 log.warn("收到空操作日志事件，跳过");
                 return;
             }
-            if (idempotentUtil.isConsumed(MQTopics.OPERATION_LOG, event.getMessageId())) {
+            if (idempotentUtil.alreadyConsumed(MQTopics.OPERATION_LOG, event.getMessageId())) {
                 return;
             }
 
@@ -63,9 +63,11 @@ public class OperationLogMqConsumer implements RocketMQListener<OperationLogEven
             );
 
             operationLogMapper.insert(operationLog);
+            idempotentUtil.markConsumed(MQTopics.OPERATION_LOG, event.getMessageId());
             log.debug("操作日志写入成功: operation={}, module={}",
                     event.getOperation(), event.getModule());
         } catch (DuplicateKeyException e) {
+            idempotentUtil.markConsumed(MQTopics.OPERATION_LOG, event.getMessageId());
             log.debug("操作日志主键冲突，已存在: {}", event.getOperation());
         } catch (Exception e) {
             log.error("处理操作日志事件失败: {}", e.getMessage(), e);

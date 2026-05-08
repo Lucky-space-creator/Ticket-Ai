@@ -37,6 +37,9 @@ public class RouteSearchOption implements Serializable {
     /** 跨站总时长（分钟），同车多段或含换乘的估计值 */
     private Long totalDurationMinutes;
 
+    /**
+     * 一段车次信息
+     */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

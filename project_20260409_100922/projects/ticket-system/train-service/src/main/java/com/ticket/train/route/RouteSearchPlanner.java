@@ -67,6 +67,7 @@ public class RouteSearchPlanner {
      * @return 搜索结果
      */
     public List<RouteSearchOption> search(String rawFrom, String rawTo, LocalDate trainDate, Integer seatType) {
+        // 标准化站名
         String from = StationNameUtil.normalize(rawFrom);
         String to = StationNameUtil.normalize(rawTo);
         if (from.isEmpty() || to.isEmpty() || from.equals(to)) {
@@ -76,11 +77,13 @@ public class RouteSearchPlanner {
         List<Train> all = trainMapper.selectList(new LambdaQueryWrapper<Train>().eq(Train::getStatus, 1));
         //获取所有站点的站序索引
         List<TrainRouteStop> routeStops = trainRouteStopMapper.selectList(null);
+        // 获取所有站点的站序索引，key为站名，value为站序
         Map<String, Integer> stopOrderIndex = TrainSegmentRules.buildStopOrderIndex(routeStops);
         //维护搜索的所有列车
         Map<String, List<Train>> byStart = new HashMap<>();
         for (Train t : all) {
             String k = StationNameUtil.normalize(t.getStartStation());
+            //如果hashMap中不存在的键，则添加一条key=k，value=new ArrayList<>(t)的记录
             byStart.computeIfAbsent(k, x -> new ArrayList<>()).add(t);
         }
 
@@ -100,9 +103,11 @@ public class RouteSearchPlanner {
         }
 
         while (!q.isEmpty() && found.size() < maxResults && expand < maxBfsExpand) {
+            // 如果下一个路径的发车时间超过限制时间，则跳过
             if (System.nanoTime() > deadline) {
                 break;
             }
+            //深度+1，确保搜索结果是深度优先的，不超过最大限制
             expand++;
             // 当前路径
             List<Train> path = q.poll();
@@ -139,6 +144,7 @@ public class RouteSearchPlanner {
             }
         }
         options.sort(Comparator
+                //优先级排序：1.单程 2.直达 3.其他，4.单程最优先，时间越短越优先，价格越低越优先
                 .comparing((RouteSearchOption o) -> typeRank(o.getRouteType()))
                 .thenComparing(o -> o.getTotalDurationMinutes() == null ? Long.MAX_VALUE : o.getTotalDurationMinutes())
                 .thenComparing(o -> o.getTotalPrice() == null ? BigDecimal.ZERO : o.getTotalPrice()));

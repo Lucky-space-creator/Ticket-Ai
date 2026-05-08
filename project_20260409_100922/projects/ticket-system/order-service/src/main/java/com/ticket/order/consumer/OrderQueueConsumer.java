@@ -4,11 +4,12 @@ import com.ticket.dto.RouteLeg;
 import com.ticket.dto.mq.OrderQueueRequest;
 import com.ticket.entity.Order;
 import com.ticket.enums.MQTopics;
-import com.ticket.order.integration.TrainOrderGateway;
 import com.ticket.dto.TrainStockCommands;
+import com.ticket.order.integration.TrainOrderGateway;
 import com.ticket.order.service.OrderQueueDbWriter;
 import com.ticket.order.service.OrderQueueService;
 import com.ticket.order.service.impl.OrderQueueServiceImpl;
+import com.ticket.order.support.OrderQueueRetryClassifier;
 import jakarta.annotation.Resource;
 import org.apache.rocketmq.spring.annotation.ConsumeMode;
 import org.apache.rocketmq.spring.annotation.MessageModel;
@@ -27,8 +28,8 @@ import java.util.List;
 @RocketMQMessageListener(
         topic = MQTopics.ORDER_QUEUE,
         consumerGroup = "order-queue-consumer-group",
-        consumeMode = ConsumeMode.CONCURRENTLY,
-        maxReconsumeTimes = 3,
+        consumeMode = ConsumeMode.ORDERLY,
+        maxReconsumeTimes = 16,
         messageModel = MessageModel.CLUSTERING
 )
 public class OrderQueueConsumer implements RocketMQListener<OrderQueueRequest> {
@@ -68,6 +69,10 @@ public class OrderQueueConsumer implements RocketMQListener<OrderQueueRequest> {
             log.info("排队下单请求处理成功: requestId={}, orderNo={}", requestId, order.getOrderNo());
 
         } catch (Exception e) {
+            if (OrderQueueRetryClassifier.isRetryable(e)) {
+                log.warn("排队下单可重试异常，交由 MQ 重试: requestId={}, error={}", requestId, e.getMessage());
+                throw new RuntimeException(e);
+            }
             log.error("排队下单请求处理失败: requestId={}, error={}", requestId, e.getMessage(), e);
             releasePrelockedStock(request);
             orderQueueService.updateResult(requestId, OrderQueueServiceImpl.STATUS_FAILED, null, e.getMessage());

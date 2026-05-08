@@ -38,12 +38,13 @@ public class TicketOrderCreatedConsumer implements RocketMQListener<OrderCreated
             log.warn("收到空订单创建事件，跳过");
             return;
         }
-        if (idempotentUtil.isConsumed(MQTopics.TICKET_ORDER, event.getMessageId())) {
+        if (idempotentUtil.alreadyConsumed(MQTopics.TICKET_ORDER, event.getMessageId())) {
             return;
         }
 
         log.info("消费订单创建事件: orderNo={}, userId={}", event.getOrderNo(), event.getUserId());
         redisUtil.delete(String.format(CacheKey.USER_ORDERS, event.getUserId()));
         log.debug("已清除用户订单缓存: userId={}", event.getUserId());
+        idempotentUtil.markConsumed(MQTopics.TICKET_ORDER, event.getMessageId());
     }
 }

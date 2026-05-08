@@ -8,39 +8,53 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
- * RocketMQ 幂等性校验工具类
- * 基于Redis实现消息去重，防止重复消费
+ * RocketMQ 消费幂等（Redis）
+ * <p>
+ * 正确用法：先 {@link #alreadyConsumed}，业务处理成功后 {@link #markConsumed}。
+ * 禁止在业务开始前写入终态键（否则进程崩溃会导致重投被跳过、丢单）。
  */
 @Slf4j
 @Component
 public class MQIdempotentUtil {
 
-
-    /** 幂等键前缀 */
     private static final String IDEMPOTENT_KEY_PREFIX = "mq:idempotent:";
 
-    /** 默认过期时间24小时 */
+    private static final String CONSUMED_MARK = "1";
+
     private static final long DEFAULT_TTL_HOURS = 24;
 
     @Resource
     private RedisUtil redisUtil;
 
     /**
-     * 检查消息是否已消费（幂等性判断）
-     * @param topic Topic名称
-     * @param messageId 消息唯一ID
-     * @return true=已消费过(应跳过), false=未消费过(标记为已消费)
+     * 是否已成功消费过（只读，不改变 Redis）
      */
-    public boolean isConsumed(String topic, String messageId) {
-        String key = buildKey(topic, messageId);
-        Boolean exists = redisUtil.exists(key);
-        if (Boolean.TRUE.equals(exists)) {
-            log.debug("消息重复消费，跳过: topic={}, messageId={}", topic, messageId);
-            return true;
+    public boolean alreadyConsumed(String topic, String messageId) {
+        if (topic == null || messageId == null || messageId.isEmpty()) {
+            return false;
         }
-        // 标记为已消费（setIfAbsent保证原子性）
-        redisUtil.set(key, "1", (int) DEFAULT_TTL_HOURS, TimeUnit.HOURS);
-        return false;
+        String key = buildKey(topic, messageId);
+        return Boolean.TRUE.equals(redisUtil.exists(key));
+    }
+
+    /**
+     * 标记消息已成功处理（应在业务提交成功后调用）
+     */
+    public void markConsumed(String topic, String messageId) {
+        if (topic == null || messageId == null || messageId.isEmpty()) {
+            return;
+        }
+        String key = buildKey(topic, messageId);
+        redisUtil.set(key, CONSUMED_MARK, DEFAULT_TTL_HOURS, TimeUnit.HOURS);
+    }
+
+    /**
+     * @deprecated 语义为先占位的乐观“防重”，会导致崩溃后重投被误跳过。请改用 {@link #alreadyConsumed} +
+     *             {@link #markConsumed}。
+     */
+    @Deprecated(forRemoval = false)
+    public boolean isConsumed(String topic, String messageId) {
+        return alreadyConsumed(topic, messageId);
     }
 
     /**

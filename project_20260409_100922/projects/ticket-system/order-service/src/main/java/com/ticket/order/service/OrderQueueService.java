@@ -10,10 +10,12 @@ public interface OrderQueueService {
 
     /**
      * 将下单请求入队（核心方法：Redis预扣+MQ入队）
-     * @param request 排队请求
+     *
+     * @param request           排队请求
+     * @param idempotencyKey    客户端幂等键（如 HTTP Idempotency-Key）；可空表示不跨请求去重
      * @return requestId 用于前端轮询查询结果
      */
-    String enqueue(OrderQueueRequest request);
+    String enqueue(OrderQueueRequest request, String idempotencyKey);
 
     /**
      * 查询排队结果

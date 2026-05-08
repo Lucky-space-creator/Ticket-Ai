@@ -26,6 +26,12 @@ const routes = [
         meta: { title: '车次管理' }
       },
       {
+        path: 'ticket-stocks',
+        name: 'TicketStockList',
+        component: () => import('@/views/TicketStockList.vue'),
+        meta: { title: '余票管理' }
+      },
+      {
         path: 'orders',
         name: 'OrderList',
         component: () => import('@/views/OrderList.vue'),

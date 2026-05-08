@@ -115,6 +115,7 @@ CREATE TABLE `order` (
     `train_no` VARCHAR(20) NULL COMMENT '兼容/展示：首段车次号',
     `route_sku` VARCHAR(256) NULL COMMENT '线段id按序拼接 如 9000001-9000002',
     `route_type` VARCHAR(20) NULL COMMENT 'DIRECT 同车联程 / TRANSFER 换乘 / SINGLE 单段',
+    `queue_request_id` VARCHAR(64) NULL COMMENT 'MQ异步排队requestId幂等键',
     `train_date` DATE NOT NULL COMMENT '乘车日期',
     `start_station` VARCHAR(50) NOT NULL COMMENT '外层出发站',
     `end_station` VARCHAR(50) NOT NULL COMMENT '外层到达站',
@@ -125,6 +126,7 @@ CREATE TABLE `order` (
     `pay_time` DATETIME COMMENT '支付时间',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY `uk_order_no` (`order_no`),
+    UNIQUE KEY `uk_order_queue_request_id` (`queue_request_id`),
     INDEX `idx_user_id` (`user_id`),
     INDEX `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单主表';

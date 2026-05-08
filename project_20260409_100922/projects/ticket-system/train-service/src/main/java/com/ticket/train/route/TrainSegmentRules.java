@@ -21,6 +21,11 @@ public final class TrainSegmentRules {
     private TrainSegmentRules() {
     }
 
+    /**
+     * 构建站序索引
+     * @param stops 站序表
+     * @return 站序索引
+     */
     public static Map<String, Integer> buildStopOrderIndex(List<TrainRouteStop> stops) {
         Map<String, Integer> m = new HashMap<>();
         for (TrainRouteStop s : stops) {
@@ -35,7 +40,7 @@ public final class TrainSegmentRules {
     }
 
     /**
-     * 同车：上一段终点须等于下一段起点；若停靠表能解析出站序则需 a&lt;b&lt;c，否则仅靠线段首尾衔接兜底（避免因未维护 train_route_stop 而无法搜路径）。
+     * 同车：上一段终点须等于下一段起点；若停靠表能解析出站序则需 a<b<c，否则仅靠线段首尾衔接兜底（避免因未维护 train_route_stop 而无法搜路径）。
      */
     public static boolean sameTrainOrderOk(Train prev, Train next, Map<String, Integer> orderIndex) {
         if (!Objects.equals(prev.getTrainNo(), next.getTrainNo())) {
@@ -48,10 +53,7 @@ public final class TrainSegmentRules {
         Integer b = orderIndex.get(stopKey(prev.getTrainNo(), prev.getEndStation()));
         Integer c = orderIndex.get(stopKey(next.getTrainNo(), next.getEndStation()));
         if (a != null && b != null && c != null) {
-            if (a >= b || b >= c) {
-                return false;
-            }
-            return true;
+            return a < b && b < c;
         }
         return true;
     }

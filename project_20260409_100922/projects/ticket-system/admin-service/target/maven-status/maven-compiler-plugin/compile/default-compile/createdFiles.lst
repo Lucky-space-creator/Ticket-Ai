@@ -12,6 +12,7 @@ com\ticket\admin\consumer\OperationLogMqConsumer.class
 com\ticket\admin\mapper\EmployeeMapper.class
 com\ticket\admin\mapper\OperationLogMapper.class
 com\ticket\admin\AdminServiceApplication.class
+com\ticket\admin\config\AdminGlobalExceptionHandler.class
 com\ticket\admin\controller\AdminOrderController.class
 com\ticket\admin\mapper\ChatSessionMapper.class
 com\ticket\admin\service\impl\OrderServiceImpl.class
@@ -34,6 +35,7 @@ com\ticket\admin\mapper\UserMapper.class
 com\ticket\admin\controller\EmployeeController.class
 com\ticket\admin\controller\AdminPermissionController$CreatePermissionRequest.class
 com\ticket\admin\mapper\RoleMapper.class
+com\ticket\admin\dto\TicketStockSaleEnabledRequest.class
 com\ticket\admin\controller\AdminUserController$UpdateRoleRequest.class
 com\ticket\admin\controller\AdminTrainController.class
 com\ticket\admin\controller\AdminPermissionController$UpdateStatusRequest.class

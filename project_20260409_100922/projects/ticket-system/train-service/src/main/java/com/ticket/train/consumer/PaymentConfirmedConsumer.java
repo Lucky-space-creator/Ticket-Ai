@@ -35,7 +35,7 @@ public class PaymentConfirmedConsumer implements RocketMQListener<PaymentConfirm
             log.warn("收到空支付确认事件，跳过");
             return;
         }
-        if (idempotentUtil.isConsumed(MQTopics.TICKET_PAYMENT, event.getMessageId())) {
+        if (idempotentUtil.alreadyConsumed(MQTopics.TICKET_PAYMENT, event.getMessageId())) {
             return;
         }
 
@@ -57,6 +57,7 @@ public class PaymentConfirmedConsumer implements RocketMQListener<PaymentConfirm
                 log.warn("支付确认事件无可执行库存段落: orderNo={}", event.getOrderNo());
             }
             log.info("支付库存确认完成: orderNo={}, count={}", event.getOrderNo(), event.getCount());
+            idempotentUtil.markConsumed(MQTopics.TICKET_PAYMENT, event.getMessageId());
         } catch (Exception e) {
             log.error("处理支付确认事件失败(将重试): orderNo={}, error={}",
                     event.getOrderNo(), e.getMessage());

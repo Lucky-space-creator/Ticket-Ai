@@ -1,5 +1,6 @@
 package com.ticket.order.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.ticket.dto.RouteLeg;
 import com.ticket.dto.mq.OrderQueueRequest;
 import com.ticket.entity.Order;
@@ -13,6 +14,7 @@ import com.ticket.order.mapper.OrderMapper;
 import com.ticket.order.mapper.OrderRouteLegMapper;
 import com.ticket.util.SnowflakeIdUtil;
 import jakarta.annotation.Resource;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +62,7 @@ public class OrderQueueDbWriter {
         Order order = new Order();
         order.setOrderNo(SnowflakeIdUtil.getInstance().nextIdStr());
         order.setUserId(request.getUserId());
+        order.setQueueRequestId(request.getRequestId());
         order.setTrainId(firstLeg != null ? firstLeg.getSegmentId() : request.getTrainId());
         order.setTrainNo(firstLeg != null ? firstLeg.getTrainNo() : trainFallback.getTrainNo());
         order.setRouteSku(request.getRouteSku());
@@ -83,7 +86,20 @@ public class OrderQueueDbWriter {
             order.setDepartTime(LocalDateTime.of(trainDate, trainFallback.getStartTime()));
         }
 
-        orderMapper.insert(order);
+        try {
+            orderMapper.insert(order);
+        } catch (DataIntegrityViolationException ex) {
+            if (request.getRequestId() == null) {
+                throw ex;
+            }
+            Order existing = orderMapper.selectOne(new LambdaQueryWrapper<Order>()
+                    .eq(Order::getQueueRequestId, request.getRequestId())
+                    .last("LIMIT 1"));
+            if (existing == null) {
+                throw ex;
+            }
+            return existing;
+        }
 
         if (legs != null && !legs.isEmpty()) {
             int seq = 1;

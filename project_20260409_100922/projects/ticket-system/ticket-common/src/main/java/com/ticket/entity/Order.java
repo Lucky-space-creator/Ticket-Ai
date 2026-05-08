@@ -52,6 +52,11 @@ public class Order {
     private String routeType;
 
     /**
+     * MQ 异步下单幂等键（与排队 requestId 一致）；唯 NULL 可多条
+     */
+    private String queueRequestId;
+
+    /**
      * 乘车日期
      */
     private LocalDate trainDate;

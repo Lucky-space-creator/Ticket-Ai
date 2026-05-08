@@ -1,6 +1,7 @@
 package com.ticket.config;
 
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.beans.factory.ObjectProvider;
@@ -96,7 +97,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     /**
      * 注册安全过滤器（优先级最高，在所有拦截器之前执行）
      */
-    @org.springframework.context.annotation.Bean
+    @Bean
     @ConditionalOnBean(SecurityFilter.class)
     public FilterRegistrationBean<SecurityFilter> securityFilterRegistration() {
         SecurityFilter securityFilter = securityFilterProvider.getObject();
