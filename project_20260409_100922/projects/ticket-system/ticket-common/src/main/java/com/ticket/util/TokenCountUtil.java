@@ -6,7 +6,7 @@ package com.ticket.util;
  *
  * <p>说明：
  * <ul>
- *   <li>同步场景：LangChain4j Result<String>; 可获取精确 TokenUsage</li>
+ *   <li>同步场景：LangChain4j Result<String>;可获取精确 TokenUsage</li>
  *   <li>流式场景：声明式 Flux<String>; 无法获取精确 TokenUsage，
  *       使用本工具类基于字符数进行估算</li>
  * </ul>

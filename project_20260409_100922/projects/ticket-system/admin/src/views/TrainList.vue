@@ -2,7 +2,6 @@
   <div class="train-list">
     <div class="header">
       <h2>车次管理</h2>
-      <el-button type="primary" @click="handleAdd">添加车次</el-button>
     </div>
     <el-card>
       <el-table :data="trainList" v-loading="loading">
@@ -19,7 +18,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="handleEdit(row)">编辑</el-button>
             <el-button
@@ -29,7 +28,6 @@
             >
               {{ row.status === 1 ? '停运' : '启用' }}
             </el-button>
-            <el-button size="small" type="primary" @click="handleStock(row)">余票</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -44,10 +42,9 @@
       </div>
     </el-card>
 
-    <!-- 添加/编辑弹窗 -->
     <el-dialog
         v-model="dialogVisible"
-        :title="dialogTitle"
+        title="编辑车次"
         width="600px"
         @close="closeDialog"
     >
@@ -96,46 +93,32 @@
         <el-button type="primary" @click="submitForm">确定</el-button>
       </template>
     </el-dialog>
-
-    <!-- 余票设置弹窗 -->
-    <el-dialog
-        v-model="stockDialogVisible"
-        title="设置余票"
-        width="800px"
-    >
-      <el-table :data="stockList">
-        <el-table-column prop="trainDate" label="日期" />
-        <el-table-column prop="startStation" label="出发站" />
-        <el-table-column prop="endStation" label="到达站" />
-        <el-table-column prop="seatTypeName" label="席别" />
-        <el-table-column prop="price" label="票价" />
-        <el-table-column prop="availableSeats" label="余票">
-          <template #default="{ row }">
-            <el-input-number v-model="row.availableSeats" :min="0" size="small" />
-          </template>
-        </el-table-column>
-      </el-table>
-      <template #footer>
-        <el-button @click="stockDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveStock">保存</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, reactive, onMounted, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 
+const TRAIN_TYPE_NAMES = { 1: '高铁', 2: '动车', 3: '普快' }
+
 const loading = ref(false)
+/** 全量车次（客户端分页） */
+const allTrains = ref([])
 const trainList = ref([])
 const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 
+function applyPage() {
+  const start = (page.value - 1) * pageSize.value
+  trainList.value = allTrains.value.slice(start, start + pageSize.value)
+}
+
+watch([page, pageSize], applyPage)
+
 const dialogVisible = ref(false)
-const stockDialogVisible = ref(false)
 const formRef = ref()
 const form = reactive({
   id: null,
@@ -156,36 +139,39 @@ const rules = {
   endTime: [{ required: true, message: '请选择到达时间', trigger: 'change' }]
 }
 
-const stockList = ref([])
-const currentTrainId = ref(null)
-
-const dialogTitle = computed(() => form.id ? '编辑车次' : '添加车次')
+function formatTimeForForm(v) {
+  if (v == null || v === '') return ''
+  if (typeof v === 'string') {
+    const s = v.trim()
+    if (/^\d{2}:\d{2}:\d{2}$/.test(s)) return s
+    if (/^\d{2}:\d{2}$/.test(s)) return `${s}:00`
+    return s
+  }
+  if (typeof v === 'object' && v.hour != null) {
+    const z = (n) => String(n).padStart(2, '0')
+    return `${z(v.hour)}:${z(v.minute ?? 0)}:${z(v.second ?? 0)}`
+  }
+  return String(v)
+}
 
 const fetchData = async () => {
   loading.value = true
   try {
-    // 调用管理端接口（待实现）
-    // 暂时使用模拟数据
-    const res = await request.get('/api/trains/search', {
-      params: {
-        startStation: '',
-        endStation: '',
-        trainDate: new Date().toISOString().split('T')[0]
-      }
-    })
-    if (res.code === 200) {
-      trainList.value = res.data.map(item => ({
+    const res = await request.get('/api/admin/trains')
+    if (res.code === 200 && Array.isArray(res.data)) {
+      allTrains.value = res.data.map((item) => ({
         id: item.id,
         trainNo: item.trainNo,
         trainType: item.trainType,
-        trainTypeName: item.trainTypeName,
+        trainTypeName: TRAIN_TYPE_NAMES[item.trainType] ?? '',
         startStation: item.startStation,
         endStation: item.endStation,
-        startTime: item.startTime,
-        endTime: item.endTime,
-        status: 1 // 默认正常
+        startTime: formatTimeForForm(item.startTime),
+        endTime: formatTimeForForm(item.endTime),
+        status: item.status != null ? item.status : 1
       }))
-      total.value = trainList.value.length
+      total.value = allTrains.value.length
+      applyPage()
     }
   } catch (error) {
     console.error('获取车次列表失败:', error)
@@ -194,23 +180,23 @@ const fetchData = async () => {
   }
 }
 
-const handleAdd = () => {
-  Object.keys(form).forEach(key => {
-    form[key] = key === 'trainType' ? 1 : key === 'status' ? 1 : ''
-  })
-  form.id = null
-  dialogVisible.value = true
-}
-
 const handleEdit = (row) => {
-  Object.assign(form, row)
+  Object.assign(form, {
+    id: row.id,
+    trainNo: row.trainNo,
+    trainType: row.trainType,
+    startStation: row.startStation,
+    endStation: row.endStation,
+    startTime: row.startTime,
+    endTime: row.endTime,
+    status: row.status
+  })
   dialogVisible.value = true
 }
 
 const toggleStatus = async (row) => {
   const newStatus = row.status === 1 ? 0 : 1
   try {
-    // 调用接口更新状态
     await request.put(`/api/admin/trains/${row.id}/status`, { status: newStatus })
     ElMessage.success('操作成功')
     row.status = newStatus
@@ -219,36 +205,16 @@ const toggleStatus = async (row) => {
   }
 }
 
-const handleStock = (row) => {
-  currentTrainId.value = row.id
-  // 获取余票数据（待实现）
-  stockList.value = [{
-    trainDate: '2024-04-10',
-    startStation: row.startStation,
-    endStation: row.endStation,
-    seatTypeName: '二等座',
-    price: 553.0,
-    availableSeats: 100
-  }]
-  stockDialogVisible.value = true
-}
-
 const closeDialog = () => {
   formRef.value?.resetFields()
 }
 
 const submitForm = async () => {
-  if (!formRef.value) return
+  if (!formRef.value || !form.id) return
   await formRef.value.validate(async (valid) => {
     if (valid) {
       try {
-        if (form.id) {
-          // 更新
-          await request.put(`/api/admin/trains/${form.id}`, form)
-        } else {
-          // 新增
-          await request.post('/api/admin/trains', form)
-        }
+        await request.put(`/api/admin/trains/${form.id}`, form)
         ElMessage.success('操作成功')
         dialogVisible.value = false
         fetchData()
@@ -257,17 +223,6 @@ const submitForm = async () => {
       }
     }
   })
-}
-
-const saveStock = async () => {
-  try {
-    // 调用接口保存余票设置
-    await request.post(`/api/admin/trains/${currentTrainId.value}/stock`, stockList.value)
-    ElMessage.success('保存成功')
-    stockDialogVisible.value = false
-  } catch (error) {
-    ElMessage.error('保存失败')
-  }
 }
 
 onMounted(() => {

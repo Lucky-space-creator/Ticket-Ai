@@ -44,6 +44,10 @@
             <el-icon><Key /></el-icon>
             <span>权限管理</span>
           </el-menu-item>
+          <el-menu-item index="/system/logs">
+            <el-icon><Document /></el-icon>
+            <span>操作日志</span>
+          </el-menu-item>
           <el-menu-item index="/customer-service">
             <el-icon><Headset /></el-icon>
             <span>客服工作台</span>
@@ -81,7 +85,7 @@
 <script setup>
 import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
-import { PieChart, Box, Goods, List, User, ChatDotRound, ArrowDown, Setting, Key, Headset } from '@element-plus/icons-vue'
+import { PieChart, Box, Goods, List, User, ChatDotRound, ArrowDown, Setting, Key, Headset, Document } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const router = useRouter()

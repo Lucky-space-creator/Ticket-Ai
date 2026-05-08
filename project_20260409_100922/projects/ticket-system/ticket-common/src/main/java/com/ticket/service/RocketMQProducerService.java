@@ -72,7 +72,9 @@ public class RocketMQProducerService {
     }
 
     /**
-     * 发送操作日志事件（异步写入DB）
+     * 发送操作日志事件：Topic {@link com.ticket.enums.MQTopics#OPERATION_LOG}，异步发送不阻塞调用线程。
+     * <p>由 admin-service 的 {@code OperationLogMqConsumer} 订阅并写入 {@code operation_log}；
+     * 消息的 KEYS 头为 {@code operation + 时间戳}，仅作 RocketMQ 路由辅助，消费幂等请以 payload 内 {@code messageId} 为准。</p>
      */
     public void sendOperationLogEvent(OperationLogEvent event) {
         sendMessage(MQTopics.OPERATION_LOG,

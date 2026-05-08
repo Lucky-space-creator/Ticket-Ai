@@ -1,33 +1,40 @@
-package com.ticket.config;
+package com.ticket.checkconfig;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.rocketmq.spring.autoconfigure.RocketMQAutoConfiguration;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.lang.NonNull;
 
 /**
- * RocketMQ 启动探测：在 {@link RocketMQTemplate} 初始化完成后立刻拉取路由，
- * 确保 NameServer 可达后再装配依赖 MQ 的业务 Bean。
+ * RocketMQ 启动探测：在 {@link RocketMQTemplate} 初始化完成后立刻拉取路由。
+ * <p>放在包 {@code com.ticket.autoconfigure}，仅通过 {@code AutoConfiguration.imports} 加载，
+ * 避免与各服务对 {@code com.ticket.config} 的组件扫描重复注册。</p>
+ * <p>使用 {@code @AutoConfiguration(after = RocketMQAutoConfiguration)}，避免原先整类
+ * {@code @ConditionalOnBean(RocketMQTemplate)} 在 RocketMQ 自动配置尚未注册 Bean 时被判定为 false，
+ * 导致探测类从未加载、控制台无任何探测日志。</p>
  */
-@Configuration(proxyBeanMethods = false)
-@ConditionalOnBean(RocketMQTemplate.class)
+@AutoConfiguration(after = RocketMQAutoConfiguration.class)
+@ConditionalOnClass(RocketMQTemplate.class)
+@Slf4j
 public class RocketMQCheckConfig {
 
-    /** Broker 内置 topic，用于探测路由，无需预建业务 topic */
     private static final String PROBE_TOPIC = "TBW102";
 
     @Bean
+    @ConditionalOnBean(RocketMQTemplate.class)
     public RocketMQTemplateStartupProbe rocketMQTemplateStartupProbe(
             @Value("${rocketmq.enabled:true}") boolean enabled,
             @Value("${rocketmq.detect-enabled:true}") boolean detectEnabled,
-            @Value("${rocketmq.fail-fast:true}") boolean failFast) {
+            @Value("${rocketmq.fail-fast:false}") boolean failFast) {
         return new RocketMQTemplateStartupProbe(enabled, detectEnabled, failFast);
     }
 
@@ -49,6 +56,7 @@ public class RocketMQCheckConfig {
             if (!(bean instanceof RocketMQTemplate template)) {
                 return bean;
             }
+            log.info("RocketMQ 启动探测: beanName={}, probeTopic={}", beanName, PROBE_TOPIC);
             if (!enabled) {
                 log.info("RocketMQ 已全局禁用(rocketmq.enabled=false)，跳过启动探测");
                 return bean;

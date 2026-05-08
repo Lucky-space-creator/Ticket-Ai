@@ -35,7 +35,7 @@
     </logger>
 
     <logger name="org.apache.rocketmq" level="INFO"/>
-    <logger name="com.ticket.config.RocketMQCheckConfig" level="DEBUG"/>
+    <logger name="com.ticket.checkconfig.RocketMQCheckConfig" level="DEBUG"/>
     <logger name="com.ticket.order.service.impl" level="DEBUG"/>
     <logger name="com.ticket.order.controller.OrderController" level="DEBUG"/>
     <logger name="com.ticket.order.mapper" level="DEBUG"/>

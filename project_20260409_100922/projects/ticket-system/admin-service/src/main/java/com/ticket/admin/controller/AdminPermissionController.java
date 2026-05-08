@@ -1,6 +1,9 @@
 package com.ticket.admin.controller;
 
+import com.ticket.annotation.OperationLog;
 import com.ticket.entity.Permission;
+import com.ticket.operationlog.Module;
+import com.ticket.operationlog.Operation;
 import com.ticket.service.PermissionService;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
@@ -38,7 +41,7 @@ public class AdminPermissionController {
     }
 
     @GetMapping("/{id}")
-    public ResponseUtil.Result<Permission> detail(@PathVariable Long id) {
+    public ResponseUtil.Result<Permission> detail(@PathVariable("id") Long id) {
         Permission permission = permissionService.getById(id);
         if (permission == null) {
             return ResponseUtil.error("权限不存在");
@@ -46,6 +49,7 @@ public class AdminPermissionController {
         return ResponseUtil.success(permission);
     }
 
+    @OperationLog(module = Module.ROLE_PERMISSION, operation = Operation.CREATE_PERMISSION)
     @PostMapping
     public ResponseUtil.Result<Permission> create(@RequestBody CreatePermissionRequest request) {
         Permission permission = new Permission();
@@ -65,8 +69,9 @@ public class AdminPermissionController {
         return ResponseUtil.success("创建成功", permission);
     }
 
+    @OperationLog(module = Module.ROLE_PERMISSION, operation = Operation.UPDATE_PERMISSION)
     @PutMapping("/{id}")
-    public ResponseUtil.Result<Permission> update(@PathVariable Long id, @RequestBody UpdatePermissionRequest request) {
+    public ResponseUtil.Result<Permission> update(@PathVariable("id") Long id, @RequestBody UpdatePermissionRequest request) {
         Permission permission = permissionService.getById(id);
         if (permission == null) {
             return ResponseUtil.error("权限不存在");
@@ -85,8 +90,9 @@ public class AdminPermissionController {
         return ResponseUtil.success("更新成功", permission);
     }
 
+    @OperationLog(module = Module.ROLE_PERMISSION, operation = Operation.UPDATE_PERMISSION_STATUS)
     @PutMapping("/{id}/status")
-    public ResponseUtil.Result<?> updateStatus(@PathVariable Long id, @RequestBody UpdateStatusRequest request) {
+    public ResponseUtil.Result<?> updateStatus(@PathVariable("id") Long id, @RequestBody UpdateStatusRequest request) {
         Permission permission = permissionService.getById(id);
         if (permission == null) {
             return ResponseUtil.error("权限不存在");
@@ -96,8 +102,9 @@ public class AdminPermissionController {
         return ResponseUtil.success("状态更新成功");
     }
 
+    @OperationLog(module = Module.ROLE_PERMISSION, operation = Operation.DELETE_PERMISSION)
     @DeleteMapping("/{id}")
-    public ResponseUtil.Result<?> delete(@PathVariable Long id) {
+    public ResponseUtil.Result<?> delete(@PathVariable("id") Long id) {
         Permission permission = permissionService.getById(id);
         if (permission == null) {
             return ResponseUtil.error("权限不存在");

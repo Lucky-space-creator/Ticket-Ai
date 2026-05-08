@@ -4,6 +4,9 @@ import com.ticket.admin.dto.TicketStockPageResult;
 import com.ticket.admin.dto.TicketStockSaleEnabledRequest;
 import com.ticket.admin.dto.TicketStockSeatsRequest;
 import com.ticket.admin.service.AdminTicketStockService;
+import com.ticket.annotation.OperationLog;
+import com.ticket.operationlog.Module;
+import com.ticket.operationlog.Operation;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -38,14 +41,16 @@ public class AdminTicketStockController {
     /**
      * 调整总座与余座；变更后刷新 train-service 余票缓存。
      */
+    @OperationLog(module = Module.TICKET_STOCK, operation = Operation.ADJUST_SEATS, description = "修改总座/余座并刷新缓存")
     @PutMapping("/{id}/seats")
-    public ResponseUtil.Result<Void> updateSeats(@PathVariable Long id, @RequestBody TicketStockSeatsRequest body) {
+    public ResponseUtil.Result<Void> updateSeats(@PathVariable("id") Long id, @RequestBody TicketStockSeatsRequest body) {
         adminTicketStockService.updateSeats(id, body);
         return ResponseUtil.success("更新成功", null);
     }
 
+    @OperationLog(module = Module.TICKET_STOCK, operation = Operation.SALE_SWITCH, description = "设置线段库存是否开售")
     @PutMapping("/{id}/sale-enabled")
-    public ResponseUtil.Result<Void> updateSaleEnabled(@PathVariable Long id, @RequestBody TicketStockSaleEnabledRequest body) {
+    public ResponseUtil.Result<Void> updateSaleEnabled(@PathVariable("id") Long id, @RequestBody TicketStockSaleEnabledRequest body) {
         adminTicketStockService.updateSaleEnabled(id, body);
         return ResponseUtil.success("更新成功", null);
     }

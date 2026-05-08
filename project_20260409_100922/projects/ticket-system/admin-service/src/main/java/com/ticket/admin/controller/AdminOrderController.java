@@ -4,10 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ticket.admin.service.AdminUserService;
 import com.ticket.admin.mapper.OrderItemMapper;
+import com.ticket.annotation.OperationLog;
 import com.ticket.admin.service.OrderService;
 import com.ticket.entity.Order;
 import com.ticket.entity.OrderItem;
 import com.ticket.entity.User;
+import com.ticket.operationlog.Module;
+import com.ticket.operationlog.Operation;
 import com.ticket.util.CryptoUtil;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
@@ -70,6 +73,7 @@ public class AdminOrderController {
         return ResponseUtil.success(order);
     }
 
+    @OperationLog(module = Module.ORDER, operation = Operation.ADMIN_ORDER_REFUND, description = "管理端发起订单退款")
     @PostMapping("/{orderNo}/refund")
     public ResponseUtil.Result<?> refund(@PathVariable("orderNo") String orderNo) {
         Order order = orderService.getOne(

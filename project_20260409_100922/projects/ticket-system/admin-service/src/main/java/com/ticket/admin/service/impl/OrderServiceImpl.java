@@ -76,6 +76,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         return order;
     }
 
+    /**
+     * 退票
+     * @param userId 用户ID
+     * @param orderNo 订单编号
+     * @return 是否成功
+     */
     @Override
     public boolean refundOrder(Long userId, String orderNo) {
         ResponseUtil.Result<Void> result = orderRefundFeignClient.refund(new OrderRefundCommand(orderNo, userId));

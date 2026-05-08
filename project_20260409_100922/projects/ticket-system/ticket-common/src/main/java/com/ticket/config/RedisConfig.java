@@ -33,7 +33,11 @@ public class RedisConfig {
 
         // 创建 ObjectMapper
         ObjectMapper mapper = new ObjectMapper();
+        // 设置 ObjectMapper 的属性：强制 Jackson 能够访问所有类的字段（包括 private 字段），而不需要 getter/setter 方法
+        //PropertyAccessor.ALL：应用于所有类型的属性（字段、getter、setter、构造器等）
+        //JsonAutoDetect.Visibility.ANY：对所有可见性级别（private、protected、public）都进行检测
         mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        //在 JSON 中自动包含类型信息，解决多态序列化/反序列化时丢失具体类型的问题。
         mapper.activateDefaultTyping(mapper.getPolymorphicTypeValidator(), ObjectMapper.DefaultTyping.NON_FINAL);
 
         // 处理 Java 8 时间类型

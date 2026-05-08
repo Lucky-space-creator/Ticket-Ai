@@ -46,7 +46,7 @@ public class TraceMdcHelper {
         try {
             Map<String, String> contextMap = MDC.getCopyOfContextMap();
             if (contextMap == null) {
-                contextMap = new java.util.HashMap<>(2);
+                contextMap = new HashMap<>(2);
             }
             contextMap.put(TraceContext.TRACE_ID_KEY, traceId);
             MDC.setContextMap(contextMap);

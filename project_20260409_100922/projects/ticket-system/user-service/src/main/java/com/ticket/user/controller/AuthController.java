@@ -1,11 +1,14 @@
 package com.ticket.user.controller;
 
+import com.ticket.annotation.OperationLog;
 import com.ticket.dto.UserLoginRequest;
 import com.ticket.dto.UserRegisterRequest;
 import com.ticket.entity.Role;
 import com.ticket.entity.User;
 import com.ticket.enums.CacheKey;
 import com.ticket.enums.ResponseCode;
+import com.ticket.operationlog.Module;
+import com.ticket.operationlog.Operation;
 import com.ticket.user.service.RoleService;
 import com.ticket.user.service.UserService;
 import com.ticket.util.CryptoUtil;
@@ -43,6 +46,7 @@ public class AuthController {
     /**
      * 用户注册
      */
+    @OperationLog(module = Module.USER_AUTH, operation = Operation.USER_REGISTER, description = "C 端账号注册")
     @PostMapping("/register")
     public ResponseUtil.Result<?> register(@Valid @RequestBody UserRegisterRequest request) {
         try {
@@ -83,6 +87,7 @@ public class AuthController {
     /**
      * 用户登录
      */
+    @OperationLog(module = Module.USER_AUTH, operation = Operation.USER_LOGIN, description = "C 端账号登录")
     @PostMapping("/login")
     public ResponseUtil.Result<?> login(@Valid @RequestBody UserLoginRequest request) {
         try {

@@ -32,7 +32,7 @@ public class AdminStatsController {
      * @param type 趋势类型：daily, weekly, monthly
      */
     @GetMapping("/trend/{type}")
-    public ResponseUtil.Result<Map<String, Object>> getTrend(@PathVariable String type) {
+    public ResponseUtil.Result<Map<String, Object>> getTrend(@PathVariable("type") String type) {
         Map<String, Object> trend = statsService.getTrendStats(type);
         return ResponseUtil.success(trend);
     }

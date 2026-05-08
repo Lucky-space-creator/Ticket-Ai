@@ -19,7 +19,7 @@ import java.util.List;
  * 拦截器执行顺序：SecurityFilter → RateLimitInterceptor → AuthenticationInterceptor → PermissionInterceptor
  */
 @Configuration
-@EnableAspectJAutoProxy
+@EnableAspectJAutoProxy  // 启用AspectJ自动代理
 public class WebMvcConfig implements WebMvcConfigurer {
 
     private final ObjectProvider<AuthenticationInterceptor> authenticationInterceptorProvider;
@@ -40,6 +40,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
         this.securityFilterProvider = securityFilterProvider;
     }
 
+    /**
+     * 跨域支持
+     */
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
@@ -49,6 +52,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .maxAge(3600);
     }
 
+    /**
+     * 添加拦截器
+     */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         // 0. 限流拦截器（最先执行）
@@ -98,7 +104,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
      * 注册安全过滤器（优先级最高，在所有拦截器之前执行）
      */
     @Bean
-    @ConditionalOnBean(SecurityFilter.class)
+    @ConditionalOnBean(SecurityFilter.class) // 只有安全过滤器时才启用
     public FilterRegistrationBean<SecurityFilter> securityFilterRegistration() {
         SecurityFilter securityFilter = securityFilterProvider.getObject();
         FilterRegistrationBean<SecurityFilter> registration = new FilterRegistrationBean<>();

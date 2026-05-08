@@ -282,4 +282,26 @@ public class JwtUtil {
         }
         return null;
     }
+
+    /**
+     * 从 Token 中解析用于展示的「姓名/账号」字符串，供操作日志 {@code username} 等场景使用。
+     * <ul>
+     *   <li>员工 Token：JWT 中含 {@code name} 时优先返回姓名；否则退回 {@code phone}。</li>
+     *   <li>普通用户 Token：通常仅有 {@code phone}，与历史 {@link #generateToken(Long, String, Long, String)} 声明一致。</li>
+     * </ul>
+     *
+     * @param token 已去掉 {@code Bearer } 前缀的 JWT 串
+     * @return 展示名；解析失败或无声明时返回 null
+     */
+    public String getDisplayNameFromToken(String token) {
+        Claims claims = getClaimsFromToken(token);
+        if (claims == null) {
+            return null;
+        }
+        String name = claims.get("name", String.class);
+        if (name != null && !name.isBlank()) {
+            return name;
+        }
+        return claims.get("phone", String.class);
+    }
 }

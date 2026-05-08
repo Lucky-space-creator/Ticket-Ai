@@ -1,7 +1,10 @@
 package com.ticket.admin.controller;
 
 import com.ticket.admin.service.AdminUserService;
+import com.ticket.annotation.OperationLog;
 import com.ticket.entity.User;
+import com.ticket.operationlog.Module;
+import com.ticket.operationlog.Operation;
 import com.ticket.util.CryptoUtil;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
@@ -32,8 +35,9 @@ public class AdminUserController {
         return ResponseUtil.success(users);
     }
 
+    @OperationLog(module = Module.USER, operation = Operation.UPDATE_USER_STATUS, description = "后台调整用户启用/禁用")
     @PutMapping("/{id}/status")
-    public ResponseUtil.Result<?> updateStatus(@PathVariable Long id, @RequestBody UpdateStatusRequest request) {
+    public ResponseUtil.Result<?> updateStatus(@PathVariable("id") Long id, @RequestBody UpdateStatusRequest request) {
         User user = adminUserService.getById(id);
         if (user == null) {
             return ResponseUtil.error("用户不存在");
@@ -43,8 +47,9 @@ public class AdminUserController {
         return ResponseUtil.success("状态更新成功");
     }
 
+    @OperationLog(module = Module.USER, operation = Operation.UPDATE_USER_ROLE, description = "后台绑定用户 RBAC 角色")
     @PutMapping("/{id}/role")
-    public ResponseUtil.Result<?> updateRole(@PathVariable Long id, @RequestBody UpdateRoleRequest request) {
+    public ResponseUtil.Result<?> updateRole(@PathVariable("id") Long id, @RequestBody UpdateRoleRequest request) {
         User user = adminUserService.getById(id);
         if (user == null) {
             return ResponseUtil.error("用户不存在");

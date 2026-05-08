@@ -19,7 +19,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
-@ConditionalOnBean(PermissionService.class)
+@ConditionalOnBean(PermissionService.class)  // 只有权限服务时才启用
 public class PermissionInterceptor implements HandlerInterceptor {
 
     @Resource

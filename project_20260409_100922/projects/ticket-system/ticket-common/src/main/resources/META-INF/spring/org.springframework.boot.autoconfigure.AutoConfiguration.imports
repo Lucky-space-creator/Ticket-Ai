@@ -6,3 +6,4 @@ com.ticket.config.RedisConfig
 com.ticket.config.RedisMasterSlaveConfig
 com.ticket.config.WebMvcConfig
 com.ticket.config.AuthenticationInterceptor
+com.ticket.checkconfig.RocketMQCheckConfig

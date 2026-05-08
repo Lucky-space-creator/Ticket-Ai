@@ -313,6 +313,15 @@ public class StockLockServiceImpl implements StockLockService {
         }
     }
 
+    /**
+     * 确认库存是否成功扣减（LUA）
+     * @param trainId
+     * @param trainDate
+     * @param seatType
+     * @param startStation
+     * @param endStation
+     * @param count
+     */
     @Override
     public void confirm(Long trainId, String trainDate, Integer seatType, String startStation, String endStation, int count) {
         String stockKey = CacheKey.formatTrainStockKey(trainId, trainDate, seatType, startStation, endStation);

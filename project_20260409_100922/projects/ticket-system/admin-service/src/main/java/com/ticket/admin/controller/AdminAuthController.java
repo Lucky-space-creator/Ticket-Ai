@@ -2,9 +2,12 @@ package com.ticket.admin.controller;
 
 import com.ticket.admin.service.EmployeeService;
 import com.ticket.admin.service.RoleService;
+import com.ticket.annotation.OperationLog;
 import com.ticket.dto.UserLoginRequest;
 import com.ticket.entity.Employee;
 import com.ticket.entity.Role;
+import com.ticket.operationlog.Module;
+import com.ticket.operationlog.Operation;
 import com.ticket.util.JwtUtil;
 import com.ticket.util.ResponseUtil;
 import jakarta.annotation.Resource;
@@ -28,6 +31,7 @@ public class AdminAuthController {
     @Resource
     private JwtUtil jwtUtil;
 
+    @OperationLog(module = Module.AUTH, operation = Operation.EMPLOYEE_LOGIN, description = "管理端 JWT 登录")
     @PostMapping("/login")
     public ResponseUtil.Result<?> login(@Valid @RequestBody UserLoginRequest request) {
         try {

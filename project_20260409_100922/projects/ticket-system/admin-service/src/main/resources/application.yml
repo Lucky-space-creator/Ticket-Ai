@@ -4,25 +4,29 @@ server:
 # JWT配置
 jwt:
   secret: ticket-system-secret-key-2024-please-change-in-production
-  expiration: 604800000
+  expiration: 604800000  # 7天
 
 rocketmq:
   name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
   producer:
     group: admin-service-producer-group
-  fail-fast: true
+  enabled: true # 是否启用RocketMQ
+  detect-enabled: true # 是否启用RocketMQ检测
+  fail-fast: true  # 启动时是否检查服务是否可用
 
-# 日志配置
+# 说明：rocketmq-spring 在容器里除 RocketMQTemplate 外，消费者多由内部容器注册，
+# IDE 的 Bean 视图里常「只有 Template」；启动后请看日志行 [RocketMQ/admin-service] ...
 logging:
   level:
     com.ticket.admin: INFO
+    com.ticket.service: DEBUG
     com.ticket.mapper: DEBUG
     com.alibaba.cloud.nacos: WARN
     com.alibaba.nacos.client.naming: WARN
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{traceId:-}] %-5level %logger{36} - %msg%n"
 
-# 管理端点
+# 管理端点，用来获取应用信息和监控信息
 management:
   endpoints:
     web:

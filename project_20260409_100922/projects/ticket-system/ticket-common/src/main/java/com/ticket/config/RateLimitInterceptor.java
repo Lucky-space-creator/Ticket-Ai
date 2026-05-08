@@ -1,5 +1,6 @@
 package com.ticket.config;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticket.util.ResponseUtil;
 import com.ticket.util.RedisUtil;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.io.IOException;
+import java.util.Base64;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -147,6 +149,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
                 return Math.min(gatewayConfig.getUserRps(), gatewayConfig.getUserRps() / 2 + 1);
             }
         }
+        // 返回最大限流阈值
         return gatewayConfig.getUserRps();
     }
 
@@ -188,8 +191,8 @@ public class RateLimitInterceptor implements HandlerInterceptor {
             if (parts.length < 2) {
                 return null;
             }
-            String payload = new String(java.util.Base64.getUrlDecoder().decode(parts[1]));
-            com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(payload);
+            String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
+            JsonNode node = objectMapper.readTree(payload);
             if (node.has("userId")) {
                 return node.get("userId").asLong();
             }
@@ -204,6 +207,13 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     /**
      * 简单的Ant路径匹配
+     * @param pattern 匹配模式
+     *                * 表示任意字符，** 表示任意字符（包括斜杠）
+     *                ? 表示任意单个字符
+     *                *? 匹配任意字符，但只匹配一个字符
+     *                **? 匹配任意字符，但只匹配一个字符
+     * @param path 需要匹配的路径
+     *             匹配成功返回true，否则返回false
      */
     private boolean matchAntPath(String pattern, String path) {
         if (pattern.equals(path)) {

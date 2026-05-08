@@ -11,8 +11,9 @@ import org.springframework.core.env.Environment;
 /**
  * 后台管理限界上下文：按 DDD 分层扫描 {@code com.ticket.admin} 下 interfaces / application / infrastructure。
  * 通用技术组件（JWT、拦截器等）仍来自 {@code com.ticket.util}、{@code com.ticket.config}。
+ * <p>必须包含 {@code com.ticket.aspect}，否则 {@link com.ticket.aspect.OperationLogAuditAspect} 不会被注册，操作日志不会发 MQ。</p>
  */
-@SpringBootApplication(scanBasePackages = {"com.ticket.admin", "com.ticket.util", "com.ticket.config"})
+@SpringBootApplication(scanBasePackages = {"com.ticket.admin", "com.ticket.util", "com.ticket.config", "com.ticket.service", "com.ticket.aspect"})
 @MapperScan({"com.ticket.admin.mapper"})
 @EnableDiscoveryClient
 @EnableFeignClients(basePackages = "com.ticket.admin.client")
