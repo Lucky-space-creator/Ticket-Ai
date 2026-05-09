@@ -34,6 +34,9 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
     @Value("${jwt.secret:ticket-system-secret-key-2024-please-change-in-production}")
     private String secret;
 
+    /**
+     * 验证 JWT
+     */
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
@@ -74,6 +77,9 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
         return chain.filter(exchange);
     }
 
+    /**
+     * 匿名路径
+     */
     private static boolean isAnonymous(String path, HttpMethod method) {
         if (MATCHER.match("/actuator/health/**", path) || "/actuator/health".equals(path)) {
             return true;
@@ -94,6 +100,7 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
     }
 
     private static Mono<Void> unauthorized(ServerHttpResponse response) {
+        // 401
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
         return response.setComplete();
     }

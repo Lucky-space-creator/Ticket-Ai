@@ -10,9 +10,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * 车次服务启动类
  */
 @SpringBootApplication(scanBasePackages = "com.ticket")
-@EnableDiscoveryClient
+@EnableDiscoveryClient  // 开启服务注册与发现
 @EnableFeignClients(basePackages = "com.ticket.train.client")
-@EnableScheduling
+@EnableScheduling  // 开启定时任务
 public class TrainServiceApplication {
     public static void main(String[] args) {
         SpringApplication.run(TrainServiceApplication.class, args);

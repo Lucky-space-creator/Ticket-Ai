@@ -8,7 +8,7 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
  * API网关启动类
  */
 @SpringBootApplication
-@EnableDiscoveryClient
+@EnableDiscoveryClient  // 注册服务
 public class GatewayApplication {
 
     public static void main(String[] args) {

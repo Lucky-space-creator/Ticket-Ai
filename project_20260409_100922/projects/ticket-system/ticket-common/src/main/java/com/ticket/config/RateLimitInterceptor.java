@@ -7,6 +7,7 @@ import com.ticket.util.RedisUtil;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -21,10 +22,10 @@ import java.util.concurrent.TimeUnit;
  * 支持三层限流：全局 → IP级别 → 用户级别
  * 支持特定路径的独立限流配置（如下单接口更严格）
  */
+@Slf4j
 @Component
 public class RateLimitInterceptor implements HandlerInterceptor {
 
-    private static final Logger logger = LoggerFactory.getLogger(RateLimitInterceptor.class);
 
     @Resource
     private GatewayConfig gatewayConfig;
@@ -79,7 +80,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
             String clientIp = getClientIp(request);
             if (!checkLimit("rate:ip:" + clientIp + ":", gatewayConfig.getIpRps(), gatewayConfig.getIpWindowSeconds())) {
                 writeLimitExceeded(response, "操作过于频繁，请稍后再试");
-                logger.warn("IP限流触发: ip={}, uri={}", clientIp, uri);
+                log.warn("IP限流触发: ip={}, uri={}", clientIp, uri);
                 return false;
             }
 
@@ -89,7 +90,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
                 int userRps = getUserSpecificLimit(uri);
                 if (!checkLimit("rate:user:" + userId + ":", userRps, gatewayConfig.getUserWindowSeconds())) {
                     writeLimitExceeded(response, "操作过于频繁，请稍后再试");
-                    logger.warn("用户限流触发: userId={}, uri={}", userId, uri);
+                    log.warn("用户限流触发: userId={}, uri={}", userId, uri);
                     return false;
                 }
                 // 下单接口专用严格限流
@@ -97,7 +98,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
                     String orderKey = "rate:order:user:" + userId + ":";
                     if (!checkLimit(orderKey, gatewayConfig.getOrderPerUserPerMinute(), gatewayConfig.getOrderWindowSeconds())) {
                         writeLimitExceeded(response, "下单过于频繁，请稍后再试");
-                        logger.warn("下单限流触发: userId={}, uri={}", userId, uri);
+                        log.warn("下单限流触发: userId={}, uri={}", userId, uri);
                         return false;
                     }
                 }
@@ -105,7 +106,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
             return true;
         } catch (Exception e) {
-            logger.error("限流检查异常，默认放行: uri={}, error={}", uri, e.getMessage());
+            log.error("限流检查异常，默认放行: uri={}, error={}", uri, e.getMessage());
             return true; // 限流组件故障时放行，避免影响正常业务
         }
     }
@@ -200,7 +201,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
                 try { return node.get("sub").asLong(); } catch (Exception ignored) {}
             }
         } catch (Exception e) {
-            logger.debug("从Token解析userId失败: {}", e.getMessage());
+            log.debug("从Token解析userId失败: {}", e.getMessage());
         }
         return null;
     }

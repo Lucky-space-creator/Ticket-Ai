@@ -4,6 +4,9 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+/**
+ * 订单库存统计服务客户端
+ */
 @FeignClient(name = "order-service", contextId = "orderStockStatsClient")
 public interface OrderStockStatsClient {
 
