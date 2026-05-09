@@ -270,7 +270,7 @@ services:
 ### 作者信息
 - **邮箱**：2769067907@qq.com
 - **技术博客**：[CSDN](https://blog.csdn.net/2303_79679395?spm=1000.2115.3001.5343)
-- **GitHub**：[项目仓库](https://github.com/your-username/ticket-system)
+- **GitHub**：[项目仓库](https://github.com/Lucky-space-creator/Ticket-Ai)
 
 ### 项目资料
 - **架构文档**：[docs/ARCHITECTURE.md](./ARCHITECTURE.md)
