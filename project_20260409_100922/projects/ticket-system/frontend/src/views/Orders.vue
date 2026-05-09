@@ -42,13 +42,16 @@
 
             <div class="order-content">
               <div class="train-info">
-                <div class="train-no">{{ order.trainNo }}</div>
+                <div class="train-row">
+                  <span class="train-no">{{ order.trainNo }}</span>
+                  <el-tag v-if="routeBadge(order)" size="small" type="warning">{{ routeBadge(order) }}</el-tag>
+                </div>
                 <div class="route">
                   <span>{{ order.startStation }}</span>
                   <el-icon><Right /></el-icon>
                   <span>{{ order.endStation }}</span>
                 </div>
-                <div class="time">{{ order.trainDate }}</div>
+                <div class="time">{{ formatOrderDate(order.trainDate) }}</div>
               </div>
 
               <div class="price-info">
@@ -92,16 +95,51 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
+import dayjs from 'dayjs'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
+const activeMenu = computed(() => route.path)
+
 const orders = ref([])
+
+function dayjsFromBackend(v) {
+  if (v == null || v === '') return null
+  if (typeof v === 'string') {
+    const d = dayjs(v)
+    return d.isValid() ? d : null
+  }
+  if (Array.isArray(v) && v.length >= 3) {
+    const [y, mo, d] = v
+    const dd = dayjs(new Date(y, mo - 1, d))
+    return dd.isValid() ? dd : null
+  }
+  if (typeof v === 'object' && v.year != null && v.month != null && v.day != null) {
+    const dd = dayjs(new Date(v.year, v.month - 1, v.day))
+    return dd.isValid() ? dd : null
+  }
+  const d = dayjs(v)
+  return d.isValid() ? d : null
+}
+
+const formatOrderDate = (v) => {
+  const d = dayjsFromBackend(v)
+  return d ? d.format('YYYY-MM-DD') : '-'
+}
+
+const routeBadge = (o) => {
+  if (!o?.routeType) return ''
+  if (o.routeType === 'TRANSFER') return '中转'
+  if (o.routeType === 'DIRECT') return '多段'
+  return ''
+}
 
 const loadOrders = async () => {
   try {
@@ -277,11 +315,19 @@ onMounted(() => {
       margin-bottom: 15px;
 
       .train-info {
+        .train-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-wrap: wrap;
+          margin-bottom: 8px;
+        }
+
         .train-no {
           font-size: 18px;
           font-weight: bold;
           color: #1890FF;
-          margin-bottom: 5px;
+          margin-bottom: 0;
         }
 
         .route {

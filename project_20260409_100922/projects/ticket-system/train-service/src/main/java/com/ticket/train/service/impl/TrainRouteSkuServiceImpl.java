@@ -107,7 +107,7 @@ public class TrainRouteSkuServiceImpl implements TrainRouteSkuService {
                     return invalid("同车次线段与停靠序不一致");
                 }
             } else {
-                if (!TrainSegmentRules.transferOk(a, b, trainDate, minTransferMinutes)) {
+                if (!TrainSegmentRules.transferOk(a, b, trainDate, minTransferMinutes, allStops)) {
                     return invalid("换乘时间不足");
                 }
             }

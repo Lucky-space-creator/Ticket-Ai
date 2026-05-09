@@ -52,7 +52,7 @@ public class RouteSearchPlanner {
     @Value("${train.route-search.max-results:25}")
     private int maxResults;
 
-    @Value("${train.route-search.max-bfs-expand:8000}")
+    @Value("${train.route-search.max-bfs-expand:100}")
     private int maxBfsExpand;
 
     @Value("${train.route-search.timeout-ms:800}")
@@ -127,7 +127,7 @@ public class RouteSearchPlanner {
             }
             // 循环byStart的所有列车，判断是否可以继续扩展到当前路径中，满足条件则加入队列
             for (Train next : byStart.getOrDefault(at, List.of())) {
-                if (!canExtend(path, next, trainDate, stopOrderIndex)) {
+                if (!canExtend(path, next, trainDate, stopOrderIndex, routeStops)) {
                     continue;
                 }
                 List<Train> np = new ArrayList<>(path);
@@ -169,15 +169,18 @@ public class RouteSearchPlanner {
      * @param stopOrderIndex 站序索引
      * @return 是否可继续扩展
      */
-    private boolean canExtend(List<Train> path, Train next, LocalDate trainDate, Map<String, Integer> stopOrderIndex) {
+    private boolean canExtend(List<Train> path, Train next, LocalDate trainDate,
+                              Map<String, Integer> stopOrderIndex, List<TrainRouteStop> routeStops) {
         if (path.isEmpty()) {
             return true;
         }
         Train prev = path.get(path.size() - 1);
+        // 同车线段
         if (Objects.equals(prev.getTrainNo(), next.getTrainNo())) {
             return TrainSegmentRules.sameTrainOrderOk(prev, next, stopOrderIndex);
         }
-        return TrainSegmentRules.transferOk(prev, next, trainDate, minTransferMinutes);
+        // 换车线段
+        return TrainSegmentRules.transferOk(prev, next, trainDate, minTransferMinutes, routeStops);
     }
 
     /**

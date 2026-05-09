@@ -242,6 +242,9 @@ public class OrderController {
                 return ResponseUtil.error(ResponseCode.UNAUTHORIZED);
             }
             Order order = orderService.getOrderDetail(orderNo);
+            if (order == null) {
+                return ResponseUtil.error(ResponseCode.ORDER_NOT_FOUND);
+            }
             if (!order.getUserId().equals(userId)) {
                 return ResponseUtil.error(ResponseCode.FORBIDDEN);
             }

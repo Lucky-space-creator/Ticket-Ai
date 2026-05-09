@@ -1,7 +1,6 @@
 <template>
   <div class="order-detail">
     <el-container>
-      <!-- 顶部导航 -->
       <el-header class="header">
         <div class="header-content">
           <div class="logo">12306</div>
@@ -24,23 +23,26 @@
         </div>
       </el-header>
 
-      <!-- 主要内容 -->
       <el-main class="main">
         <el-button icon="ArrowLeft" @click="$router.back()" style="margin-bottom: 20px;">
           返回
         </el-button>
 
-        <el-card v-if="order" class="order-card">
+        <el-skeleton v-if="loading" :rows="12" animated />
+
+        <el-card v-else-if="order" class="order-card">
           <template #header>
             <div class="card-header">
               <span class="order-title">订单详情</span>
-              <el-tag :type="getStatusType(order.status)">
-                {{ getStatusName(order.status) }}
-              </el-tag>
+              <div class="header-tags">
+                <el-tag v-if="routeTypeLabel" type="info" size="small">{{ routeTypeLabel }}</el-tag>
+                <el-tag :type="getStatusType(order.status)">
+                  {{ getStatusName(order.status) }}
+                </el-tag>
+              </div>
             </div>
           </template>
 
-          <!-- 订单基本信息 -->
           <div class="order-section">
             <h3 class="section-title">订单信息</h3>
             <el-descriptions :column="2" border>
@@ -52,39 +54,83 @@
                   {{ getStatusName(order.status) }}
                 </el-tag>
               </el-descriptions-item>
+              <el-descriptions-item label="乘车日期">
+                {{ formatDateOnly(order.trainDate) }}
+              </el-descriptions-item>
               <el-descriptions-item label="创建时间">
-                {{ formatDate(order.createdAt) }}
+                {{ formatDateTime(order.createdAt) }}
               </el-descriptions-item>
               <el-descriptions-item label="支付时间" v-if="order.payTime">
-                {{ formatDate(order.payTime) }}
+                {{ formatDateTime(order.payTime) }}
               </el-descriptions-item>
             </el-descriptions>
           </div>
 
-          <!-- 车次信息 -->
+          <!-- 全程摘要（与 legs 一致：首段发站 ~ 末段到站） -->
           <div class="order-section">
             <h3 class="section-title">车次信息</h3>
-            <div class="train-detail">
+            <div class="route-summary" v-if="summaryFrom && summaryTo">
+              <span class="summary-label">全程</span>
+              <span class="summary-stations">{{ summaryFrom }} → {{ summaryTo }}</span>
+            </div>
+
+            <!-- 多段：每程单独展示车次与起终点时刻 -->
+            <div v-if="isMultiLeg" class="legs-wrap">
+              <el-alert
+                  type="info"
+                  :closable="false"
+                  show-icon
+                  class="transfer-hint"
+                  title="本订单包含多段行程，请按乘车顺序乘车；换乘时请留意车站与发车时间。"
+              />
+              <div
+                  v-for="(leg, idx) in sortedLegs"
+                  :key="leg.id ?? `${leg.legSeq}-${leg.trainNo}`"
+                  class="leg-card"
+              >
+                <div class="leg-card-head">
+                  <span class="leg-index">第 {{ idx + 1 }} 程</span>
+                  <span class="leg-train">{{ leg.trainNo }}</span>
+                  <el-tag type="primary" size="small">{{ getTrainTypeName(leg.trainNo) }}</el-tag>
+                </div>
+                <div class="train-route leg-route">
+                  <div class="station">
+                    <div class="station-name">{{ leg.fromStation }}</div>
+                    <div class="time">{{ formatTime(leg.plannedDepartAt) }}</div>
+                    <div class="date">{{ formatDateOnly(leg.plannedDepartAt) }}</div>
+                  </div>
+                  <div class="arrow">→</div>
+                  <div class="station">
+                    <div class="station-name">{{ leg.toStation }}</div>
+                    <div class="time">{{ formatTime(leg.plannedArriveAt) }}</div>
+                    <div class="date">{{ formatDateOnly(leg.plannedArriveAt) }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 单段 -->
+            <div v-else class="train-detail single">
               <div class="train-header">
-                <div class="train-no">{{ order.trainNo }}</div>
-                <el-tag type="primary">{{ getTrainTypeName() }}</el-tag>
+                <div class="train-no">{{ primaryTrainNo }}</div>
+                <el-tag type="primary">{{ getTrainTypeName(primaryTrainNo) }}</el-tag>
               </div>
               <div class="train-route">
                 <div class="station">
-                  <div class="station-name">{{ order.startStation }}</div>
-                  <div class="time">{{ formatTime(order.departTime) }}</div>
-                  <div class="date">{{ formatDate(order.trainDate) }}</div>
+                  <div class="station-name">{{ primaryFrom }}</div>
+                  <div class="time">{{ formatTime(primaryDepart) }}</div>
+                  <div class="date">{{ formatDateOnly(primaryDepart) }}</div>
                 </div>
                 <div class="arrow">→</div>
                 <div class="station">
-                  <div class="station-name">{{ order.endStation }}</div>
-                  <div class="date">{{ formatDate(order.trainDate) }}</div>
+                  <div class="station-name">{{ primaryTo }}</div>
+                  <div class="time">{{ formatTime(primaryArrive) }}</div>
+                  <div class="date">{{ formatDateOnly(primaryArrive) }}</div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- 票务信息 -->
           <div class="order-section">
             <h3 class="section-title">票务信息</h3>
             <el-descriptions :column="2" border>
@@ -97,7 +143,6 @@
             </el-descriptions>
           </div>
 
-          <!-- 操作按钮 -->
           <div class="order-actions" v-if="order.status === 0">
             <el-button type="success" @click="handlePay">
               立即支付
@@ -113,7 +158,7 @@
           </div>
         </el-card>
 
-        <el-skeleton v-else :rows="10" animated />
+        <el-empty v-else description="未找到订单或加载失败" />
       </el-main>
     </el-container>
   </div>
@@ -136,13 +181,125 @@ const loading = ref(false)
 
 const activeMenu = computed(() => route.path)
 
+/** 兼容 Jackson 对 LocalDate / LocalDateTime 的数组或对象序列化 */
+function dayjsFromBackend(v) {
+  if (v == null || v === '') return null
+  if (typeof v === 'string') {
+    const d = dayjs(v)
+    return d.isValid() ? d : null
+  }
+  if (Array.isArray(v)) {
+    if (v.length >= 6) {
+      const [y, mo, d, h, mi, s] = v
+      const dd = dayjs(new Date(y, mo - 1, d, h, mi, Math.floor(s)))
+      return dd.isValid() ? dd : null
+    }
+    if (v.length >= 3) {
+      const [y, mo, d] = v
+      const dd = dayjs(new Date(y, mo - 1, d))
+      return dd.isValid() ? dd : null
+    }
+  }
+  if (typeof v === 'object') {
+    if (v.year != null && v.monthValue != null && v.dayOfMonth != null) {
+      const dd = dayjs(new Date(
+          v.year,
+          v.monthValue - 1,
+          v.dayOfMonth,
+          v.hour ?? 0,
+          v.minute ?? 0,
+          v.second ?? 0
+      ))
+      return dd.isValid() ? dd : null
+    }
+    if (v.year != null && v.month != null && v.day != null) {
+      const dd = dayjs(new Date(v.year, v.month - 1, v.day))
+      return dd.isValid() ? dd : null
+    }
+  }
+  const d = dayjs(v)
+  return d.isValid() ? d : null
+}
+
+const sortedLegs = computed(() => {
+  const legs = order.value?.legs
+  if (!Array.isArray(legs) || legs.length === 0) return []
+  return [...legs].sort((a, b) => (a.legSeq ?? 0) - (b.legSeq ?? 0))
+})
+
+const isMultiLeg = computed(() => sortedLegs.value.length > 1)
+
+const routeTypeLabel = computed(() => {
+  const t = order.value?.routeType
+  if (t === 'TRANSFER') return '异车中转'
+  if (t === 'DIRECT') return '同车多段'
+  if (isMultiLeg.value) return '多段行程'
+  return ''
+})
+
+const summaryFrom = computed(() => {
+  const legs = sortedLegs.value
+  if (legs.length) return legs[0].fromStation
+  return order.value?.startStation
+})
+
+const summaryTo = computed(() => {
+  const legs = sortedLegs.value
+  if (legs.length) return legs[legs.length - 1].toStation
+  return order.value?.endStation
+})
+
+const primaryLeg = computed(() => sortedLegs.value[0])
+
+const primaryTrainNo = computed(() => {
+  if (primaryLeg.value) return primaryLeg.value.trainNo
+  return order.value?.trainNo
+})
+
+const primaryFrom = computed(() => {
+  if (primaryLeg.value) return primaryLeg.value.fromStation
+  return order.value?.startStation
+})
+
+const primaryTo = computed(() => {
+  if (primaryLeg.value) return primaryLeg.value.toStation
+  return order.value?.endStation
+})
+
+const primaryDepart = computed(() => {
+  if (primaryLeg.value?.plannedDepartAt != null) return primaryLeg.value.plannedDepartAt
+  return order.value?.departTime
+})
+
+const primaryArrive = computed(() => {
+  if (primaryLeg.value?.plannedArriveAt != null) return primaryLeg.value.plannedArriveAt
+  return null
+})
+
+const formatDateTime = (v) => {
+  const d = dayjsFromBackend(v)
+  return d ? d.format('YYYY-MM-DD HH:mm:ss') : ''
+}
+
+const formatDateOnly = (v) => {
+  const d = dayjsFromBackend(v)
+  return d ? d.format('YYYY-MM-DD') : ''
+}
+
+const formatTime = (v) => {
+  const d = dayjsFromBackend(v)
+  return d ? d.format('HH:mm') : '-'
+}
+
 const loadOrderDetail = async () => {
   loading.value = true
+  order.value = null
   try {
     const res = await request.get(`/orders/${route.params.orderNo}`)
     order.value = res.data
   } catch (error) {
     console.error('加载订单详情失败:', error)
+    order.value = null
     ElMessage.error({
       message: '加载订单详情失败',
       duration: 1000
@@ -159,7 +316,7 @@ const getStatusName = (status) => {
     2: '已退票',
     3: '已取消'
   }
-  return statusNames[status] || '未知'
+  return statusNames[status] ?? '未知'
 }
 
 const getStatusType = (status) => {
@@ -169,7 +326,7 @@ const getStatusType = (status) => {
     2: 'info',
     3: 'info'
   }
-  return types[status] || 'info'
+  return types[status] ?? 'info'
 }
 
 const getSeatTypeName = (seatType) => {
@@ -181,27 +338,14 @@ const getSeatTypeName = (seatType) => {
     5: '硬卧',
     6: '硬座'
   }
-  return seatTypeNames[seatType] || '未知'
+  return seatTypeNames[seatType] ?? '未知'
 }
 
-const getTrainTypeName = () => {
-  // 这里可以根据 trainNo 判断车次类型
-  // 简化处理，实际应该从后端获取
-  if (order.value?.trainNo?.startsWith('G')) {
-    return '高铁'
-  } else if (order.value?.trainNo?.startsWith('D')) {
-    return '动车'
-  } else {
-    return '普快'
-  }
-}
-
-const formatDate = (date) => {
-  return dayjs(date).format('YYYY-MM-DD HH:mm:ss')
-}
-
-const formatTime = (dateTime) => {
-  return dayjs(dateTime).format('HH:mm')
+const getTrainTypeName = (trainNo) => {
+  if (!trainNo) return '列车'
+  if (trainNo.startsWith?.('G')) return '高铁'
+  if (trainNo.startsWith?.('D')) return '动车'
+  return '普快'
 }
 
 const handlePay = async () => {
@@ -326,11 +470,20 @@ onMounted(() => {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
 
     .order-title {
       font-size: 18px;
       font-weight: bold;
       color: #333333;
+    }
+
+    .header-tags {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
     }
   }
 
@@ -342,6 +495,65 @@ onMounted(() => {
       font-weight: bold;
       color: #333333;
       margin-bottom: 15px;
+    }
+
+    .route-summary {
+      margin-bottom: 16px;
+      padding: 10px 14px;
+      background: #e6f4ff;
+      border-radius: 6px;
+      font-size: 15px;
+
+      .summary-label {
+        color: #666;
+        margin-right: 10px;
+        font-weight: 500;
+      }
+
+      .summary-stations {
+        color: #1890FF;
+        font-weight: 600;
+      }
+    }
+
+    .transfer-hint {
+      margin-bottom: 16px;
+    }
+
+    .legs-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .leg-card {
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      padding: 16px 20px;
+      border: 1px solid #e8e8e8;
+
+      .leg-card-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+
+        .leg-index {
+          font-weight: bold;
+          color: #333;
+        }
+
+        .leg-train {
+          font-size: 20px;
+          font-weight: bold;
+          color: #1890FF;
+        }
+      }
+
+      .leg-route {
+        padding: 0 20px;
+      }
     }
 
     .train-detail {
@@ -367,19 +579,23 @@ onMounted(() => {
         align-items: center;
         justify-content: space-between;
         padding: 0 40px;
+        gap: 12px;
 
         .station {
           text-align: center;
+          flex: 1;
+          min-width: 0;
 
           .station-name {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: bold;
             color: #333333;
             margin-bottom: 10px;
+            word-break: break-all;
           }
 
           .time {
-            font-size: 28px;
+            font-size: 26px;
             font-weight: bold;
             color: #1890FF;
             margin-bottom: 5px;
@@ -392,8 +608,9 @@ onMounted(() => {
         }
 
         .arrow {
-          font-size: 32px;
+          font-size: 28px;
           color: #999999;
+          flex-shrink: 0;
         }
       }
     }

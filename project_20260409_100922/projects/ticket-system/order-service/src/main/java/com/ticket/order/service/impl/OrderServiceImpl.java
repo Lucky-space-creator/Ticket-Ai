@@ -297,10 +297,16 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Override
     public Order getOrderDetail(String orderNo) {
-        // 先查缓存
+        // 先查缓存（历史缓存可能不含 legs，需补全以便前端展示中转行程）
         String cacheKey = String.format(CacheKey.ORDER_INFO, orderNo);
         Order cached = redisUtil.get(cacheKey);
         if (cached != null) {
+            if (cached.getLegs() == null || cached.getLegs().isEmpty()) {
+                LambdaQueryWrapper<OrderRouteLeg> lw = new LambdaQueryWrapper<>();
+                lw.eq(OrderRouteLeg::getOrderId, cached.getId()).orderByAsc(OrderRouteLeg::getLegSeq);
+                cached.setLegs(orderRouteLegMapper.selectList(lw));
+                redisUtil.set(cacheKey, cached, 30, TimeUnit.MINUTES);
+            }
             return cached;
         }
 

@@ -8,7 +8,7 @@ train:
     min-transfer-minutes: 20
     max-legs: 4
     max-results: 25
-    max-bfs-expand: 8000
+    max-bfs-expand: 100   #bfs
     timeout-ms: 800   #超时
 
 rocketmq:

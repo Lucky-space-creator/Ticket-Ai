@@ -93,7 +93,7 @@ public class RouteBookingValidationService {
             boolean sameTrain = Objects.equals(prev.getTrainNo(), next.getTrainNo());
             boolean ok = sameTrain
                     ? TrainSegmentRules.sameTrainOrderOk(prev, next, stopOrder)
-                    : TrainSegmentRules.transferOk(prev, next, trainDate, minTransferMinutes);
+                    : TrainSegmentRules.transferOk(prev, next, trainDate, minTransferMinutes, stops);
             if (!ok) {
                 throw new IllegalArgumentException(sameTrain ? "同车线段衔接不合法" : "换乘衔接或时刻不满足规则");
             }
