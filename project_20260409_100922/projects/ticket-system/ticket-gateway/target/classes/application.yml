@@ -1,11 +1,10 @@
-# 本地默认配置（当Nacos配置缺失时使用）
-# 503 常见原因：1) Nacos 未启动或服务未注册，lb:// 无可用实例；2) 带 Redis 限流的路由在 Redis 不可用时失败。
+# 本地默认配置（Nacos 配置优先）
+# 限流/鉴权/路由限流参数均由 Nacos gateway.* 统一管理
 server:
   port: 8080
 
-# 必须与 user-service / order-service / customer-service / aichat-service 等 JwtUtil 配置一致，否则带 Token 的请求在网关即 401
-jwt:
-  secret: ticket-system-secret-key-2024-please-change-in-production
+# JWT 密钥：必须由 Nacos 配置中心提供
+# jwt.secret=
 
 spring:
   config:
@@ -13,49 +12,37 @@ spring:
   cloud:
     gateway:
       routes:
-        # 登录/注册不走 Redis 限流（避免本地 Redis 未起时整页 503）
+        # 登录/注册（匿名放行）
         - id: user-service-auth-public
           uri: lb://user-service
           order: -10
           predicates:
             - Path=/api/auth/login,/api/auth/register
 
-        # 用户服务（需限流的业务接口）
+        # 用户服务
         - id: user-service
           uri: lb://user-service
           predicates:
             - Path=/api/user/**,/api/passengers/**
-          filters:
-            - name: RequestRateLimiter
-              args:
-                redis-rate-limiter.replenishRate: 10
-                redis-rate-limiter.burstCapacity: 20
-                key-resolver: "#{@userKeyResolver}"
 
-        # 车次服务路由（含 GET /api/trains/searchRoutes 联程检索）
+        # 车次服务路由
         - id: train-service
           uri: lb://train-service
           predicates:
             - Path=/api/trains/**,/api/ticket-stocks/**
 
-        # 下单排队轮询：高频只读，不走 Redis 限流（与下单/支付限流解耦）
+        # 下单排队轮询：高频只读
         - id: order-service-queue-read
           uri: lb://order-service
           order: -10
           predicates:
             - Path=/api/orders/queue/**
 
-        # 订单服务路由（创建/支付/退票/列表等）
+        # 订单服务路由
         - id: order-service
           uri: lb://order-service
           predicates:
             - Path=/api/orders/**
-          filters:
-            - name: RequestRateLimiter
-              args:
-                redis-rate-limiter.replenishRate: 5
-                redis-rate-limiter.burstCapacity: 10
-                key-resolver: "#{@userKeyResolver}"
 
         # AI聊天服务路由
         - id: aichat-service
@@ -69,13 +56,13 @@ spring:
           predicates:
             - Path=/api/customer-service/**
 
-        # 客服 WebSocket（customer-service 注册为 /ws/chat/**，不经 StripPrefix）
+        # 客服 WebSocket
         - id: customer-service-ws
           uri: lb://customer-service
           predicates:
             - Path=/ws/**
 
-        # 管理端登录单独声明（便于与 Jwt 白名单、后续扩展对齐；order 更高优先于 /api/admin/**）
+        # 管理端登录（匿名放行）
         - id: admin-service-auth-public
           uri: lb://admin-service
           order: -10
@@ -92,20 +79,11 @@ spring:
         - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
         - AddResponseHeader=X-Gateway-Version, ticket-gateway-1.0
 
-      # 关闭按服务名自动暴露路由，避免与显式 /api/** 路由混淆及误暴露内部端口
       discovery:
         locator:
           enabled: false
           lower-case-service-id: true
 
-  # 安全配置（允许跨域）
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri:
-
-# 日志配置
 logging:
   level:
     com.ticket.gateway: INFO
@@ -115,7 +93,6 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
-# 管理端点
 management:
   endpoints:
     web:
