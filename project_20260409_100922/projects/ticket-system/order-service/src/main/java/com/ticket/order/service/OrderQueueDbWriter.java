@@ -41,11 +41,16 @@ public class OrderQueueDbWriter {
     @Resource
     private TrainOrderGateway trainOrderGateway;
 
+    /**
+     * 将 MQ 排队结果写入订单库
+     * @param request 订单排队请求
+     * @return 订单
+     */
     @Transactional(rollbackFor = Exception.class)
     public Order createOrderFromQueue(OrderQueueRequest request) {
         BigDecimal totalAmount = request.getItems().stream()
                 .map(OrderQueueRequest.PassengerItem::getPrice)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .reduce(BigDecimal.ZERO, BigDecimal::add);   // 总金额 = 乘客票价之和
 
         List<RouteLeg> legs = request.getLegs();
         Train trainFallback = legs == null || legs.isEmpty()
@@ -59,6 +64,7 @@ public class OrderQueueDbWriter {
 
         RouteLeg firstLeg = legs != null && !legs.isEmpty() ? legs.get(0) : null;
 
+        // 创建主单
         Order order = new Order();
         order.setOrderNo(SnowflakeIdUtil.getInstance().nextIdStr());
         order.setUserId(request.getUserId());
@@ -101,6 +107,7 @@ public class OrderQueueDbWriter {
             return existing;
         }
 
+        // 如果是多端，则创建行程，将每一段信息插入行程表中
         if (legs != null && !legs.isEmpty()) {
             int seq = 1;
             for (RouteLeg rl : legs) {

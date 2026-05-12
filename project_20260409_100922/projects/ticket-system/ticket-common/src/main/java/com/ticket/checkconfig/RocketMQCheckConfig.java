@@ -27,6 +27,8 @@ import org.springframework.lang.NonNull;
 @Slf4j
 public class RocketMQCheckConfig {
 
+    /** 探测 Topic  **/
+    //检查 RocketMQ NameServer 是否可达以及路由信息能否正常拉取
     private static final String PROBE_TOPIC = "TBW102";
 
     @Bean
@@ -66,6 +68,7 @@ public class RocketMQCheckConfig {
                 return bean;
             }
             try {
+                // 检查 NameServer 是否可达
                 template.getProducer().fetchPublishMessageQueues(PROBE_TOPIC);
                 log.info("RocketMQ NameServer 可达: beanName={}, probeTopic={}, producerGroup={}",
                         beanName, PROBE_TOPIC, template.getProducer().getProducerGroup());

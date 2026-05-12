@@ -65,6 +65,7 @@ public class OrderController {
     @PostMapping
     public ResponseUtil.Result<?> createOrder(
             @RequestBody CreateOrderRequest request,
+            // 前端通过uuid生成 后端通过redis存储，幂等键
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             HttpServletRequest httpRequest) {
         try {

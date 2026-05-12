@@ -12,11 +12,6 @@ import java.util.List;
 public interface OrderService extends IService<Order> {
 
     /**
-     * 创建订单
-     */
-    Order createOrder(Long userId, Long trainId, String trainDate, String startStation, String endStation, Integer seatType, List<OrderItem> items);
-
-    /**
      * 支付订单
      */
     boolean payOrder(Long userId, String orderNo);

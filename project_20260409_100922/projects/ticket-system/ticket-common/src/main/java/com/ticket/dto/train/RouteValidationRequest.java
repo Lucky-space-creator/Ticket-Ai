@@ -7,6 +7,9 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.util.List;
 
+/**
+ * 路径校验请求
+ */
 @Data
 public class RouteValidationRequest implements Serializable {
 
