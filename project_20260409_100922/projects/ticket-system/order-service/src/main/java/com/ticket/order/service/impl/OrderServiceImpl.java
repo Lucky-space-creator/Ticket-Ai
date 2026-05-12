@@ -109,10 +109,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             save(order);
 
             // 5. 保存订单明细
-            for (OrderItem item : items) {
-                item.setOrderId(order.getId());
-                orderItemMapper.insert(item);
-            }
+            orderItemMapper.insertBatch(items);
 
             // 直筒同步下单：单行 order_route_leg
             OrderRouteLeg orl = new OrderRouteLeg();

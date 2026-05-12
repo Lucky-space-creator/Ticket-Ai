@@ -4,6 +4,7 @@ import cn.hutool.core.util.IdUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticket.checkconfig.RocketMQCheckConfig;
 import com.ticket.dto.RouteLeg;
 import com.ticket.dto.mq.OrderQueueRequest;
 import com.ticket.dto.TrainStockCommands;
@@ -30,6 +31,8 @@ public class OrderQueueServiceImpl implements OrderQueueService {
 
     private static final Logger logger = LoggerFactory.getLogger(OrderQueueServiceImpl.class);
 
+    // 用来序列化和反序列化json
+    // 作用：将json字符串转换为json对象，将json对象转换为json字符串
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /** 排队结果Redis键前缀 */
@@ -56,6 +59,12 @@ public class OrderQueueServiceImpl implements OrderQueueService {
     @Resource
     private RedisUtil redisUtil;
 
+    /**
+     * 排队下单
+     * @param request           排队请求
+     * @param idempotencyKey    客户端幂等键（如 HTTP Idempotency-Key）；可空表示不跨请求去重
+     * @return requestId
+     */
     @Override
     public String enqueue(OrderQueueRequest request, String idempotencyKey) {
         ensureQueueInvariant(request);
@@ -65,20 +74,25 @@ public class OrderQueueServiceImpl implements OrderQueueService {
             throw new IllegalArgumentException("userId 不能为空");
         }
 
+        // 1. 检查幂等键
         if (StringUtils.hasText(idempotencyKey)) {
             String idemStoreKey = idempotencyRedisKey(userId, idempotencyKey);
             String existingRid = redisUtil.get(idemStoreKey);
+            // 如果幂等键已存在，则直接返回已存在的requestId
             if (StringUtils.hasText(existingRid)) {
                 logger.info("Idempotency-Key 复用已有 requestId={}", existingRid);
                 return existingRid;
             }
         }
 
+        // 请求ID
         String requestId = IdUtil.fastSimpleUUID();
 
         if (StringUtils.hasText(idempotencyKey)) {
             String idemStoreKey = idempotencyRedisKey(userId, idempotencyKey);
+            // 如果幂等键不存在，则设置幂等键，并设置过期时间为30分钟
             if (!redisUtil.setIfAbsent(idemStoreKey, requestId, RESULT_TTL_MINUTES, TimeUnit.MINUTES)) {
+                // 最终获取到的
                 String winner = redisUtil.get(idemStoreKey);
                 if (StringUtils.hasText(winner)) {
                     return winner;
@@ -89,12 +103,14 @@ public class OrderQueueServiceImpl implements OrderQueueService {
         request.setRequestId(requestId);
 
         String resultKey = QUEUE_RESULT_PREFIX + requestId;
+        // 组装排队结果对象，并设置过期时间为30分钟
         redisUtil.set(resultKey, buildResultJson(STATUS_PROCESSING, null, null), RESULT_TTL_MINUTES, TimeUnit.MINUTES);
 
         int pax = request.getItems().size();
         try {
             List<RouteLeg> legs = request.getLegs();
             if (legs != null && !legs.isEmpty()) {
+                // 根据passengerCount和seatType计算总票数
                 trainOrderGateway.deductStocksBatch(TrainStockCommands.fromRouteLegs(
                         legs, request.getTrainDate(), request.getSeatType(), pax));
             } else {

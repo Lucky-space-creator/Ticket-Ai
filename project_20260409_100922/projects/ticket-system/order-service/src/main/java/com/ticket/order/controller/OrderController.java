@@ -60,6 +60,7 @@ public class OrderController {
      *   POST /api/orders → 返回 { requestId, status:"PROCESSING" }
      *   → 轮询 GET /api/orders/queue/{requestId}
      *   → SUCCESS时拿到orderNo → 跳转支付页面
+     *   idempotencyKey 用于幂等控制 前端通过uuid生成 后端通过redis存储
      */
     @PostMapping
     public ResponseUtil.Result<?> createOrder(

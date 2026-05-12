@@ -22,8 +22,8 @@ import org.springframework.lang.NonNull;
  * {@code @ConditionalOnBean(RocketMQTemplate)} 在 RocketMQ 自动配置尚未注册 Bean 时被判定为 false，
  * 导致探测类从未加载、控制台无任何探测日志。</p>
  */
-@AutoConfiguration(after = RocketMQAutoConfiguration.class)
-@ConditionalOnClass(RocketMQTemplate.class)
+@AutoConfiguration(after = RocketMQAutoConfiguration.class)  // 在 RocketMQ 自动配置后加载
+@ConditionalOnClass(RocketMQTemplate.class)   // 避免在非 RocketMQ 环境下加载
 @Slf4j
 public class RocketMQCheckConfig {
 

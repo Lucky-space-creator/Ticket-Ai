@@ -5,6 +5,7 @@ import com.ticket.dto.mq.OperationLogEvent;
 import com.ticket.entity.OperationLog;
 import com.ticket.enums.MQTopics;
 import com.ticket.util.MQIdempotentUtil;
+import com.ticket.util.RedisUtil;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.MessageModel;
@@ -54,6 +55,9 @@ public class OperationLogMqConsumer implements RocketMQListener<OperationLogEven
 
     @Resource
     private MQIdempotentUtil idempotentUtil;
+
+    @Resource
+    private RedisUtil redisUtil;
 
     /**
      * RocketMQ 回调入口：单条消息一次调用。失败时抛出异常可触发框架重试（受 maxReconsumeTimes 等配置约束）。

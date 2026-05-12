@@ -1,3 +1,5 @@
+
+# Nacos未启动时，使用本地配置
 jwt:
   secret: dev-only-secret-key-at-least-32-chars
 

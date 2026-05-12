@@ -72,6 +72,7 @@ public class OrderQueueRequest implements Serializable {
     @AllArgsConstructor
     @NoArgsConstructor
     public static class PassengerItem implements Serializable {
+        @Serial
         private static final long serialVersionUID = 1L;
         /** 乘客姓名 */
         private String passengerName;
