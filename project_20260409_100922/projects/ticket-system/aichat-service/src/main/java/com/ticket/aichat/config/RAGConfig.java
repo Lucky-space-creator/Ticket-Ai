@@ -204,6 +204,7 @@ public class RAGConfig {
 
         log.info("=== 初始化流式 RAG 服务（集成业务工具） ===");
 
+
         if (streamingChatLanguageModel == null) {
             log.warn("StreamingChatLanguageModel 为 null，流式 RAG 服务可能无法正常工作");
         }

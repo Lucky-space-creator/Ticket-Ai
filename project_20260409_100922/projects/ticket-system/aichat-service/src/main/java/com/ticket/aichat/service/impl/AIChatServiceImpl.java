@@ -49,6 +49,9 @@ public class AIChatServiceImpl implements AIChatService {
     private static final String EMPTY_MODEL_FALLBACK = "抱歉，未获取到有效回答。请换一种问法或稍后重试；"
             + "若与查票、订单相关，请说明日期、出发到达站或订单号。";
 
+    /**
+     * 知识库助手
+     */
     @Resource
     private KnowledgeAssistant knowledgeAssistant;
 
