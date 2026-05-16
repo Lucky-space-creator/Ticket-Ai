@@ -35,6 +35,9 @@ public class MQTopics {
     /** 知识库向量同步（异步向量化） */
     public static final String KNOWLEDGE_SYNC = "knowledge-sync";
 
+    /** 用户画像生成（异步LLM总结+MySQL存储） */
+    public static final String USER_PROFILE_GENERATE = "user-profile-generate";
+
     // ==================== P3 - 低优先级后台 ====================
 
     /** 库存对账事件（可由定时任务触发，暂未使用） */

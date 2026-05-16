@@ -6,10 +6,12 @@ import com.ticket.aichat.rag.lexical.BM25ContentRetriever;
 import com.ticket.aichat.rag.lexical.CalculateBM25;
 import com.ticket.aichat.service.KnowledgeAssistant;
 import com.ticket.aichat.service.StreamingKnowledgeAssistant;
+import com.ticket.aichat.service.UserProfileService;
 import com.ticket.aichat.service.impl.ManualDocImpl;
 import com.ticket.aichat.tool.AIBusinessTool;
 import com.ticket.util.UserContext;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
@@ -33,6 +35,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import reactor.core.publisher.Flux;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -46,7 +49,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Slf4j
 @Configuration
-@ConditionalOnProperty(name = "ai.enabled", havingValue = "true")  // 当启用 ai 服务时，才加载 RAGConfig
+@ConditionalOnProperty(name = "ai.enabled", havingValue = "true")
 public class RAGConfig {
 
 
@@ -59,8 +62,8 @@ public class RAGConfig {
     private final ConcurrentHashMap<String, ChatMemory> chatMemoryMap = new ConcurrentHashMap<>();
 
     @Bean
-    public ChatMemory chatMemory() {
-        return new UserScopedChatMemory();
+    public ChatMemory chatMemory(UserProfileService userProfileService) {
+        return new UserScopedChatMemory(userProfileService);
     }
 
     /**
@@ -71,7 +74,7 @@ public class RAGConfig {
      * @param manualKbGovernance 手册治理：检索结果由外部控制
      * @param expandMultiplier 检索结果数量：检索结果数量乘数
      * @param filteredCap 过滤后的最大数量
-     * @return
+     * @return 手册治理的检索器
      */
     @Bean
     public ContentRetriever manualRagRetriever(
@@ -252,8 +255,18 @@ public class RAGConfig {
         return ms;
     }
 
-    /** 登录用户维度隔离的对话记忆（最多窗口条数见 withMaxMessages）。 */
+    /**
+     * 登录用户维度隔离的对话记忆。
+     * <p>
+     * 每次获取消息列表时，自动注入用户画像作为系统消息，让 LLM 了解用户偏好和历史。
+     */
     private class UserScopedChatMemory implements ChatMemory {
+        private final UserProfileService userProfileService;
+
+        UserScopedChatMemory(UserProfileService userProfileService) {
+            this.userProfileService = userProfileService;
+        }
+
         @Override
         public Object id() {
             return getCurrentUserId();
@@ -266,7 +279,18 @@ public class RAGConfig {
 
         @Override
         public List<ChatMessage> messages() {
-            return getDelegate().messages();
+            List<ChatMessage> delegateMessages = getDelegate().messages();
+            String userProfile = userProfileService.getUserProfile(UserContext.getCurrentUserId());
+
+            if (userProfile == null || userProfile.isBlank()) {
+                return delegateMessages;
+            }
+
+            // 将用户画像作为系统消息注入到对话历史前面
+            List<ChatMessage> merged = new ArrayList<>(delegateMessages.size() + 1);
+            merged.add(SystemMessage.from("【用户画像】" + userProfile));
+            merged.addAll(delegateMessages);
+            return merged;
         }
 
         @Override

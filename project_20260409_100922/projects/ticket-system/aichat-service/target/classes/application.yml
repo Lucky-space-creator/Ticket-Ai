@@ -44,21 +44,20 @@ ai:
     fallback-type: http-api
   ollama:
     base-url: http://192.168.48.135:11434
-    chat-model: llama3.2:3b # qwen2:1.5b不支持LangChain4j中的Tools注解     # 对话模型
+    chat-model: llama3.2:3b
     embedding-model: nomic-embed-text
     temperature: 0.7
     timeout: 600
   http-api:
     base-url: https://api.cphone.vip/v1
-    api-key: ${AI_API_KEY}  #写在本地环境变量
+    api-key: ${AI_API_KEY}
     model: gpt-3.5-turbo
     temperature: 0.7
     timeout: 600
 
 # 知识库：FAQ 仅存 DB；向量仅来自 handbook MD
 knowledge:
-  base-path: knowledge-base                 # MD 手册根目录（工作目录相对路径）
-  # none | reconcile_once | full_rebuild（兼容 legacy: init-on-startup=true 等价 reconcile_once）
+  base-path: knowledge-base
   startup-sync-mode: reconcile_once
 
 # FAQ（表 knowledge_base）：先于 LLM 字面匹配短路；不涉及 Chroma/BM25
@@ -66,7 +65,7 @@ faq:
   match:
     enabled: true
 
-# Chroma 向量集合；embedding 不可用且 allow=true 时降级内存库（仅限开发）
+# Chroma 向量集合（仅知识库 RAG 使用）；embedding 不可用且 allow=true 时降级内存库（仅限开发）
 chroma:
   host: 192.168.48.135
   port: 8000
@@ -74,11 +73,18 @@ chroma:
   allow-in-memory-fallback: true
 
 rag:
-  max-results: 3                   # 最终注入 LLM 的片段条数（单路与混合治理后共用）
-  min-score: 0.7                   # EmbeddingStoreContentRetriever 向量初筛阈值 [0,1]
-  retrieval-expand-multiplier: 5   # 向量检索扩展倍数
-  filtered-cap: 40                 # 过滤片段
-  hybrid: # 混合检索
+  max-results: 3
+  min-score: 0.7
+  retrieval-expand-multiplier: 5
+  filtered-cap: 40
+  hybrid:
     enabled: false
-  lexical: # LLM 文本匹配
-    top-k: 40 # 向量检索 Top-K 条数
+  lexical:
+    top-k: 40
+
+# 用户画像配置
+user-profile:
+  enabled: true
+  history-limit: 50
+  cache-ttl-hours: 24
+  message-threshold: 20

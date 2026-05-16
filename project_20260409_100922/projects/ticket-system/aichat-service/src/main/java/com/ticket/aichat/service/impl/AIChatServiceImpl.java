@@ -12,6 +12,7 @@ import com.ticket.service.RocketMQProducerService;
 import com.ticket.aichat.service.ChatSessionService;
 import com.ticket.aichat.service.HumanTransferPublisher;
 import com.ticket.aichat.service.QuickFaqMatchService;
+import com.ticket.aichat.service.UserProfileService;
 import com.ticket.util.MQIdempotentUtil;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.service.Result;
@@ -34,6 +35,8 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 智能客服服务实现
@@ -75,6 +78,14 @@ public class AIChatServiceImpl implements AIChatService {
 
     @Resource
     private QuickFaqMatchService quickFaqMatchService;
+
+    @Resource
+    private UserProfileService userProfileService;
+
+    /**
+     * 用户消息计数器（用于触发画像增量更新）
+     */
+    private final ConcurrentHashMap<Long, AtomicInteger> userMessageCounters = new ConcurrentHashMap<>();
     @Override
     @Transactional
     public String chat(@UserMessage String question) {
@@ -161,6 +172,10 @@ public class AIChatServiceImpl implements AIChatService {
         stopWatch.checkpoint("llm_call");
         saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, inputTokens, outputTokens);
         stopWatch.checkpoint("db_save_ai");
+
+        // 消息计数：达到阈值时异步触发画像增量更新
+        checkAndTriggerProfileUpdate(userId, sessionId);
+
         stopWatch.stopAndLog();
         return answer;
     }
@@ -282,5 +297,25 @@ public class AIChatServiceImpl implements AIChatService {
     public void clearMemory() {
         log.info("清除用户聊天记忆，用户ID：{}", UserContext.getCurrentUserId());
         chatMemory.clear();
+    }
+
+    /**
+     * 消息计数达到阈值时，异步触发用户画像增量更新。
+     * 使用 compareAndSet 保证只有一个线程能成功触发，避免重复生成。
+     */
+    private void checkAndTriggerProfileUpdate(Long userId, String sessionId) {
+        if (userId == null || !(userProfileService instanceof UserProfileServiceImpl impl)) {
+            return;
+        }
+        AtomicInteger counter = userMessageCounters.computeIfAbsent(userId, k -> new AtomicInteger(0));
+        int count = counter.incrementAndGet();
+        int threshold = impl.getMessageThreshold();
+        if (count >= threshold) {
+            // CAS：只有一个线程能成功将 counter 从 threshold 改为 0
+            if (counter.compareAndSet(threshold, 0)) {
+                log.info("用户消息达到阈值，触发画像增量更新: userId={}, threshold={}", userId, threshold);
+                userProfileService.generateProfile(userId, sessionId);
+            }
+        }
     }
 }

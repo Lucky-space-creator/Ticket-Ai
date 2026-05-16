@@ -81,13 +81,21 @@ public class RocketMQProducerService {
                 event.getOperation() + ":" + System.currentTimeMillis(), event);
     }
 
-    // ==================== P2: 知识库 ====================
+    // ==================== P2: 知识库/画像 ====================
 
     /**
      * 发送知识库同步事件
      */
     public void sendKnowledgeSyncEvent(KnowledgeSyncEvent event) {
         sendMessage(MQTopics.KNOWLEDGE_SYNC, "knowledge-sync", event);
+    }
+
+    /**
+     * 发送用户画像生成事件
+     */
+    public void sendUserProfileGenerateEvent(UserProfileGenerateEvent event) {
+        sendMessage(MQTopics.USER_PROFILE_GENERATE,
+                event.getUserId() + ":" + event.getMessageId(), event);
     }
 
     // ==================== 内部方法 ====================

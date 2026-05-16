@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * ChromaDB 向量存储（仅 aichat-service 使用）。
+ * ChromaDB 向量存储（仅知识库 RAG 使用）。
  * 生产环境建议 chroma.allow-in-memory-fallback=false。
  */
 @Configuration
@@ -34,12 +34,12 @@ public class ChromaDBConfig {
     private boolean allowInMemoryFallback;
 
     /**
-     * LangChain4j EmbeddingStore：在线 Chroma，失败时可降级内存索引（仅限开发调试）。
+     * 知识库向量存储：在线 Chroma，失败时可降级内存向量库（仅限开发调试）。
      */
     @Bean
     public EmbeddingStore<TextSegment> chromaEmbeddingStore() {
         String baseUrl = String.format("http://%s:%d", host, port);
-        log.info("连接 ChromaDB: {}", baseUrl);
+        log.info("连接 ChromaDB 集合 [{}]: {}", collectionName, baseUrl);
         try {
             return ChromaEmbeddingStore.builder()
                     .baseUrl(baseUrl)
@@ -50,7 +50,7 @@ public class ChromaDBConfig {
                 log.error("ChromaDB 连接失败且已禁止降级内存向量库: {}", baseUrl);
                 throw new IllegalStateException("无法连接 ChromaDB 且 chroma.allow-in-memory-fallback=false", ex);
             }
-            log.error("ChromaDB 不可用，降级为内存向量库（仅限开发）：{}", ex.toString());
+            log.error("ChromaDB 集合 [{}] 不可用，降级为内存向量库（仅限开发）：{}", collectionName, ex.toString());
             return new InMemoryEmbeddingStore<>();
         }
     }

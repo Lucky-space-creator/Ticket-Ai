@@ -1,5 +1,6 @@
 package com.ticket.aichat.controller;
 
+import com.ticket.aichat.service.UserProfileService;
 import com.ticket.dto.ChatRequest;
 import com.ticket.dto.ChatResponse;
 import com.ticket.aichat.service.AIChatService;
@@ -37,6 +38,9 @@ public class AIChatController {
     @Resource
     private MQIdempotentUtil mqIdempotentUtil;
 
+    @Resource
+    private UserProfileService userProfileService;
+
     @PostMapping("/ask")
     public ResponseUtil.Result<ChatResponse> ask(@Valid @RequestBody ChatRequest request) {
         ensureChatTraceForRequest();
@@ -47,6 +51,8 @@ public class AIChatController {
         stopWatch.checkpoint("controller_total");
         ChatResponse chatResponse = new ChatResponse(answer, true, System.currentTimeMillis());
         stopWatch.stopAndLog();
+//        //测试画像功能
+//        userProfileService.generateProfile(1L, "user_305376811947266048");
         return ResponseUtil.success(chatResponse);
     }
 

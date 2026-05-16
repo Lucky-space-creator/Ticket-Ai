@@ -5,9 +5,11 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ticket.entity.ChatSession;
 import com.ticket.aichat.mapper.ChatSessionMapper;
 import com.ticket.aichat.service.ChatSessionService;
+import com.ticket.aichat.service.UserProfileService;
 import com.ticket.util.SnowflakeIdUtil;
 import com.ticket.util.UserContext;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,11 +22,15 @@ import java.util.UUID;
 /**
  * 客服会话服务实现类
  */
+@Slf4j
 @Service
 public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatSession> implements ChatSessionService {
 
     @Resource
     private ChatSessionMapper chatSessionMapper;
+
+    @Resource
+    private UserProfileService userProfileService;
 
     @Override
     public List<ChatSession> getSessionsByUserId(Long userId) {
@@ -115,13 +121,19 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             return false;
         }
         if (ChatSession.STATUS_ENDED.equals(session.getStatus())) {
-            // 已经结束
             return true;
         }
         session.setStatus(ChatSession.STATUS_ENDED);
         session.setUpdatedAt(LocalDateTime.now());
-        // 可以根据endedBy更新相关字段（如果需要记录谁结束的）
-        return chatSessionMapper.updateById(session) > 0;
+        boolean updated = chatSessionMapper.updateById(session) > 0;
+
+        // 会话结束时异步触发用户画像生成
+        if (updated && session.getUserId() != null) {
+            log.info("会话结束，触发用户画像生成: userId={}, sessionId={}", session.getUserId(), sessionId);
+            userProfileService.generateProfile(session.getUserId(), sessionId);
+        }
+
+        return updated;
     }
 
     @Override
