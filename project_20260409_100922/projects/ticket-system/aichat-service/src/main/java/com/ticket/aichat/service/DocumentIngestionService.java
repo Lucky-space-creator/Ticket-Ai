@@ -338,6 +338,7 @@ public class DocumentIngestionService {
         Metadata meta = mergedMetadata(loaded.metadata(), docId, relative, checksum);
         Document toIngest = Document.document(loaded.text(), meta);
 
+        // 将文档分片
         var splitter = DocumentSplitters.recursive(SPLIT_CHUNK, SPLIT_OVERLAP);
         List<TextSegment> segments = splitter.split(toIngest);
         if (segments.isEmpty()) {
