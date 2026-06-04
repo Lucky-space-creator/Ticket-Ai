@@ -33,6 +33,9 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/customer-service")
 public class CustomerServiceController {
 
+    /**
+     *  自动分配线程池
+     */
     private static final ScheduledExecutorService AUTO_ASSIGN_SCHEDULER =
             Executors.newScheduledThreadPool(2, r -> {
                 Thread t = new Thread(r, "customer-auto-assign");

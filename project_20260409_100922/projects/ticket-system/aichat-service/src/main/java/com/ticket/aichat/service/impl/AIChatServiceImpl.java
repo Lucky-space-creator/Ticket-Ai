@@ -1,19 +1,27 @@
 package com.ticket.aichat.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.ticket.aichat.agent.FAQAgent;
+import com.ticket.aichat.agent.HumanTransferAgent;
+import com.ticket.aichat.agent.OrderAgent;
+import com.ticket.aichat.agent.ProfileAgent;
+import com.ticket.aichat.agent.TrainQueryAgent;
+import com.ticket.dto.TokenUsage;
 import com.ticket.dto.mq.ChatRecordEvent;
 import com.ticket.entity.ChatRecord;
 import com.ticket.entity.ChatSession;
 import com.ticket.entity.KnowledgeBase;
 import com.ticket.aichat.mapper.ChatRecordMapper;
+import com.ticket.aichat.router.IntentRouter;
+import com.ticket.aichat.router.IntentType;
 import com.ticket.aichat.service.AIChatService;
-import com.ticket.aichat.service.KnowledgeAssistant;
 import com.ticket.service.RocketMQProducerService;
 import com.ticket.aichat.service.ChatSessionService;
 import com.ticket.aichat.service.HumanTransferPublisher;
 import com.ticket.aichat.service.QuickFaqMatchService;
 import com.ticket.aichat.service.UserProfileService;
 import com.ticket.util.MQIdempotentUtil;
+import com.ticket.util.TokenMonitor;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.service.Result;
 import com.ticket.util.UserContext;
@@ -32,11 +40,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 智能客服服务实现
@@ -51,12 +58,6 @@ public class AIChatServiceImpl implements AIChatService {
 
     private static final String EMPTY_MODEL_FALLBACK = "抱歉，未获取到有效回答。请换一种问法或稍后重试；"
             + "若与查票、订单相关，请说明日期、出发到达站或订单号。";
-
-    /**
-     * 知识库助手
-     */
-    @Resource
-    private KnowledgeAssistant knowledgeAssistant;
 
     @Resource
     private ChatRecordMapper chatRecordMapper;
@@ -82,10 +83,40 @@ public class AIChatServiceImpl implements AIChatService {
     @Resource
     private UserProfileService userProfileService;
 
+    // ==================== 多 Agent 路由 ====================
+
+    @Resource
+    private IntentRouter intentRouter;
+
+    @Resource
+    private TrainQueryAgent trainQueryAgent;
+
+    @Resource
+    private OrderAgent orderAgent;
+
+    @Resource
+    private FAQAgent faqAgent;
+
+    @Resource
+    private ProfileAgent profileAgent;
+
+    @Resource
+    private HumanTransferAgent humanTransferAgent;
+
+    @Resource
+    private TokenMonitor tokenMonitor;
+
     /**
      * 用户消息计数器（用于触发画像增量更新）
      */
     private final ConcurrentHashMap<Long, AtomicInteger> userMessageCounters = new ConcurrentHashMap<>();
+
+    /**
+     * 用户级聊天锁：保证同一用户的完整 ChatMemory 读写 + LLM 调用流程原子执行。
+     * 防止同一用户并发请求导致 LangChain4j ChatMemory 出现消息丢失或错序。
+     * key = userId，不同用户之间完全不阻塞。
+     */
+    private final ConcurrentHashMap<Long, ReentrantLock> userChatLocks = new ConcurrentHashMap<>();
     @Override
     @Transactional
     public String chat(@UserMessage String question) {
@@ -101,76 +132,108 @@ public class AIChatServiceImpl implements AIChatService {
 
         Long userId = UserContext.getCurrentUserId();
 
+        // 已接入人工客服时，AI 通道仅返回提示
         ChatSession humanServing = findHumanServingSession(userId);
         if (humanServing != null) {
-            saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, humanServing.getId(), null, 0, 0, 0);
-            saveChatRecord(HUMAN_SESSION_HINT, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, humanServing.getId(), null, 0, 0, 0);
+            saveChatRecord(question, BusinessStatus.MSG_TYPE_USER,
+                    null, humanServing.getId(), null, 0, 0, 0);
+            saveChatRecord(HUMAN_SESSION_HINT, BusinessStatus.MSG_TYPE_ROBOT,
+                    BigDecimal.ONE, humanServing.getId(), null, 0, 0, 0);
             stopWatch.stopAndLog();
             return HUMAN_SESSION_HINT;
         }
 
-        // 检查是否包含转人工关键字
-        if (containsHumanServiceKeyword(question)) {
-            stopWatch.checkpoint("route_judge");
+        // 意图分类：规则优先 → LLM 兜底
+        IntentType intent = intentRouter.classify(question);
+        stopWatch.checkpoint("intent_classify");
+        log.info("[{}] 意图分类结果: {}", tid, intent);
+
+        // 转人工：独立流程，不经过 FAQ 和 Agent
+        if (intent == IntentType.HUMAN_TRANSFER) {
             String sessionId = chatSessionService.createSession(userId, "");
+            saveChatRecord(question, BusinessStatus.MSG_TYPE_USER,
+                    null, sessionId, null, 0, 0, 0);
             String answer = humanTransferPublisher.publish(userId, sessionId, null);
             stopWatch.checkpoint("human_transfer");
-            saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, 0, 0);
+            saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT,
+                    BigDecimal.ONE, sessionId, null, 0, 0, 0);
             stopWatch.stopAndLog();
             return answer;
         }
 
+        // 打招呼：硬编码回复，不消耗 Token
+        if (intent == IntentType.GREETING) {
+            String sessionId = chatSessionService.getOrCreateAiOnlySessionId(userId);
+            saveChatRecord(question, BusinessStatus.MSG_TYPE_USER,
+                    null, sessionId, null, 0, 0, 0);
+            String answer = "您好！我是智能客服助手，可以帮您：\n"
+                    + "1. 查询车次和票价\n"
+                    + "2. 引导购票、退票、支付\n"
+                    + "3. 回答铁路相关知识问题\n"
+                    + "4. 管理个人信息和联系人\n"
+                    + "请问有什么可以帮您？";
+            saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT,
+                    BigDecimal.ONE, sessionId, null, 0, 0, 0);
+            stopWatch.stopAndLog();
+            return answer;
+        }
+
+        // 常规流程：获取/创建 AI 会话
         String sessionId = chatSessionService.getOrCreateAiOnlySessionId(userId);
         if (isSessionEnded(sessionId)) {
             return "会话已结束，若需要客服介入，请点击转客服按钮";
         }
-        saveChatRecord(question, BusinessStatus.MSG_TYPE_USER, null, sessionId, null, 0, 0, 0);
+        saveChatRecord(question, BusinessStatus.MSG_TYPE_USER,
+                null, sessionId, null, 0, 0, 0);
         stopWatch.checkpoint("db_save_user");
 
-        Optional<KnowledgeBase> faqHit = quickFaqMatchService.tryHit(question);
-        if (faqHit.isPresent()) {
-            String ans = faqHit.get().getAnswer();
-            int estimated = TokenCountUtil.estimate(ans);
-            log.info("[{}] FAQ 直通命中，跳过 LLM", TraceContext.getTraceId());
-            saveChatRecord(ans, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, 0, estimated);
-            stopWatch.stopAndLog();
-            return ans;
+        // FAQ 直通命中：跳过所有 Agent
+        if (intent == IntentType.KNOWLEDGE) {
+            Optional<KnowledgeBase> faqHit = quickFaqMatchService.tryHit(question);
+            if (faqHit.isPresent()) {
+                String ans = faqHit.get().getAnswer();
+                int estimated = TokenCountUtil.estimate(ans);
+                log.info("[{}] FAQ 直通命中，跳过 LLM", tid);
+                tokenMonitor.record(TokenUsage.estimated(Integer.parseInt(ans), "faq_bypass"), userId);
+                saveChatRecord(ans, BusinessStatus.MSG_TYPE_ROBOT,
+                        BigDecimal.ONE, sessionId, null, 0, 0, estimated);
+                stopWatch.stopAndLog();
+                return ans;
+            }
         }
 
-        // 调用AI（Result<String>获取TokenUsage）
+        // 调用对应 Agent（用户级锁保证 ChatMemory 并发安全）
         String answer;
         int inputTokens = 0;
         int outputTokens = 0;
+        ReentrantLock chatLock = userChatLocks.computeIfAbsent(
+                userId, k -> new ReentrantLock());
+        chatLock.lock();
         try {
-            Result<String> result = knowledgeAssistant.chat(question);
-            answer = result.content();
-            if (answer == null || answer.isBlank()) {
-                answer = EMPTY_MODEL_FALLBACK;
-            }
-            if (result.tokenUsage() != null) {
-                inputTokens = result.tokenUsage().inputTokenCount();
-                outputTokens = result.tokenUsage().outputTokenCount();
-                log.info("[{}] Token消耗 - input:{}, output:{}",
-                        TraceContext.getTraceId(), inputTokens, outputTokens);
-            } else {
-                // 回退：使用估算
-                outputTokens = TokenCountUtil.estimate(answer);
-                log.warn("[{}] 无法获取精确TokenUsage，使用估算值 output:{}",
-                        TraceContext.getTraceId(), outputTokens);
-            }
+            AgentCallResult callResult = dispatchToAgent(intent, question);
+            answer = callResult.answer;
+            inputTokens = callResult.inputTokens;
+            outputTokens = callResult.outputTokens;
         } catch (IllegalStateException e) {
-            log.error("[{}] RAG服务不可用，返回降级消息: {}",
-                    TraceContext.getTraceId(), e.getMessage());
+            log.error("[{}] Agent 服务不可用: {}", tid, e.getMessage(), e);
             answer = "抱歉，智能客服系统当前正在维护中，预计10分钟内恢复。"
                     + "您可以：1.查看【常见问题】页面 2.拨打客服热线12306";
             outputTokens = TokenCountUtil.estimate(answer);
+            tokenMonitor.record(
+                    tokenMonitor.estimateOutput(answer, "fallback"), userId);
         } catch (Exception e) {
-            log.error("[{}] AI 调用异常: {}", TraceContext.getTraceId(), e.getMessage(), e);
+            log.error("[{}] Agent 调用异常: {}", tid, e.getMessage(), e);
             answer = EMPTY_MODEL_FALLBACK;
             outputTokens = TokenCountUtil.estimate(answer);
+            tokenMonitor.record(
+                    tokenMonitor.estimateOutput(answer, "error"), userId);
+        } finally {
+            chatLock.unlock();
         }
-        stopWatch.checkpoint("llm_call");
-        saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT, BigDecimal.ONE, sessionId, null, 0, inputTokens, outputTokens);
+        stopWatch.checkpoint("agent_call");
+
+        saveChatRecord(answer, BusinessStatus.MSG_TYPE_ROBOT,
+                BigDecimal.ONE, sessionId, null, 0, inputTokens, outputTokens);
         stopWatch.checkpoint("db_save_ai");
 
         // 消息计数：达到阈值时异步触发画像增量更新
@@ -178,6 +241,84 @@ public class AIChatServiceImpl implements AIChatService {
 
         stopWatch.stopAndLog();
         return answer;
+    }
+
+    /**
+     * 根据意图分派到对应的 Specialist Agent。
+     *
+     * @param intent   意图类型
+     * @param question 用户问题
+     * @return Agent 调用结果（含 Token 统计）
+     */
+    private AgentCallResult dispatchToAgent(IntentType intent, String question) {
+        Long userId = UserContext.getCurrentUserId();
+        String source;
+
+        // KNOWLEDGE 意图走 FAQAgent（Result<String> 返回 TokenUsage）
+        if (intent == IntentType.KNOWLEDGE) {
+            source = "agent:FAQAgent";
+            Result<String> result = faqAgent.chat(question);
+            String answer = result.content();
+            if (answer == null || answer.isBlank()) {
+                answer = EMPTY_MODEL_FALLBACK;
+            }
+            // 从 Result 提取精确 TokenUsage
+            if (result.tokenUsage() != null) {
+                TokenUsage usage = tokenMonitor.extractPrecise(
+                        result.tokenUsage().inputTokenCount(),
+                        result.tokenUsage().outputTokenCount(),
+                        source);
+                if (usage != null) {
+                    tokenMonitor.record(usage, userId);
+                    return new AgentCallResult(answer,
+                            usage.inputTokens(), usage.outputTokens());
+                }
+            }
+            // 无精确 TokenUsage 时估算
+            TokenUsage estimated = tokenMonitor.estimateOutput(answer, source);
+            tokenMonitor.record(estimated, userId);
+            return new AgentCallResult(answer, 0, estimated.outputTokens());
+        }
+
+        // 其他 Agent 返回 String（无精确 TokenUsage，需估算）
+        String agentAnswer;
+        switch (intent) {
+            case TRAIN_QUERY:
+                source = "agent:TrainQueryAgent";
+                agentAnswer = trainQueryAgent.chat(question);
+                break;
+            case ORDER:
+                source = "agent:OrderAgent";
+                agentAnswer = orderAgent.chat(question);
+                break;
+            case PROFILE:
+                source = "agent:ProfileAgent";
+                agentAnswer = profileAgent.chat(question);
+                break;
+            case HUMAN_TRANSFER:
+                // 不应到达此处（已在上层处理），防御性兜底
+                source = "agent:HumanTransferAgent";
+                agentAnswer = humanTransferAgent.chat(question);
+                break;
+            default:
+                source = "agent:TrainQueryAgent";
+                agentAnswer = trainQueryAgent.chat(question);
+                break;
+        }
+
+        if (agentAnswer == null || agentAnswer.isBlank()) {
+            agentAnswer = EMPTY_MODEL_FALLBACK;
+        }
+        int estimatedOutput = TokenCountUtil.estimate(agentAnswer);
+        tokenMonitor.record(
+                tokenMonitor.estimateOutput(agentAnswer, source), userId);
+        return new AgentCallResult(agentAnswer, 0, estimatedOutput);
+    }
+
+    /**
+     * Agent 调用结果（内部值对象）
+     */
+    private record AgentCallResult(String answer, int inputTokens, int outputTokens) {
     }
 
     /**
@@ -237,37 +378,6 @@ public class AIChatServiceImpl implements AIChatService {
                 .orderByDesc(ChatSession::getLastMessageAt)
                 .last("LIMIT 1");
         return chatSessionService.getOne(w);
-    }
-
-    /**
-     * 检测用户输入是否包含转人工关键字
-     * @param question 用户输入
-     * @return 是否包含转人工关键字
-     */
-    private boolean containsHumanServiceKeyword(String question) {
-        if (question == null || question.trim().isEmpty()) {
-            return false;
-        }
-
-        // 仅显式转人工表述（避免「联系客服」、英文 human 等正常咨询误判）
-        List<String> keywords = Arrays.asList(
-                "转人工",
-                "转人工客服",
-                "人工客服",
-                "转接人工",
-                "人工坐席",
-                "真人客服",
-                "我要人工",
-                "接人工"
-        );
-        for (String keyword : keywords) {
-            if (question.contains(keyword)) {
-                log.info("检测到转人工意图: {}，用户输入: {}", keyword, question);
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

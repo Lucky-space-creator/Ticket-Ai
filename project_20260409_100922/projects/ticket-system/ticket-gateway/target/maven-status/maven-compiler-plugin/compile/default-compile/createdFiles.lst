@@ -1,4 +1,0 @@
-com\ticket\gateway\config\RateLimitConfig.class
-com\ticket\gateway\filter\JwtAuthenticationGlobalFilter.class
-com\ticket\gateway\GatewayApplication.class
-com\ticket\gateway\config\RedisMasterSlaveConfig.class

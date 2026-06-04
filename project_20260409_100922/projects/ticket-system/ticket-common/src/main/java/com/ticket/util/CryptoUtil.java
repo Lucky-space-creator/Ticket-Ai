@@ -88,10 +88,10 @@ public class CryptoUtil {
     // ... existing code ...
 
     public static void main(String[] args) {
-        String password = "110101198405055699";
+        String password = "123456";
 
         // 生成新的哈希
-        String hashed = CryptoUtil.encrypt(password);
+        String hashed = CryptoUtil.encryptPassword(password);
         System.out.println("=== 新生成的哈希 ===");
         System.out.println("加密密码: " + hashed);
         System.out.println("长度: " + hashed.length());
@@ -101,13 +101,13 @@ public class CryptoUtil {
         System.out.println("新哈希验证结果: " + valid);
 
         // 测试数据库中的哈希
-        String dbHash = "$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa";
+        String dbHash = "$2a$10$3ZjsO/5Uy61OIs9F0p8AOeO/nS2ncbk9EKFjAMDPu2K6AgEof6Uae";
         System.out.println("\n=== 数据库中的哈希 ===");
         System.out.println("数据库哈希: " + dbHash);
         System.out.println("数据库哈希长度: " + dbHash.length());
         System.out.println("是否为BCrypt格式: " + CryptoUtil.isBcryptPassword(dbHash));
 
-        boolean dbValid = CryptoUtil.verifyPassword(password, dbHash);
+        boolean dbValid = CryptoUtil.verifyPassword("123456", dbHash);
         System.out.println("数据库哈希验证结果: " + dbValid);
 
         // 如果验证失败，尝试逐个字符比较
