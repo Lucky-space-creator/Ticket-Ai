@@ -4,7 +4,7 @@ server:
 
 # RocketMQ：ticket-common 扫描到 RocketMQProducerService 需 RocketMQTemplate；Nacos 的 sharding-rocketmq-config.yaml 可覆盖
 rocketmq:
-  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+  name-server: ${ROCKETMQ_NAME_SERVER:192.168.48.136:9876}
   producer:
     group: user-service-producer-group
   fail-fast: true

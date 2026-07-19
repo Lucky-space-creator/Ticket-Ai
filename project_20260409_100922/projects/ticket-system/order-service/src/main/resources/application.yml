@@ -4,7 +4,7 @@ server:
 
 spring:
   config:
-    import: optional:nacos:localhost:8848
+    import: optional:nacos:192.168.48.136:8848
   cloud:
     openfeign:
       client:
@@ -22,7 +22,7 @@ jwt:
 
 # RocketMQ：与 docker-compose 中 namesrv 端口 9876 一致；Nacos 的 sharding-rocketmq-config.yaml 可覆盖
 rocketmq:
-  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+  name-server: ${ROCKETMQ_NAME_SERVER:192.168.48.136:9876}
   producer:
     group: order-service-producer-group
   fail-fast: true

@@ -1,5 +1,6 @@
 package com.ticket.util;
 
+import cn.hutool.jwt.JWTUtil;
 import org.slf4j.MDC;
 
 import java.util.HashMap;
@@ -15,7 +16,6 @@ import java.util.function.Supplier;
 public class TraceMdcHelper {
 
     private TraceMdcHelper() {}
-
     /**
      * 在子线程中执行Runnable，自动恢复MDC上下文
      * @param traceId 父线程的TraceID

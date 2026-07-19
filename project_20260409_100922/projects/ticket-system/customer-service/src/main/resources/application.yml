@@ -4,7 +4,7 @@ server:
 
 spring:
   config:
-    import: optional:nacos:localhost:8848
+    import: optional:nacos:192.168.48.136:8848
 
 # 日志配置
 logging:
@@ -27,7 +27,7 @@ jwt:
   expiration: 604800000 # 7天
 
 rocketmq:
-  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+  name-server: ${ROCKETMQ_NAME_SERVER:192.168.48.136:9876}
   producer:
     group: customer-service-producer-group
   fail-fast: true

@@ -9,10 +9,10 @@ jwt:
 
 spring:
   config:
-    import: optional:nacos:localhost:8848
+    import: optional:nacos:192.168.48.136:8848
 
 rocketmq:
-  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+  name-server: ${ROCKETMQ_NAME_SERVER:192.168.48.136:9876}
   producer:
     group: aichat-service-producer-group
   fail-fast: true
@@ -43,7 +43,7 @@ ai:
     enabled: true
     fallback-type: http-api
   ollama:
-    base-url: http://192.168.48.135:11434
+    base-url: http://192.168.48.136:11434
     chat-model: llama3.2:3b
     embedding-model: nomic-embed-text
     temperature: 0.7
@@ -67,7 +67,7 @@ faq:
 
 # Chroma 向量集合（仅知识库 RAG 使用）；embedding 不可用且 allow=true 时降级内存库（仅限开发）
 chroma:
-  host: 192.168.48.135
+  host: 192.168.48.136
   port: 8000
   collection: ticket_knowledge
   allow-in-memory-fallback: true

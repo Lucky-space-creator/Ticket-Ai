@@ -5,13 +5,13 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: localhost:8848
+        server-addr: 192.168.48.136:8848
         namespace: public
         group: DEFAULT_GROUP
         cluster-name: DEFAULT
         register-enabled: true
       config:
-        server-addr: localhost:8848
+        server-addr: 192.168.48.136:8848
         namespace: public
         group: DEFAULT_GROUP
         file-extension: yaml

@@ -5,16 +5,11 @@ import com.ticket.aichat.agent.HumanTransferAgent;
 import com.ticket.aichat.agent.OrderAgent;
 import com.ticket.aichat.agent.ProfileAgent;
 import com.ticket.aichat.agent.TrainQueryAgent;
-import com.ticket.aichat.service.UserProfileService;
 import com.ticket.aichat.tool.HumanTransferTools;
 import com.ticket.aichat.tool.OrderTools;
 import com.ticket.aichat.tool.ProfileTools;
 import com.ticket.aichat.tool.TrainTools;
-import com.ticket.util.UserContext;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.memory.ChatMemory;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.rag.RetrievalAugmentor;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
@@ -25,17 +20,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
  * 多 Agent 装配配置。
  * <p>
  * 为 5 个 Specialist Agent 创建 Bean：
  * <ul>
  *   <li>TrainQueryAgent — 车次查询（无记忆）</li>
- *   <li>OrderAgent — 订单操作（有记忆，多轮收集信息）</li>
+ *   <li>OrderAgent — 订单操作（共享 ChatMemory，多轮收集信息）</li>
  *   <li>FAQAgent — 知识问答（RAG 检索，无工具）</li>
  *   <li>ProfileAgent — 个人信息（无记忆）</li>
  *   <li>HumanTransferAgent — 转人工（无记忆）</li>
@@ -62,19 +53,18 @@ public class MultiAgentConfig {
 
     /**
      * 订单 Agent：有记忆，多轮收集乘客信息。
-     * 独立的 UserScopedChatMemory，与 RAGConfig 中的 ChatMemory 互不影响。
+     * 共享 RAGConfig 中的 ChatMemory Bean，与 KnowledgeAssistant 同一份用户级记忆。
      * 用户画像自动注入到对话历史中。
      */
     @Bean
     public OrderAgent orderAgent(
             ChatLanguageModel chatLanguageModel,
             OrderTools orderTools,
-            UserProfileService userProfileService) {
-        log.info("=== 初始化 OrderAgent（含用户级记忆） ===");
-        ChatMemory orderMemory = new OrderUserScopedChatMemory(userProfileService);
+            ChatMemory chatMemory) {
+        log.info("=== 初始化 OrderAgent（共享用户级记忆） ===");
         return AiServices.builder(OrderAgent.class)
                 .chatLanguageModel(chatLanguageModel)
-                .chatMemory(orderMemory)
+                .chatMemory(chatMemory)
                 .tools(orderTools)
                 .build();
     }
@@ -126,68 +116,5 @@ public class MultiAgentConfig {
                 .chatLanguageModel(chatLanguageModel)
                 .tools(humanTransferTools)
                 .build();
-    }
-
-    // ==================== 内部类 ====================
-
-    /**
-     * OrderAgent 专用的用户级隔离对话记忆。
-     * <p>
-     * 与 RAGConfig.UserScopedChatMemory 结构相同，
-     * 但维护独立的 memoryMap，避免 OrderAgent 和 KnowledgeAssistant 互相干扰。
-     * 每次获取消息列表时自动注入用户画像。
-     */
-    private static class OrderUserScopedChatMemory implements ChatMemory {
-
-        private final ConcurrentHashMap<String, ChatMemory> memoryMap =
-                new ConcurrentHashMap<>();
-        private final UserProfileService userProfileService;
-
-        OrderUserScopedChatMemory(UserProfileService userProfileService) {
-            this.userProfileService = userProfileService;
-        }
-
-        @Override
-        public Object id() {
-            return getCurrentUserId();
-        }
-
-        @Override
-        public void add(ChatMessage message) {
-            getDelegate().add(message);
-        }
-
-        @Override
-        public List<ChatMessage> messages() {
-            List<ChatMessage> delegateMessages = getDelegate().messages();
-            Long userId = UserContext.getCurrentUserId();
-            if (userId == null) {
-                return delegateMessages;
-            }
-            String userProfile = userProfileService.getUserProfile(userId);
-            if (userProfile == null || userProfile.isBlank()) {
-                return delegateMessages;
-            }
-            List<ChatMessage> merged = new ArrayList<>(delegateMessages.size() + 1);
-            merged.add(SystemMessage.from("【用户画像】" + userProfile));
-            merged.addAll(delegateMessages);
-            return merged;
-        }
-
-        @Override
-        public void clear() {
-            getDelegate().clear();
-        }
-
-        private String getCurrentUserId() {
-            Long userId = UserContext.getCurrentUserId();
-            return userId != null ? userId.toString() : "anonymous";
-        }
-
-        private ChatMemory getDelegate() {
-            return memoryMap.computeIfAbsent(
-                    getCurrentUserId(),
-                    k -> MessageWindowChatMemory.withMaxMessages(10));
-        }
     }
 }
