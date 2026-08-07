@@ -1,32 +1,35 @@
-# 12306购票系统 + 智能客服
+# Ticket-AI · 基于 LangChain4j 的多智能体铁路票务客服平台
 
-> 版本: v2.0.0  
-> **微服务运行说明**：业务运行以仓库根目录 `pom.xml` 子模块（`ticket-gateway`、`user-service` 等）为准；`backend/` 仅作单体对照，不参与注册发现。本地依赖与分层改造要点见 [docs/microservices/README.md](docs/microservices/README.md)，一键基础设施见根目录 [docker-compose.yml](docker-compose.yml)。
+> 版本: v2.0.0
+> 一个基于 Spring Cloud 微服务架构的铁路票务系统，集成「多智能体编排 + 混合检索 RAG」AI 客服，支持用户购票、AI 智能答疑与办单、人工客服实时转接、后台管理等完整业务闭环。
+
+> **微服务运行说明**：业务运行以仓库根目录 `pom.xml` 子模块（`ticket-gateway`、`user-service`、`aichat-service`、`customer-service` 等）为准；`backend/` 仅作单体对照，不参与 Nacos 注册与网关路由，运行与分层改造要点见 [docs/microservices/README.md](docs/microservices/README.md)，基础设施一键启动见根目录 [docker-compose.yml](docker-compose.yml)。
 
 > 状态: 开发完成，可直接运行
 
 ## 项目简介
 
-这是一个基于 Spring Boot + Vue3 的精简版铁路票务系统，保留核心购票流程，预留了 AI 智能客服接口。系统采用前后端分离架构，后端使用 MyBatisPlus 进行数据交互，使用内存缓存替代 Redis，使用 JWT 进行用户认证。
+本项目是一个基于 **Spring Cloud Alibaba 微服务架构**的铁路票务系统，在前端 Vue3 + 后端多服务的完整购票链路之上，构建了以 **LangChain4j** 为核心的 AI 智能客服：通过「编排器 + 专业 Agent」多智能体架构与「向量 + BM25 混合检索」RAG 知识库，实现能查、能答、能办的智能服务；常规咨询由 AI 自主解决（约 70%），复杂场景无缝转接 WebSocket 人工坐席，形成「AI 自助 + 人工兜底」的生产级客服闭环。
 
 ## 技术栈
 
-### 后端
-- **框架**: Spring Boot 3.2.0
-- **数据库**: MySQL 8.0+
-- **ORM**: MyBatis Plus 3.5.5
-- **认证**: JWT (jjwt)
-- **加密**: BCrypt
-- **工具**: Hutool、FastJSON2、Lombok
+### 后端 / 微服务
+- **框架**: Spring Boot 3.2 / Spring Cloud Alibaba（Nacos 注册配置中心、Gateway 网关）
+- **AI 框架**: LangChain4j + Ollama（本地大模型）
+- **检索**: ChromaDB 向量库 + BM25 稀疏检索（RRF 融合）
+- **消息队列**: RocketMQ（异步落库、事件驱动）
+- **缓存 / 锁**: Redis + Redisson 分布式锁
+- **数据库**: MySQL 8.0（MyBatis-Plus）
+- **实时通讯**: WebSocket（人工客服双向通道）
+- **可观测**: ELK（Filebeat → Logstash → Elasticsearch → Kibana）+ Actuator + TraceId 全链路追踪
 
 ### 前端
-- **框架**: Vue 3.4.0
-- **构建工具**: Vite 5.0.0
-- **UI组件**: Element Plus 2.5.0
-- **路由**: Vue Router 4.2.5
-- **状态管理**: Pinia 2.1.7
-- **HTTP客户端**: Axios 1.6.2
-- **日期处理**: Day.js 1.11.10
+- **框架**: Vue 3.4 + Vite 5
+- **UI 组件**: Element Plus
+- **路由**: Vue Router 4
+- **状态管理**: Pinia
+- **HTTP 客户端**: Axios
+- **日期处理**: Day.js
 
 ## 项目结构
 
@@ -146,16 +149,28 @@ npm run dev
 - ✅ 订单退票
 - ✅ 订单列表查看
 
-#### 管理端（预留接口）
-- 🔲 车次管理
-- 🔲 订单管理
-- 🔲 用户管理
-- 🔲 知识库管理
+#### 管理端
+- ✅ 车次管理
+- ✅ 订单管理
+- ✅ 用户管理
+- ✅ 知识库管理
 
-#### AI 智能客服（预留接口）
-- 🔲 对话接口
-- 🔲 知识库查询
-- 🔲 LLM 集成
+#### AI 智能客服
+- ✅ 多智能体对话接口（IntentRouter 两级路由 + 5 个 Specialist Agent）
+- ✅ 混合检索 RAG 知识库（向量 + BM25 + RRF 融合）
+- ✅ LLM 集成（LangChain4j + Ollama 本地大模型）
+
+## AI 智能客服核心特性
+
+- **多智能体编排**：`IntentRouter` 实现「关键词规则优先 + LLM 兜底分类」两级意图路由，分派至
+  **车次查询 / 订单办理 / 知识问答 / 个人信息 / 人工转接** 5 个 Specialist Agent；
+  Agent 通过 Tool-Calling 调用订单、车次等下游微服务接口，实现「能查能答能办」，AI 自主解决率约 70%。
+- **混合检索 RAG**：向量检索（ChromaDB）与 BM25 稀疏检索双路召回，经 **RRF 融合 + 治理表过滤**保障召回质量；
+  支持单路 / 混合模式配置切换。
+- **用户画像个性化**：对话记忆按用户隔离，自动注入用户画像系统消息，并按消息阈值 CAS 增量更新，实现个性化应答。
+- **Token 成本治理**：自研 `TokenMonitor` 统一采集全局 / 分 Agent / 分用户 Token 消耗，设日限额与单请求限额告警，经 Actuator 暴露。
+- **生产级人工客服**：基于 WebSocket 的实时会话（会话池、心跳、广播、待接入提醒），AI 与人工无缝转接；
+  聊天记录经 RocketMQ 异步落库与广播，主链路与存储解耦。
 
 ## 核心特性
 
