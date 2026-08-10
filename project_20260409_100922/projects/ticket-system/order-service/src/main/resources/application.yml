@@ -1,6 +1,17 @@
 # 本地默认配置（当Nacos配置缺失时使用）
+# ==================== Tomcat 线程池调优 ====================
+# 下单接口为两段式异步：Controller 仅做 Redis 预扣 + MQ 入队（约 12~30ms）
+# max-threads 决定阶段1 的最大并发连接数；accept-count 作为突发流量蓄水池
 server:
   port: 8083
+  tomcat:
+    threads:
+      max: 200              # 阶段1 最大并发 = 200 连接
+      min-spare: 20         # 保持热线程应对突发流量
+    accept-count: 800       # 超出线程数的请求排队缓冲，避免直接拒绝
+    max-connections: 10000
+    connection-timeout: 10000
+    keep-alive-timeout: 30s # 前端轮询排队结果需要长连接
 
 spring:
   config:
@@ -15,6 +26,37 @@ spring:
           train-service:
             connectTimeout: 3000
             readTimeout: 12000
+
+  # ==================== Druid 连接池调优 ====================
+  # 阶段2（OrderQueueConsumer 异步落库）是主要 DB 客户端
+  # 单条消费约 15~40ms，max-active 直接决定落单 QPS 上限
+  # 落单能力 ≈ max-active / 单条耗时 = 200 / 0.03 ≈ 6600 单/s（受 MySQL 实际写入能力约束）
+  datasource:
+    druid:
+      initial-size: 20      # 启动即预热连接，避免 Consumer 冷启动抖动
+      min-idle: 30          # 保持热连接，减少建连开销
+      max-active: 200       # 落单能力核心参数（原默认远低于此值）
+      max-wait: 3000        # 快速失败，避免线程长时间阻塞在取连接上
+      validation-query: SELECT 1
+      test-on-borrow: false
+      test-on-return: false
+      test-while-idle: true
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      keep-alive: true
+      pool-prepared-statements: true
+      max-pool-prepared-statement-per-connection-size: 20
+
+  # ==================== Redis 连接池调优 ====================
+  # 幂等键、库存预扣结果、排队结果轮询均走 Redis，连接池不足会成为阶段1 瓶颈
+  data:
+    redis:
+      lettuce:
+        pool:
+          max-active: 128
+          max-idle: 64
+          min-idle: 20
+          max-wait: 3000ms
 
 # 与网关、用户服务保持一致（JWT 解析）
 jwt:

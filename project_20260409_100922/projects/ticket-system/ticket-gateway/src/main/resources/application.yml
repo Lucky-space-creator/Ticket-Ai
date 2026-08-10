@@ -84,6 +84,48 @@ spring:
           enabled: false
           lower-case-service-id: true
 
+# ==================== 网关限流本地兜底配置（Nacos gateway.* 可覆盖）====================
+# 限流维度从严到宽：IP黑名单 > 下单专用 > 路径级 > 服务级 > 用户级 > IP级 > 全局
+gateway:
+  rate-limit-enabled: true
+  security-enabled: true
+
+  # 全局限流：保护整个网关不被打垮
+  global-rps: 10000
+  global-window-seconds: 1
+
+  # IP 限流：防止单 IP 攻击
+  ip-rps: 50
+  ip-window-seconds: 1
+
+  # 用户限流：防止刷接口
+  user-rps: 100
+  user-window-seconds: 1
+
+  # 下单接口专用严格限流（核心业务保护，排队轮询接口除外）
+  order-per-user-per-minute: 5
+  order-window-seconds: 60
+  order-path-prefix: /api/orders
+  order-exclude-paths:
+    - /api/orders/queue
+
+  # 服务级限流：key 为注册中心服务名，value 为单用户/IP 每秒请求数
+  route-rate-limits:
+    order-service: 20
+    train-service: 50
+    user-service: 30
+    aichat-service: 10
+
+  # 路径级限流：最长前缀匹配，value 为窗口内最大请求数
+  path-window-seconds: 1
+  path-limits:
+    /api/orders/queue: 20
+    /api/auth/login: 3
+    /api/auth/register: 2
+
+  # IP 黑名单
+  blacklist-ips: []
+
 logging:
   level:
     com.ticket.gateway: INFO
