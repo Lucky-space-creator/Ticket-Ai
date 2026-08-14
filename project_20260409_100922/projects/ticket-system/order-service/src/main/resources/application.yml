@@ -62,6 +62,30 @@ spring:
 jwt:
   secret: ticket-system-secret-key-2024-please-change-in-production
 
+# ==================== 未支付订单超时取消 ====================
+# 必须在 train-service 预占 TTL(30min) 之前触发，否则 Redis 预占已被删除，回滚会误加回 stock 造成超卖
+order:
+  pay-timeout-minutes: 15        # 待支付订单存活时长（分钟）
+  timeout-cancel-cron: "0 * * * * ?"  # 每分钟扫描一次（多实例靠乐观抢占互斥）
+
+# ==================== 熔断降级（order-service -> train-service 同步 Feign） ====================
+# 仅保护入队路径的查价/预扣；超时快速失败，避免 Hold 住 Tomcat 线程拖垮下单入口
+resilience4j:
+  circuitbreaker:
+    instances:
+      trainService:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10          # 最近 10 次调用统计
+        failure-rate-threshold: 50       # 失败率 > 50% 打开熔断
+        wait-duration-in-open-state: 10s # 打开 10s 后半开试探
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+  timelimiter:
+    instances:
+      trainService:
+        timeout-duration: 3s             # 3s 超时即失败（替代 10s Feign readTimeout 的快速失败）
+        cancel-running-future: true
+
 # RocketMQ：与 docker-compose 中 namesrv 端口 9876 一致；Nacos 的 sharding-rocketmq-config.yaml 可覆盖
 rocketmq:
   name-server: ${ROCKETMQ_NAME_SERVER:192.168.48.136:9876}

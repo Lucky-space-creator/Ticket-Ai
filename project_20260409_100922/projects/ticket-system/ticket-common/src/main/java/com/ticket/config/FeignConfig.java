@@ -9,10 +9,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import jakarta.servlet.http.HttpServletRequest;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Locale;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Feign 客户端全局配置
@@ -41,23 +38,20 @@ public class FeignConfig {
      */
     @Bean
     public RequestInterceptor requestInterceptor() {
-        return new RequestInterceptor() {
-            // 拦截请求，将请求头中的某些字段传递给下游服务
-            @Override
-            public void apply(RequestTemplate template) {
-                ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-                if (attributes != null) {
-                    HttpServletRequest request = attributes.getRequest();
-                    java.util.Enumeration<String> headerNames = request.getHeaderNames();
-                    while (headerNames.hasMoreElements()) {
-                        String headerName = headerNames.nextElement();
-                        if (headerName == null) {
-                            continue;
-                        }
-                        if (FORWARD_HEADER_NAMES.contains(headerName.toLowerCase(Locale.ROOT))) {
-                            String headerValue = request.getHeader(headerName);
-                            template.header(headerName, headerValue);
-                        }
+        // 拦截请求，将请求头中的某些字段传递给下游服务
+        return template -> {
+            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attributes != null) {
+                HttpServletRequest request = attributes.getRequest();
+                Enumeration<String> headerNames = request.getHeaderNames();
+                while (headerNames.hasMoreElements()) {
+                    String headerName = headerNames.nextElement();
+                    if (headerName == null) {
+                        continue;
+                    }
+                    if (FORWARD_HEADER_NAMES.contains(headerName.toLowerCase(Locale.ROOT))) {
+                        String headerValue = request.getHeader(headerName);
+                        template.header(headerName, headerValue);
                     }
                 }
             }

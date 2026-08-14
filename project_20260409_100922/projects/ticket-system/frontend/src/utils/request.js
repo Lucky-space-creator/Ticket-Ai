@@ -25,6 +25,15 @@ request.interceptors.request.use(
       if (config.method === 'post' || config.method === 'put' || config.method === 'patch') {
         config.headers['Content-Type'] = 'application/json'
       }
+      // 下单接口注入幂等键：后端 order-service 据此去重，防止网络重试/重复点击造成的重复预扣
+      if (config.url === '/orders' && (config.method === 'post' || config.method === 'POST')) {
+        const genUuid = () => crypto.randomUUID ? crypto.randomUUID()
+            : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0
+                return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+            })
+        config.headers['Idempotency-Key'] = genUuid()
+      }
       return config
     },
     error => {

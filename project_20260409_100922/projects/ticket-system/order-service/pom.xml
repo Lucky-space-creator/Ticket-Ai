@@ -28,6 +28,12 @@
             <artifactId>spring-cloud-starter-loadbalancer</artifactId>
         </dependency>
 
+        <!-- 熔断降级：保护 order-service -> train-service 的同步 Feign 链路（查价/预扣） -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+        </dependency>
+
 <!--        SpringDoc 用来生成接口文档  -->
         <dependency>
             <groupId>org.springdoc</groupId>
