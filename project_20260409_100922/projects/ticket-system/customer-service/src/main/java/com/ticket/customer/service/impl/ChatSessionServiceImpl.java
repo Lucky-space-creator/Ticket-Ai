@@ -1,6 +1,7 @@
 package com.ticket.customer.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ticket.customer.mapper.ChatSessionMapper;
 import com.ticket.customer.service.ChatSessionService;
@@ -88,17 +89,14 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     @Override
     @Transactional
     public boolean acceptSession(String sessionId, Long employeeId) {
-        ChatSession session = chatSessionMapper.selectById(sessionId);
-        if (session == null) {
-            return false;
-        }
-        if (!ChatSession.STATUS_PENDING.equals(session.getStatus())) {
-            return false;
-        }
-        session.setEmployeeId(employeeId);
-        session.setStatus(ChatSession.STATUS_ACTIVE);
-        session.setUpdatedAt(LocalDateTime.now());
-        return chatSessionMapper.updateById(session) > 0;
+        // 原子更新：仅当会话仍处于 pending 时才接单成功，避免并发双坐席抢接导致归属错乱。
+        LambdaUpdateWrapper<ChatSession> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(ChatSession::getId, sessionId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_PENDING)
+                .set(ChatSession::getEmployeeId, employeeId)
+                .set(ChatSession::getStatus, ChatSession.STATUS_ACTIVE)
+                .set(ChatSession::getUpdatedAt, LocalDateTime.now());
+        return chatSessionMapper.update(updateWrapper) > 0;
     }
 
     @Override

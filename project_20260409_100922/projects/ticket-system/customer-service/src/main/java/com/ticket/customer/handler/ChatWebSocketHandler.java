@@ -2,6 +2,7 @@ package com.ticket.customer.handler;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import com.ticket.customer.config.WsAuthHandshakeInterceptor;
 import com.ticket.customer.mapper.ChatRecordMapper;
 import com.ticket.entity.ChatRecord;
 import jakarta.annotation.Resource;
@@ -60,7 +61,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             String type = json.getString("type");
             String sessionId = extractSessionId(session);
             if ("chat".equals(type)) {
-                handleChatMessage(json, sessionId);
+                handleChatMessage(json, sessionId, session);
             } else if ("heartbeat".equals(type)) {
                 Map<String, String> pongMsg = new HashMap<>();
                 pongMsg.put("type", "pong");
@@ -73,11 +74,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private void handleChatMessage(JSONObject json, String sessionId) {
+    private void handleChatMessage(JSONObject json, String sessionId, WebSocketSession session) {
         String content = json.getString("content");
-        Long userId = json.getLong("userId");
         String msgType = json.getString("msgType");
         Long employeeId = json.getLong("employeeId");
+        // 优先使用握手阶段经 JWT 校验的服务端身份，避免客户端伪造身份。
+        Object authUserId = session.getAttributes().get(WsAuthHandshakeInterceptor.ATTR_USER_ID);
+        Object authEmployeeId = session.getAttributes().get(WsAuthHandshakeInterceptor.ATTR_EMPLOYEE_ID);
+        Long userId = authUserId != null ? ((Number) authUserId).longValue() : json.getLong("userId");
+        if (authEmployeeId != null) {
+            employeeId = ((Number) authEmployeeId).longValue();
+        }
         if (content == null || content.trim().isEmpty()) {
             log.warn("收到空消息内容，忽略处理");
             return;
@@ -136,14 +143,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 }
             }
         }
-        try {
-            JSONObject json = JSON.parseObject(message);
-            json.put("sessionId", sessionId);
-            json.put("notificationType", "chat_message");
-            sendMessageToGlobal(JSON.toJSONString(json));
-        } catch (Exception e) {
-            log.warn("发送到全局连接失败", e);
-        }
+        // 注意：聊天正文仅发给本会话连接，不转发到 global 连接（global 仅承载
+        // new_pending_session 等通知类消息），避免无关客服后台收到他人会话内容。
     }
 
     @Override
@@ -193,14 +194,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 }
             }
         }
-        try {
-            JSONObject json = JSON.parseObject(message);
-            json.put("sessionId", sessionId);
-            json.put("notificationType", "chat_message");
-            sendMessageToGlobal(JSON.toJSONString(json));
-        } catch (Exception e) {
-            log.warn("发送到全局连接失败", e);
-        }
+        // 聊天正文仅发给本会话连接，不转发到 global（global 仅承载通知类消息）。
     }
 
     public void sendMessageToGlobal(String message) {

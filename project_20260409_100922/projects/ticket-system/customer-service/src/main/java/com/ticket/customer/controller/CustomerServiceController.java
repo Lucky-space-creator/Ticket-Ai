@@ -2,7 +2,6 @@ package com.ticket.customer.controller;
 
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.ticket.customer.client.AdminEmployeeInternalClient;
 import com.ticket.customer.handler.ChatWebSocketHandler;
 import com.ticket.customer.mapper.ChatRecordMapper;
 import com.ticket.customer.mapper.ChatSessionMapper;
@@ -23,25 +22,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
 @RequestMapping("/api/customer-service")
 public class CustomerServiceController {
-
-    /**
-     *  自动分配线程池
-     */
-    private static final ScheduledExecutorService AUTO_ASSIGN_SCHEDULER =
-            Executors.newScheduledThreadPool(2, r -> {
-                Thread t = new Thread(r, "customer-auto-assign");
-                t.setDaemon(true);
-                return t;
-            });
 
     @Resource
     private ChatRecordMapper chatRecordMapper;
@@ -54,9 +40,6 @@ public class CustomerServiceController {
 
     @Resource
     private ChatWebSocketHandler chatWebSocketHandler;
-
-    @Resource
-    private AdminEmployeeInternalClient adminEmployeeInternalClient;
 
     @GetMapping("/pending-sessions")
     public ResponseUtil.Result<?> getPendingSessions() {
@@ -199,7 +182,7 @@ public class CustomerServiceController {
                 .eq(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_PENDING);
         ChatRecord pendingRecord = chatRecordMapper.selectOne(wrapper);
         if (pendingRecord != null) {
-            pendingRecord.setMsgType(employeeId.toString());
+            pendingRecord.setMsgType(BusinessStatus.MSG_TYPE_EMPLOYEE);
             pendingRecord.setEmployeeId(employeeId);
             pendingRecord.setIsRead(1);
             chatRecordMapper.updateById(pendingRecord);
@@ -208,7 +191,7 @@ public class CustomerServiceController {
         systemMsg.setSessionId(sessionId);
         systemMsg.setUserId(pendingRecord != null ? pendingRecord.getUserId() : null);
         systemMsg.setMessage("客服已介入，有什么可以帮助您的？");
-        systemMsg.setMsgType(employeeId.toString());
+        systemMsg.setMsgType(BusinessStatus.MSG_TYPE_EMPLOYEE);
         systemMsg.setEmployeeId(employeeId);
         systemMsg.setIsRead(0);
         systemMsg.setConfidence(BigDecimal.ONE);
@@ -220,7 +203,7 @@ public class CustomerServiceController {
             Map<String, Object> wsMessage = new HashMap<>();
             wsMessage.put("type", "chat");
             wsMessage.put("content", "客服已介入，有什么可以帮助您的？");
-            wsMessage.put("msgType", employeeId.toString());
+            wsMessage.put("msgType", BusinessStatus.MSG_TYPE_EMPLOYEE);
             wsMessage.put("employeeId", employeeId);
             Long userIdValue = pendingRecord != null ? pendingRecord.getUserId() : null;
             if (userIdValue != null) {
@@ -363,79 +346,8 @@ public class CustomerServiceController {
         } catch (Exception e) {
             log.warn("发送全局通知失败，但不影响主要流程", e);
         }
-        final String finalSessionId = sessionId;
-        final Long finalUserId = userId;
-        AUTO_ASSIGN_SCHEDULER.schedule(() -> {
-            try {
-                ChatSession currentSession = chatSessionMapper.selectById(finalSessionId);
-                if (currentSession != null && ChatSession.STATUS_PENDING.equals(currentSession.getStatus())) {
-                    Long employeeId = adminEmployeeInternalClient.availableEmployeeId();
-                    if (employeeId != null) {
-                        boolean accepted = chatSessionService.acceptSession(finalSessionId, employeeId);
-                        if (accepted) {
-                            LambdaQueryWrapper<ChatRecord> pw = new LambdaQueryWrapper<>();
-                            pw.eq(ChatRecord::getSessionId, finalSessionId)
-                                    .eq(ChatRecord::getMsgType, BusinessStatus.MSG_TYPE_PENDING);
-                            ChatRecord pending = chatRecordMapper.selectOne(pw);
-                            if (pending != null) {
-                                pending.setMsgType(employeeId.toString());
-                                pending.setEmployeeId(employeeId);
-                                pending.setIsRead(1);
-                                chatRecordMapper.updateById(pending);
-                            }
-                            ChatRecord systemMsg = new ChatRecord();
-                            systemMsg.setSessionId(finalSessionId);
-                            systemMsg.setUserId(finalUserId);
-                            systemMsg.setMessage("客服已介入，有什么可以帮助您的？");
-                            systemMsg.setMsgType(employeeId.toString());
-                            systemMsg.setEmployeeId(employeeId);
-                            systemMsg.setIsRead(0);
-                            systemMsg.setConfidence(BigDecimal.ONE);
-                            systemMsg.setCreatedAt(LocalDateTime.now());
-                            chatRecordMapper.insert(systemMsg);
-                            chatSessionService.incrementMessageCount(finalSessionId);
-                            chatSessionService.updateLastMessageTime(finalSessionId);
-                            Map<String, Object> wsMessage = new HashMap<>();
-                            wsMessage.put("type", "chat");
-                            wsMessage.put("content", "客服已介入，有什么可以帮助您的？");
-                            wsMessage.put("msgType", employeeId.toString());
-                            wsMessage.put("employeeId", employeeId);
-                            wsMessage.put("userId", finalUserId);
-                            wsMessage.put("timestamp", System.currentTimeMillis());
-                            chatWebSocketHandler.sendMessageToSession(finalSessionId, JSON.toJSONString(wsMessage));
-                            log.info("延迟自动分配客服 {} 接入会话 {}", employeeId, finalSessionId);
-                        }
-                    } else {
-                        ChatRecord busyMsg = new ChatRecord();
-                        busyMsg.setSessionId(finalSessionId);
-                        busyMsg.setUserId(finalUserId);
-                        busyMsg.setMessage("当前客服忙，请稍后再试或继续使用AI助手。");
-                        busyMsg.setMsgType(BusinessStatus.MSG_TYPE_ROBOT);
-                        busyMsg.setIsRead(0);
-                        busyMsg.setConfidence(BigDecimal.ONE);
-                        busyMsg.setCreatedAt(LocalDateTime.now());
-                        chatRecordMapper.insert(busyMsg);
-                        chatSessionService.incrementMessageCount(finalSessionId);
-                        chatSessionService.updateLastMessageTime(finalSessionId);
-                        ChatSession sessionToUpdate = chatSessionMapper.selectById(finalSessionId);
-                        if (sessionToUpdate != null) {
-                            sessionToUpdate.setStatus(ChatSession.STATUS_AI_ONLY);
-                            chatSessionMapper.updateById(sessionToUpdate);
-                        }
-                        Map<String, Object> wsMessage = new HashMap<>();
-                        wsMessage.put("type", "chat");
-                        wsMessage.put("content", "当前客服忙，请稍后再试或继续使用AI助手。");
-                        wsMessage.put("msgType", BusinessStatus.MSG_TYPE_ROBOT);
-                        wsMessage.put("userId", finalUserId);
-                        wsMessage.put("timestamp", System.currentTimeMillis());
-                        chatWebSocketHandler.sendMessageToSession(finalSessionId, JSON.toJSONString(wsMessage));
-                        log.info("客服忙，转人工失败，会话 {} 恢复AI对话", finalSessionId);
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("延迟自动分配客服失败", e);
-            }
-        }, 5, TimeUnit.SECONDS);
+        // 自动分配交由 CustomerAutoAssignScheduler 周期扫描 PENDING 会话处理，
+        // 避免内存定时任务在进程重启后丢失导致会话永久滞留。
         log.info("用户 {} 请求转人工客服，会话ID: {}，原因: {}", userId, sessionId, reason);
         return ResponseUtil.success("转人工请求已提交");
     }
@@ -527,20 +439,15 @@ public class CustomerServiceController {
             return ResponseUtil.error("会话已结束，无法发送消息");
         }
         if (session == null) {
-            session = new ChatSession();
-            session.setId(sessionId);
-            session.setUserId(userId);
-            session.setEmployeeId(employeeId);
-            session.setStatus(ChatSession.STATUS_ACTIVE);
-            session.setMessageCount(0);
-            session.setLastMessageAt(LocalDateTime.now());
-            chatSessionMapper.insert(session);
+            // 禁止凭空建会话：坐席只能向已存在（经转人工/接入建立）的会话发送消息，
+            // 否则会绕过 pending→active 状态机，导致会话归属与状态错乱。
+            return ResponseUtil.error("会话不存在，请先接入或转人工后再发送消息");
         }
         ChatRecord record = new ChatRecord();
         record.setSessionId(sessionId);
         record.setUserId(userId);
         record.setMessage(content);
-        record.setMsgType(employeeId.toString());
+        record.setMsgType(BusinessStatus.MSG_TYPE_EMPLOYEE);
         record.setEmployeeId(employeeId);
         record.setIsRead(0);
         record.setConfidence(BigDecimal.ONE);
@@ -552,7 +459,7 @@ public class CustomerServiceController {
             Map<String, Object> wsMessage = new HashMap<>();
             wsMessage.put("type", "chat");
             wsMessage.put("content", content);
-            wsMessage.put("msgType", employeeId.toString());
+            wsMessage.put("msgType", BusinessStatus.MSG_TYPE_EMPLOYEE);
             wsMessage.put("employeeId", employeeId);
             if (userId != null) {
                 wsMessage.put("userId", userId);

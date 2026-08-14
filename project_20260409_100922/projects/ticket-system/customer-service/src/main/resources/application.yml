@@ -46,9 +46,11 @@ management:
 ticket:
   customer:
     # WebSocket配置
+    # allowed-origins: 允许跨域的源（逗号分隔）。默认留空表示仅同源，禁止使用 "*" 通配开放。
+    # 生产环境请配置为实际前端域名，例如: https://cs.example.com,https://www.example.com
     websocket:
       endpoint: /ws
-      allowed-origins: "*"
+      allowed-origins: ""
       stomp:
         broker: /topic
         destination-prefix: /app

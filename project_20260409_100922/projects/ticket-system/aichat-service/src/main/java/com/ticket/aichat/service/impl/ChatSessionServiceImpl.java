@@ -1,6 +1,7 @@
 package com.ticket.aichat.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ticket.entity.ChatSession;
 import com.ticket.aichat.mapper.ChatSessionMapper;
@@ -98,19 +99,30 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
 
     @Override
     @Transactional
+    public String createPendingSession(Long userId) {
+        String sessionId = generateSessionId();
+        ChatSession session = new ChatSession();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStatus(ChatSession.STATUS_PENDING);
+        session.setTitle("用户请求转人工客服");
+        session.setMessageCount(0);
+        session.setLastMessageAt(LocalDateTime.now());
+        chatSessionMapper.insert(session);
+        return sessionId;
+    }
+
+    @Override
+    @Transactional
     public boolean acceptSession(String sessionId, Long employeeId) {
-        ChatSession session = chatSessionMapper.selectById(sessionId);
-        if (session == null) {
-            return false;
-        }
-        if (!ChatSession.STATUS_PENDING.equals(session.getStatus())) {
-            // 如果不是pending状态，可能已经被其他客服接入
-            return false;
-        }
-        session.setEmployeeId(employeeId);
-        session.setStatus(ChatSession.STATUS_ACTIVE);
-        session.setUpdatedAt(LocalDateTime.now());
-        return chatSessionMapper.updateById(session) > 0;
+        // 原子更新：仅当会话仍处于 pending 时才接单成功，避免并发双坐席抢接导致归属错乱。
+        LambdaUpdateWrapper<ChatSession> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(ChatSession::getId, sessionId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_PENDING)
+                .set(ChatSession::getEmployeeId, employeeId)
+                .set(ChatSession::getStatus, ChatSession.STATUS_ACTIVE)
+                .set(ChatSession::getUpdatedAt, LocalDateTime.now());
+        return chatSessionMapper.update(updateWrapper) > 0;
     }
 
     @Override

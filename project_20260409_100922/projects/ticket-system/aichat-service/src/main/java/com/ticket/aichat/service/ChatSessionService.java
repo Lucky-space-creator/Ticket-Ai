@@ -60,6 +60,13 @@ public interface ChatSessionService extends IService<ChatSession> {
     String createAiOnlySession(Long userId);
 
     /**
+     * 创建「用户请求转人工」的待接入会话（pending 状态）
+     * @param userId 用户ID
+     * @return 会话ID
+     */
+    String createPendingSession(Long userId);
+
+    /**
      * 客服接入会话
      * @param sessionId 会话ID
      * @param employeeId 客服员工ID

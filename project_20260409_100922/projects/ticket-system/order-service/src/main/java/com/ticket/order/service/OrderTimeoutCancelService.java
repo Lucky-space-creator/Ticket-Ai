@@ -11,7 +11,6 @@ import com.ticket.order.integration.TrainOrderGateway;
 import com.ticket.order.mapper.OrderItemMapper;
 import com.ticket.order.mapper.OrderMapper;
 import com.ticket.order.mapper.OrderRouteLegMapper;
-import com.ticket.util.StationNameUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -161,10 +160,12 @@ public class OrderTimeoutCancelService {
             trainOrderGateway.reservationRollbackBatch(TrainStockCommands.fromRouteLegs(
                     routeLegs, order.getTrainDate().toString(), order.getSeatType(), pax));
         } else {
+            // 与入队预扣 / MQ失败回滚 / 消费失败回滚保持一致，使用原始站名，禁止 normalize，
+            // 否则 Redis 预占 key 不匹配导致预占永不释放（少卖）。
             trainOrderGateway.rollbackReservation(
                     order.getTrainId(), order.getTrainDate().toString(),
-                    StationNameUtil.normalize(order.getStartStation()),
-                    StationNameUtil.normalize(order.getEndStation()),
+                    order.getStartStation(),
+                    order.getEndStation(),
                     order.getSeatType(), pax);
         }
     }

@@ -143,6 +143,18 @@ public class AIChatServiceImpl implements AIChatService {
             return HUMAN_SESSION_HINT;
         }
 
+        // 已发起转人工但坐席尚未接入（pending）：避免 AI 误接管，提示等待客服
+        ChatSession pendingHuman = findPendingHumanSession(userId);
+        if (pendingHuman != null) {
+            saveChatRecord(question, BusinessStatus.MSG_TYPE_USER,
+                    null, pendingHuman.getId(), null, 0, 0, 0);
+            String waitingHint = "您的人工客服请求已提交，正在为您接入，请稍候……";
+            saveChatRecord(waitingHint, BusinessStatus.MSG_TYPE_ROBOT,
+                    BigDecimal.ONE, pendingHuman.getId(), null, 0, 0, 0);
+            stopWatch.stopAndLog();
+            return waitingHint;
+        }
+
         // 意图分类：规则优先 → LLM 兜底
         IntentType intent = intentRouter.classify(question);
         stopWatch.checkpoint("intent_classify");
@@ -150,7 +162,7 @@ public class AIChatServiceImpl implements AIChatService {
 
         // 转人工：独立流程，不经过 FAQ 和 Agent
         if (intent == IntentType.HUMAN_TRANSFER) {
-            String sessionId = chatSessionService.createSession(userId, "");
+            String sessionId = chatSessionService.createPendingSession(userId);
             saveChatRecord(question, BusinessStatus.MSG_TYPE_USER,
                     null, sessionId, null, 0, 0, 0);
             String answer = humanTransferPublisher.publish(userId, sessionId, null);
@@ -194,7 +206,7 @@ public class AIChatServiceImpl implements AIChatService {
                 String ans = faqHit.get().getAnswer();
                 int estimated = TokenCountUtil.estimate(ans);
                 log.info("[{}] FAQ 直通命中，跳过 LLM", tid);
-                tokenMonitor.record(TokenUsage.estimated(Integer.parseInt(ans), "faq_bypass"), userId);
+                tokenMonitor.record(TokenUsage.estimated(estimated, "faq_bypass"), userId);
                 saveChatRecord(ans, BusinessStatus.MSG_TYPE_ROBOT,
                         BigDecimal.ONE, sessionId, null, 0, 0, estimated);
                 stopWatch.stopAndLog();
@@ -381,6 +393,22 @@ public class AIChatServiceImpl implements AIChatService {
     }
 
     /**
+     * 查找用户已发起但尚未接入的人工会话（pending 状态）。
+     * 用于转人工真空期：用户提交转人工后、坐席接入前，AI 不应接管该会话。
+     */
+    private ChatSession findPendingHumanSession(Long userId) {
+        if (userId == null) {
+            return null;
+        }
+        LambdaQueryWrapper<ChatSession> w = new LambdaQueryWrapper<>();
+        w.eq(ChatSession::getUserId, userId)
+                .eq(ChatSession::getStatus, ChatSession.STATUS_PENDING)
+                .orderByDesc(ChatSession::getLastMessageAt)
+                .last("LIMIT 1");
+        return chatSessionService.getOne(w);
+    }
+
+    /**
      * 检查会话是否已结束
      */
     private boolean isSessionEnded(String sessionId) {
@@ -421,8 +449,9 @@ public class AIChatServiceImpl implements AIChatService {
         int count = counter.incrementAndGet();
         int threshold = impl.getMessageThreshold();
         if (count >= threshold) {
-            // CAS：只有一个线程能成功将 counter 从 threshold 改为 0
-            if (counter.compareAndSet(threshold, 0)) {
+            // CAS：将计数器回退 threshold（兼容并发累加越过阈值的场景），
+            // 只有一个线程能成功触发画像更新，避免重复生成且不会卡死在越过阈值的计数上。
+            if (counter.compareAndSet(count, count - threshold)) {
                 log.info("用户消息达到阈值，触发画像增量更新: userId={}, threshold={}", userId, threshold);
                 userProfileService.generateProfile(userId, sessionId);
             }
